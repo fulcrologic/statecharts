@@ -1,0 +1,16 @@
+{:deps     {:aliases [:dev :test]}
+ :jvm-opts ["-Xmx2G"]
+ :dev-http {9001 "resources/public"}
+ :builds   {:test     {:target           :browser-test
+                       :test-dir         "resources/public"
+                       :ns-regexp        "-(test|spec)$"
+                       :compiler-options {:static-fns      false
+                                          :external-config {:guardrails {:throw? true :emit-spec? true}}}}
+
+            :ci-tests {:target           :karma
+                       :js-options       {:js-provider :shadow}
+                       :compiler-options {:static-fns      false ; required for mocking to work
+                                          :external-config {:guardrails {:throw? true :emit-spec? true}}}
+                       :output-to        "target/ci.js"
+                       :ns-regexp        "-(test|spec)$"}}}
+

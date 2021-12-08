@@ -1,0 +1,57 @@
+= State Charts for Clojure(script)
+
+A Clojure implementation of state charts that use the SCXML
+structure and semantics, without the need for XML.
+
+It is a simple exercise to convert an SCXML document to/from the
+Clojure data structures used by this library, which
+means existing tooling can pretty easily be used to design or
+document your machine.
+
+NOTE: This library uses break versioning. The reason for this is that it is
+meant to be a reference implementation that follows a standard. If there is
+a bug in the implementation, then fixing that bug may cause machines you've
+written to change their behavior (if you've depended on the errant behavior).
+Thus, you are encouraged to report such a bug (or issue a PR) to resolve
+the issue in order to ensure no subtle bugs will be introduced via bug
+fixes to this library.
+
+== Status
+
+Work in progress translating pseudocode of spec to CLJ. Not done yet.
+
+See Conformance.adoc at the root of this repository for notes on
+decisions that might affect exact conformance to the standard.
+
+== Execution
+
+SCXML allows for expressions to be placed in the machine design, functions
+to be invoked, and parameters to be passed from the state machine's data model.
+
+The execution model adopted makes it possible for you to leverage these
+features when translating to/from such a document by way of a
+`dispatcher` that you can define on the machine itself.
+
+By setting the dispatcher you can use plain symbols in place of functions,
+and when they need to be invoked the dispatcher will be called with
+`(dispatcher sym data-model param-map)`. You can use a multimethod,
+a plain old function, or whatever function-like thing you want to implement
+the actual execution.
+
+== Working Memory and Identity
+
+The working memory of the state machine is plain EDN and contains no code.
+It is serializable by nippy, transit, etc. Therefore, you can easily save
+an active state machine by value into any data store. The value
+is intended to be as small as possible so that storage can be efficient.
+
+Every active state machine is assigned a random UUID on creation (which you
+can override via `initialize`). This allows you to coordinate external
+event sources with instances of running machines.
+
+== Conformance
+
+This library was written using the reference implementation described in
+the https://www.w3.org/TR/scxml[SCXML standard], but without the requirement
+that the machine be written in XML. Any deviation from the standard should
+be considered a bug.

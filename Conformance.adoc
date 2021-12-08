@@ -1,0 +1,9 @@
+This library attempts to conform to the https://www.w3.org/TR/scxml standard
+and suggested implementation. There are some notable exceptions, which
+are documented here.
+
+* Only early data binding is supported.
+* The specification is vague about "Document Order". The default in this
+library is "depth first" document order, but you can choose "breadth first"
+when creating the machine. This should only have a visible difference in
+parallel nodes that have nested structure deeper than one.
