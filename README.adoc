@@ -8,14 +8,6 @@ Clojure data structures used by this library, which
 means existing tooling can pretty easily be used to design or
 document your machine.
 
-NOTE: This library uses break versioning. The reason for this is that it is
-meant to be a reference implementation that follows a standard. If there is
-a bug in the implementation, then fixing that bug may cause machines you've
-written to change their behavior (if you've depended on the errant behavior).
-Thus, you are encouraged to report such a bug (or issue a PR) to resolve
-the issue in order to ensure no subtle bugs will be introduced via bug
-fixes to this library.
-
 == Status
 
 Work in progress translating pseudocode of spec to CLJ. Not done yet.
