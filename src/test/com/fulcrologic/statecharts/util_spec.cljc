@@ -11,3 +11,5 @@
     (pop (queue 1 2 3)) => (queue 2 3)
     "Adds items to the rear"
     (conj (queue 1 2 3) 4) => (queue 1 2 3 4)))
+
+(str (queue 1 2))

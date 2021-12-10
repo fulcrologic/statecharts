@@ -85,11 +85,7 @@
    :cond - Expression that must be true for this transition to be enabled. See execution model."
   [{:keys [event cond target type action content] :as attrs}]
   (let [content (or action content)
-        t       (cond
-                  (keyword? target) #{target}
-                  (set? target) target
-                  (sequential? target) (set target)
-                  :else (throw (ex-info "Invalid target" {:target t})))]
+        t       (if (keyword? target) #{target} target)]
     (merge
       {:id   (genid "transition")
        :type (or type :external)}

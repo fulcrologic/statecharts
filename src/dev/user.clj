@@ -7,11 +7,15 @@
     [clojure.spec.alpha :as s]
     [edn-query-language.core :as eql]
     [com.fulcrologic.statecharts.tracing :refer [set-trace!]]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  (:import (clojure.lang PersistentQueue)))
 
 (set-refresh-dirs "src/main" "src/test" "src/dev" "src/todomvc"
   "../fulcro-websockets/src/main")
 
 (alter-var-root #'s/*explain-out* (constantly expound/printer))
-(set-trace! (fn [msg v] (log/info msg " => " v)))
+(defn queue? [v] (instance? PersistentQueue v))
+(set-trace! (fn [msg v] (log/info msg " => " (if (queue? v)
+                                               (iterator-seq (.iterator v))
+                                               v))))
 

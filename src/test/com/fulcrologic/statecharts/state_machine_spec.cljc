@@ -13,9 +13,9 @@
      (:import (clojure.lang PersistentQueue))))
 
 (let [substates [(state {:id :s0}
-                   (transition {:id :t1})
-                   (transition {:id :t2})
-                   (transition {:id :t3})
+                   (transition {:id :t1 :target :s1})
+                   (transition {:id :t2 :target :s1})
+                   (transition {:id :t3 :target :s1})
                    (state {:id :s0.0}))
                  (state {:id :s1}
                    (state {:id :s1.1}
@@ -162,8 +162,18 @@
       (sm/parallel-state? m :p) => true
       (sm/parallel-state? m :p1) => false))
 
-  (specification "")
   )
 
 
 
+(comment
+  (let [machine (machine {}
+                  (initial {}
+                    (transition {:target :A/a}))
+                  (state {:id :A}
+                    (transition {:event  :trigger
+                                 :target :B}))
+                  (state {:id :B}
+                    (transition {:event  :trigger
+                                 :target :A})))]
+    (sm/initialize machine)))
