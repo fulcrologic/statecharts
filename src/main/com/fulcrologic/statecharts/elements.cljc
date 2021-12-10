@@ -8,8 +8,8 @@
   "Create a state. ID will be generated if not supplied. The `initial` element is an alias for this
    element with `:initial? true`."
   [{:keys [id initial?] :as attrs} & children]
-  (merge {:id (genid "state")} attrs {:node-type :state
-                                      :children  (vec children)}))
+  (merge {:id (or id (genid "state"))} attrs {:node-type :state
+                                              :children  (vec children)}))
 
 (defn history
   "Create a history node. Set `:deep? true` for deep history. `transition` is required, and specifies the

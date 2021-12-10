@@ -12,13 +12,16 @@
   #?(:clj
      (:import (clojure.lang PersistentQueue))))
 
-(let [substates [(state {:id :s0}
+(let [substates [(initial {:id :I}
+                   (transition {:id     :it
+                                :target :s0}))
+                 (state {:id :s0}
                    (transition {:id :t1 :target :s1})
                    (transition {:id :t2 :target :s1})
                    (transition {:id :t3 :target :s1})
                    (state {:id :s0.0}))
                  (state {:id :s1}
-                   (state {:id :s1.1}
+                   (initial {:id :s1.1}
                      (state {:id :s1.1.1})))
                  (state {:id :s2}
                    (parallel {:id :p}
@@ -58,7 +61,7 @@
       "Finds child node ids of a given type"
       (sm/get-children m :s0 :transition) => [:t1 :t2 :t3]
       "Can find the immediate children of a machine"
-      (sm/get-children m m :state) => [:s0 :s1 :s2]
+      (sm/get-children m m :state) => [:I :s0 :s1 :s2]
       "Can find the immediate children of a node"
       (sm/get-children m (sm/element m :s0) :state) => [:s0.0]
       "returns the children in document order"
@@ -86,7 +89,7 @@
       (sm/child-states m :s2) => [:p]
       (sm/child-states m :p) => [:p1 :p2 :p3]
       (sm/child-states m :p1) => [:f2]
-      (sm/child-states m m) => [:s0 :s1 :s2]))
+      (sm/child-states m m) => [:I :s0 :s1 :s2]))
 
   (specification "descendant?"
     (assertions
@@ -162,18 +165,36 @@
       (sm/parallel-state? m :p) => true
       (sm/parallel-state? m :p1) => false))
 
-  )
+  (specification "initial-element"
+    (assertions
+      "can find the element of the machine"
+      (map? (sm/initial-element m m)) => true
+      (:id (sm/initial-element m m)) => :I
+      "can find the initial element of a substate"
+      (:id (sm/initial-element m :s1)) => :s1.1))
 
+  (specification "transition-element"
+    (assertions
+      "can find the transition element (first) of a state"
+      (:id (sm/transition-element m (sm/initial-element m m))) => :it)))
 
-
-(comment
+(specification "Basic machine" :focus
   (let [machine (machine {}
                   (initial {}
-                    (transition {:target :A/a}))
+                    (transition {:target :A}))
                   (state {:id :A}
                     (transition {:event  :trigger
                                  :target :B}))
                   (state {:id :B}
                     (transition {:event  :trigger
-                                 :target :A})))]
-    (sm/initialize machine)))
+                                 :target :A})))
+        wmem    (sm/initialize machine)
+        c       (fn [mem] (::sc/configuration mem))]
+    (assertions
+      "Enters proper state from initial"
+      (c wmem) => #{:A}
+      "Transitions on events"
+      (c (sm/process-event machine wmem (sm/new-event :trigger))) => #{:B}
+      (c (as-> wmem $
+           (sm/process-event machine $ (sm/new-event :trigger))
+           (sm/process-event machine $ (sm/new-event :trigger)))) => #{:A})))

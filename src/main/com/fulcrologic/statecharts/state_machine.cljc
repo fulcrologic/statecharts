@@ -11,12 +11,17 @@
     [com.fulcrologic.statecharts.tracing :refer [trace]]
     [clojure.set :as set]))
 
-(declare execute invalid-history-elements configuration-problems get-transition-domain before-event)
+;; I did try to translate all that imperative code to something more functional...got really tiring, and generated
+;; subtle bugs divergent from spec.
+;; So, some internals are in an imperative style, which does make them easier to compare to the spec.
+;; The main event loop from the spec is split into `before-event` and `process-event` so it can be
+;; used in a non-imperative way.
+
+(declare execute enter-states invalid-history-elements configuration-problems get-transition-domain before-event)
 
 (defn new-event
   ([name data]
-   (merge data {:_event   name
-                ::sc/name name}))
+   (merge data {::sc/name name}))
   ([name]
    {:_event   name
     ::sc/name name}))
@@ -143,7 +148,11 @@
 (defn initial-element
   "Returns the element that represents the <initial> element of a compound state node-or-id."
   [machine node-or-id]
-  (element machine (first (filter :initial? (child-states machine node-or-id)))))
+  (->>
+    (child-states machine node-or-id)
+    (map #(element machine %))
+    (filter :initial?)
+    first))
 
 (defn atomic-state? [machine node-or-id]
   (and
@@ -210,10 +219,11 @@
 (defn initialize
   "Create working memory for a new machine. Auto-assigns a session ID unless you supply one."
   [{:keys [id name script] :as machine}]
-  (let [wmem {::sc/configuration       #{}
+  (let [t    (trace "initial transition" (->> machine (initial-element machine) (transition-element machine)))
+        wmem {::sc/configuration       #{}
               ::sc/initialized-states  #{}                  ; states that have been entered (initialized data model) before
               ::sc/states-to-invoke    #{}
-              ::sc/enabled-transitions #{}                  ; only populated during processing, as a way to pass among functions
+              ::sc/enabled-transitions (if t #{t} #{})
               ::sc/internal-queue      (queue)
               ::sc/history-value       {}
               ::sc/data-model          {:_name         (or name (genid "name"))
@@ -221,8 +231,11 @@
                                         :_ioprocessors {}
                                         :_sessionid    (or id (genid "workingmemory"))}
               ::sc/running?            true}]
-    (cond-> (before-event machine wmem)
-      script (as-> $ (execute machine $ script)))))
+    (as-> wmem $
+      (enter-states machine $)
+      (before-event machine $)
+      (cond-> $
+        script (as-> $ (execute machine $ script))))))
 
 (defn get-proper-ancestors
   "Returns the node ids from `machine` that are proper ancestors of `node-or-id` (an id or actual node-or-id). If `stopping-node-or-id-or-id`
@@ -270,8 +283,6 @@
                                                    (fn [s] (in-final-state? machine wmem s))
                                                    (child-states machine non-atomic-state))
       :else false)))
-
-;; Tired of translating imperative code. imperative it is...TK
 
 (declare add-descendant-states-to-enter!)
 
@@ -329,7 +340,7 @@
                  (set/union targets (get-effective-target-states machine working-memory default-transition)))
           :else (conj targets s))))
     #{}
-    (:target t)))
+    (:target (element machine t))))
 
 (defn- compute-entry-set
   "Returns [states-to-enter states-for-default-entry default-history-content]."
@@ -400,8 +411,8 @@
     enabled-transitions))
 
 (defn get-transition-domain [machine working-memory t]
-  (let [tstates (get-effective-target-states machine working-memory t)
-        tsource (nearest-ancestor-state machine t)]
+  (let [tstates (trace (get-effective-target-states machine working-memory t))
+        tsource (trace (nearest-ancestor-state machine t))]
     (cond
       (empty? tstates) nil
       (and
@@ -413,8 +424,8 @@
 (defn compute-exit-set [machine {::sc/keys [configuration] :as working-mem} transitions]
   (reduce
     (fn [acc t]
-      (if (contains? t :target)
-        (let [domain (get-transition-domain machine working-mem t)]
+      (if (trace (contains? (element machine t) :target))
+        (let [domain (trace (get-transition-domain machine working-mem t))]
           (into acc
             (filter #(descendant? machine % domain))
             configuration))
@@ -437,25 +448,26 @@
           (if (descendant? machine (source t1) (source t2))
             (vswap! to-remove conj t2)
             (vreset! preempted? true))))
-      (if (not preempted?)
+      (if (not @preempted?)
         (do
           (doseq [t3 @to-remove]
             (vswap! filtered-transitions disj t3))
           (vswap! filtered-transitions conj t1))))
-    (assoc wmem ::sc/enabled-transitions @filtered-transitions)))
+    (assoc wmem ::sc/enabled-transitions (trace @filtered-transitions))))
 
 (defn select-eventless-transitions
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [machine {::sc/keys [configuration] :as working-memory}]
   (trace working-memory)
   (let [working-memory (assoc working-memory ::sc/enabled-transitions #{})
-        atomic-states  (in-document-order machine (filterv atomic-state? configuration))
+        atomic-states  (in-document-order machine (filterv #(atomic-state? machine %) configuration))
         wmem           (reduce
                          (fn [wmem atomic-state]
                            (let [states-to-scan    (into [atomic-state] (get-proper-ancestors machine atomic-state))
                                  transition-to-add (first
                                                      (for [s states-to-scan
-                                                           t (in-document-order machine (transitions machine s))
+                                                           t (map #(element machine %)
+                                                               (in-document-order machine (transitions machine s)))
                                                            :when (and
                                                                    (not (contains? t :event))
                                                                    (condition-match machine working-memory t))]
@@ -465,8 +477,7 @@
                                wmem)))
                          working-memory
                          atomic-states)
-        final-mem      (remove-conflicting-transitions machine wmem)
-        ]
+        final-mem      (remove-conflicting-transitions machine wmem)]
     (trace "eventless transitions" (::sc/enabled-transitions final-mem))
     final-mem))
 
@@ -474,20 +485,22 @@
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [machine {::sc/keys [configuration] :as working-memory} event]
   (let [working-memory (assoc working-memory ::sc/enabled-transitions #{})
-        atomic-states  (in-document-order machine (filterv atomic-state? configuration))]
+        atomic-states  (in-document-order machine (filterv #(atomic-state? machine %) configuration))]
     (remove-conflicting-transitions machine
       (reduce
         (fn [wmem atomic-state]
           (let [states-to-scan    (into [atomic-state] (get-proper-ancestors machine atomic-state))
                 transition-to-add (first
                                     (for [s states-to-scan
-                                          t (in-document-order machine (transitions machine s))
+                                          t (map
+                                              #(element machine %)
+                                              (in-document-order machine (transitions machine s)))
                                           :when (and
-                                                  (contains? t :event)
-                                                  (= (:event t) (:name event))
-                                                  (condition-match machine working-memory t))]
+                                                  (contains? (trace t) :event)
+                                                  (= (trace (:event t)) (trace (::sc/name event)))
+                                                  (trace (condition-match machine working-memory t)))]
                                       (:id t)))]
-            (if transition-to-add
+            (if (trace transition-to-add)
               (update wmem ::sc/enabled-transitions conj transition-to-add)
               wmem)))
         working-memory
@@ -584,10 +597,10 @@
                        (vreset! macrostep-done? true)
                        wmem)
                      (let [internal-event (first internal-queue)]
-                       (-> wmem
-                         (update ::sc/internal-queue pop)
-                         (assoc-in [::sc/data-model :_event] internal-event)
-                         (assoc ::sc/enabled-transitions (select-transitions machine wmem internal-event)))))
+                       (as-> wmem $
+                         (update $ ::sc/internal-queue pop)
+                         (assoc-in $ [::sc/data-model :_event] internal-event)
+                         (select-transitions machine $ internal-event))))
                    wmem)
             {::sc/keys [running?]
              :as       wmem} (cond->> wmem
@@ -602,6 +615,7 @@
     working-memory
     (exit-handlers machine state)))
 
+;; TODO: Sending events back to the machine that started this one, if there is one
 (defn- send-done-event! [machine wmem state])
 
 (defn- exit-interpreter [machine {::sc/keys [configuration] :as working-memory}]
@@ -611,14 +625,13 @@
                              (run-exit-handlers state)
                              (cancel-active-invocations state)
                              (update ::sc/configuration disj state))]
-                ;; TODO: Sending events back to the machine that started this one
                 (when (and (final-state? machine state) (nil? (:parent (element machine state))))
                   (send-done-event! machine wmem state))
                 result))
       working-memory
       states-to-exit)))
 
-(defn before-event
+(defn- before-event
   "Steps that are run before processing the next event."
   [machine working-memory]
   {:post [(map? %)]}
@@ -646,7 +659,8 @@
   (if (cancel? external-event)
     (exit-interpreter machine working-memory)
     (as-> working-memory $
-      (assoc $ ::sc/enabled-transitions (select-transitions machine $ external-event))
+      (select-transitions machine $ external-event)
+      (trace $)
       (handle-external-invocations machine $)
       (microstep machine $)
       (before-event machine $))))

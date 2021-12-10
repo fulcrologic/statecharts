@@ -8,7 +8,8 @@
     [edn-query-language.core :as eql]
     [com.fulcrologic.statecharts.tracing :refer [set-trace!]]
     [taoensso.timbre :as log])
-  (:import (clojure.lang PersistentQueue)))
+  (:import (clojure.lang PersistentQueue)
+           (java.io Writer)))
 
 (set-refresh-dirs "src/main" "src/test" "src/dev" "src/todomvc"
   "../fulcro-websockets/src/main")
@@ -18,4 +19,6 @@
 (set-trace! (fn [msg v] (log/info msg " => " (if (queue? v)
                                                (iterator-seq (.iterator v))
                                                v))))
+(defmethod print-method PersistentQueue [v ^Writer w]
+  (.write w (pr-str (into [] (iterator-seq (.iterator v))))))
 
