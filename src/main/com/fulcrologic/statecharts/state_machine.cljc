@@ -11,7 +11,13 @@
     [com.fulcrologic.statecharts.tracing :refer [trace]]
     [clojure.set :as set]))
 
-(declare invalid-history-elements configuration-problems)
+(declare invalid-history-elements configuration-problems get-transition-domain)
+
+(defn new-event
+  ([name data]
+   (merge data {:sc/name name}))
+  ([name]
+   {::sc/name name}))
 
 (defn- ids-in-document-order
   "Returns the IDs of the states in the given node, in document order (not including the node itself).
@@ -51,9 +57,10 @@
         result       (assoc node
                        :children (mapv :id children)
                        ::sc/elements-by-id (into {}
-                                             (keep (fn [{:keys [id children] :as n}] (when id [id (cond-> n
-                                                                                                    (seq children) (assoc :children
-                                                                                                                     (mapv :id children)))])))
+                                             (keep (fn [{:keys [id children] :as n}]
+                                                     (when id [id (cond-> n
+                                                                    (seq children) (assoc :children
+                                                                                     (mapv :id children)))])))
                                              (tree-seq :children :children node))
                        ::sc/ids-in-document-order ids-in-order)
         problems     (concat
@@ -75,6 +82,8 @@
 
     :else
     (get-in machine [::sc/elements-by-id node-or-id])))
+
+(defn element-id [machine node-or-id] (:id (element machine node-or-id)))
 
 (defn dispatch
   "Use the machine definition to figure out how to run the given code sym."
@@ -100,17 +109,25 @@
   "Returns the IDs of the nodes that are invocations within `node-or-id-or-id`"
   [machine node-or-id] (get-children machine node-or-id :invoke))
 (defn transitions [machine node-or-id] (get-children machine node-or-id :transition))
+
+(defn transition-element
+  "Returns the element that represents the first transition of node-or-id.
+   This should only be used on nodes that have a single required transition, such as
+   <initial> and <history> nodes."
+  [machine node-or-id]
+  (element machine (first (get-children machine node-or-id :transition))))
+
 (defn exit-handlers [machine node-or-id] (get-children machine node-or-id :on-exit))
 (defn entry-handlers [machine node-or-id] (get-children machine node-or-id :on-entry))
 (defn history-elements [machine node-or-id] (get-children machine node-or-id :history))
 (defn history-element? [machine node-or-id] (= :history (:node-type (element machine node-or-id))))
+(defn final-state? [machine node-or-id] (= :final (:node-type (element machine node-or-id))))
 (defn state? [machine node-or-id]
   (let [n (element machine node-or-id)]
     (boolean
       (and
         (map? n)
         (#{:final :state :parallel} (:node-type n))))))
-
 (defn child-states
   "Find all of the immediate children (IDs) of `node-or-id` that are states
    (final, node-or-id, or parallel)"
@@ -120,6 +137,11 @@
       (get-children machine node-or-id :final)
       (get-children machine node-or-id :state)
       (get-children machine node-or-id :parallel))))
+
+(defn initial-element
+  "Returns the element that represents the <initial> element of a compound state node-or-id."
+  [machine node-or-id]
+  (element machine (first (filter :initial? (child-states machine node-or-id)))))
 
 (defn atomic-state? [machine node-or-id]
   (and
@@ -180,6 +202,7 @@
 
 (defn initialize [{:keys [script] :as machine}]
   (let [state {::sc/configuration       #{}
+               ::sc/initialized-states  #{}                 ; states that have been entered (initialized data model) before
                ::sc/states-to-invoke    #{}
                ::sc/enabled-transitions #{}
                ::sc/internal-queue      (queue)
@@ -205,11 +228,82 @@
 
 ;; TODO: implement
 (defn condition-match [machine working-memory node] true)
-(defn find-least-common-compound-ancestor [machine states] nil)
-(defn enter-states [machine states] nil)
-(defn execute-transition-content [machine states] nil)
 
-(defn get-effective-target-states [machine {::sc/keys [history-value] :as working-memory} t]
+(defn find-least-common-compound-ancestor
+  "Returns the ELEMENT that is the common compound ancestor of all the `states`. NOTE: This may be
+   the state machine itself. The compound state returned will be the one closest to all of the states."
+  [machine states]
+  (let [possible-ancestors (conj
+                             (into []
+                               (comp
+                                 (map #(element machine %))
+                                 (filter #(compound-state? machine %)))
+                               (get-proper-ancestors machine (first states)))
+                             machine)
+        other-states       (rest states)]
+    (first
+      (keep
+        (fn [anc] (when (every? (fn [s] (descendant? machine s anc)) other-states) anc))
+        possible-ancestors))))
+
+(defn in-final-state?
+  "Returns true if `non-atomic-state` is completely done."
+  [machine {::sc/keys [configuration] :as wmem} non-atomic-state]
+  (boolean
+    (cond
+      (compound-state? machine non-atomic-state) (some
+                                                   (fn [s] (and (final-state? machine s) (contains? configuration s)))
+                                                   (child-states machine non-atomic-state))
+      (parallel-state? machine non-atomic-state) (every?
+                                                   (fn [s] (in-final-state? machine wmem s))
+                                                   (child-states machine non-atomic-state))
+      :else false)))
+
+;; Tired of translating imperative code. imperative it is...TK
+
+(declare add-descendant-states-to-enter)
+
+(defn- add-ancestor-states-to-enter [machine {::sc/keys [history-value] :as wmem} state ancestor
+                                     states-to-enter states-for-default-entry default-history-content]
+  (doseq [anc (get-proper-ancestors state ancestor)]
+    (vswap! states-to-enter conj anc)
+    (when (parallel-state? machine anc)
+      (doseq [child (child-states machine anc)]
+        (when-not (some (fn [s] (descendant? machine s child)) states-to-enter)
+          (add-descendant-states-to-enter! machine wmem child states-to-enter
+            states-for-default-entry default-history-content))))))
+
+(defn- add-descendant-states-to-enter! [machine {::sc/keys [history-value] :as wmem}
+                                        state states-to-enter states-for-default-entry default-history-content]
+  (letfn [(add-elements! [target parent]
+            (doseq [s target]
+              (add-descendant-states-to-enter! machine wmem s states-to-enter
+                states-for-default-entry default-history-content))
+            (doseq [s target]
+              (add-ancestor-states-to-enter machine wmem s parent states-to-enter
+                states-for-default-entry default-history-content)))]
+    (let [{:keys [id parent] :as state} (element machine state)]
+      (if (history-element? machine state)
+        (if-let [previously-active-states (get history-value id)]
+          (add-elements! previously-active-states parent)
+          (let [{:keys [content target]} (transition-element machine state)]
+            (when content (vswap! default-history-content assoc parent content))
+            (add-elements! target parent)))
+        ; not a history element
+        (do
+          (vswap! states-to-enter conj state)
+          (if (compound-state? machine state)
+            (let [target (->> (initial-element machine state) (transition-element machine) :target)]
+              (vswap! states-for-default-entry conj state)
+              (add-elements! target state))
+            (if (parallel-state? machine state)
+              (doseq [child (child-states machine state)]
+                (when-not (some (fn [s] (descendant? machine s child)) states-to-enter)
+                  (add-descendant-states-to-enter! machine wmem child states-to-enter
+                    states-for-default-entry default-history-content))))))))))
+
+
+(defn- get-effective-target-states [machine {::sc/keys [history-value] :as working-memory} t]
   (reduce
     (fn [targets s]
       (let [{:keys [id] :as s} (element machine s)]
@@ -224,6 +318,68 @@
           :else (conj targets s))))
     #{}
     (:target t)))
+
+(defn- compute-entry-set
+  "Returns [states-to-enter states-for-default-entry default-history-content]."
+  [machine {::sc/keys [enabled-transitions] :as working-memory}]
+  (let [states-to-enter          (volatile! #{})
+        states-for-default-entry (volatile! #{})
+        default-history-content  (volatile! {})
+        transitions              (map #(element machine %) enabled-transitions)]
+    (doseq [{:keys [target] :as t} transitions]
+      (let [ancestor (get-transition-domain machine working-memory t)]
+        (doseq [s target]
+          (add-descendant-states-to-enter! machine working-memory s states-to-enter
+            states-for-default-entry default-history-content))
+        (doseq [s (get-effective-target-states machine working-memory t)]
+          (add-ancestor-states-to-enter machine working-memory s ancestor states-to-enter
+            states-for-default-entry default-history-content))))
+    [@states-to-enter @states-for-default-entry @default-history-content]))
+
+;; TODO:
+(defn- initialize-data-model!
+  "Initialize the data models in volatile working memory `wmem` for the given states, if necessary."
+  [machine wmem states])
+
+(defn- execute!
+  "Run the content/action of s."
+  [machine wmem s])
+
+(defn enter-states
+  "Enters states, triggers actions, tracks long-running invocations, and
+   returns updated working memory."
+  [machine {::sc/keys [enabled-transitions
+                       states-to-invoke] :as wmem} states]
+  (let [[states-to-enter
+         states-for-default-entry
+         default-history-content] (compute-entry-set machine wmem)
+        ma (volatile! wmem)]
+    (doseq [s (in-entry-order machine states-to-enter)]
+      (vswap! ma update ::sc/configuration conj s)
+      (vswap! ma update ::sc/states-to-invoke conj s)
+      (initialize-data-model! machine ma s)
+      (doseq [entry (entry-handlers machine s)] (execute! machine @ma entry))
+      (when-let [t (and (contains? states-for-default-entry s)
+                     (some->> s (initial-element machine) (transition-element machine)))]
+        (execute! machine @ma t))
+      (when-let [content (get default-history-content (element-id machine s))]
+        (execute! machine @ma content))
+      (if (final-state? machine s)
+        (if (nil? (get-parent machine s))
+          (vswap! ma assoc ::sc/running? false)
+          (let [parent      (get-parent machine s)
+                grandparent (get-parent machine parent)
+                done-data   {}]                             ;; TODO: What is done-data?
+            (vswap! ma update ::sc/internal-queue conj
+              (new-event ::sc/done {:state (element-id machine parent)
+                                    :data  done-data}))
+            (when (and (parallel-state? machine grandparent)
+                    (every? (fn [s] (in-final-state? machine @ma s)) (child-states machine grandparent)))
+              (vswap! ma update ::sc/internal-queue conj
+                (new-event ::sc/done {:state (element-id machine grandparent)})))))))
+    @ma))
+
+(defn execute-transition-content [machine states] nil)
 
 
 (defn get-transition-domain [machine working-memory t]
