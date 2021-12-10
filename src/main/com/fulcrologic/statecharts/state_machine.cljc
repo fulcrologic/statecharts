@@ -8,7 +8,10 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [queue]]
+    [com.fulcrologic.statecharts.tracing :refer [trace]]
     [clojure.set :as set]))
+
+(declare invalid-history-elements configuration-problems)
 
 (defn- ids-in-document-order
   "Returns the IDs of the states in the given node, in document order (not including the node itself).
@@ -44,15 +47,20 @@
   (let [node         (assoc attrs
                        :node-type :machine
                        :children (assign-parents nil children))
-        ids-in-order (ids-in-document-order node)]
-    (assoc node
-      :children (mapv :id children)
-      ::sc/elements-by-id (into {}
-                            (keep (fn [{:keys [id children] :as n}] (when id [id (cond-> n
-                                                                                   (seq children) (assoc :children
-                                                                                                    (mapv :id children)))])))
-                            (tree-seq :children :children node))
-      ::sc/ids-in-document-order ids-in-order)))
+        ids-in-order (ids-in-document-order node)
+        result       (assoc node
+                       :children (mapv :id children)
+                       ::sc/elements-by-id (into {}
+                                             (keep (fn [{:keys [id children] :as n}] (when id [id (cond-> n
+                                                                                                    (seq children) (assoc :children
+                                                                                                                     (mapv :id children)))])))
+                                             (tree-seq :children :children node))
+                       ::sc/ids-in-document-order ids-in-order)
+        problems     (concat
+                       (invalid-history-elements result))]
+    (when (seq problems)
+      (throw (ex-info "Invalid machine specification" {:problems problems})))
+    result))
 
 (defn element
   "Find the node in the machine that has the given ID (of any type)"
@@ -94,8 +102,8 @@
 (defn transitions [machine node-or-id] (get-children machine node-or-id :transition))
 (defn exit-handlers [machine node-or-id] (get-children machine node-or-id :on-exit))
 (defn entry-handlers [machine node-or-id] (get-children machine node-or-id :on-entry))
-(defn history-nodes [machine node-or-id] (get-children machine node-or-id :history))
-
+(defn history-elements [machine node-or-id] (get-children machine node-or-id :history))
+(defn history-element? [machine node-or-id] (= :history (:node-type (element machine node-or-id))))
 (defn state? [machine node-or-id]
   (let [n (element machine node-or-id)]
     (boolean
@@ -197,29 +205,45 @@
 
 ;; TODO: implement
 (defn condition-match [machine working-memory node] true)
-(defn get-effective-target-states [machine t] true)
-(defn find-LCCA [machine states] nil)
+(defn find-least-common-compound-ancestor [machine states] nil)
 (defn enter-states [machine states] nil)
 (defn execute-transition-content [machine states] nil)
 
+(defn get-effective-target-states [machine {::sc/keys [history-value] :as working-memory} t]
+  (reduce
+    (fn [targets s]
+      (let [{:keys [id] :as s} (element machine s)]
+        (cond
+          (and
+            (history-element? machine s)
+            (contains? history-value id))
+          #_=> (set/union targets (get history-value id))
+          (history-element? machine s)
+          #_=> (let [default-transition (first (transitions machine s))] ; spec + validation. There will be exactly one
+                 (set/union targets (get-effective-target-states machine working-memory default-transition)))
+          :else (conj targets s))))
+    #{}
+    (:target t)))
 
-(defn get-transition-domain [machine t]
-  (let [tstates (get-effective-target-states machine t)
+
+(defn get-transition-domain [machine working-memory t]
+  (let [tstates (get-effective-target-states machine working-memory t)
         tsource (nearest-ancestor-state machine t)]
     (cond
       (empty? tstates) nil
-      (and (= :internal (:type t))
+      (and
+        (= :internal (:type t))
         (compound-state? machine tsource)
-        (every? (fn [s] (descendant? s tsource)) tstates)) tsource
-      :else (find-LCCA machine (into [tsource] tstates)))))
+        (every? (fn [s] (descendant? machine s tsource)) tstates)) tsource
+      :else (find-least-common-compound-ancestor machine (into [tsource] tstates)))))
 
 (defn compute-exit-set [machine {::sc/keys [configuration] :as working-mem} transitions]
   (reduce
     (fn [acc t]
       (if (contains? t :target)
-        (let [domain (get-transition-domain machine t)]
+        (let [domain (get-transition-domain machine working-mem t)]
           (into acc
-            (filter #(descendant? % domain))
+            (filter #(descendant? machine % domain))
             configuration))
         acc))
     #{}
@@ -240,7 +264,7 @@
                                                common     (set/intersection exit-set-1 exit-set-2)]
                                            (if (empty? common)
                                              acc
-                                             (if (descendant? (nearest-ancestor-state machine t1) (nearest-ancestor-state machine t2))
+                                             (if (descendant? machine (nearest-ancestor-state machine t1) (nearest-ancestor-state machine t2))
                                                (update acc :to-remove conj t2)
                                                (reduced (assoc acc :preempted? true))))))
                                        {:to-remove  #{}
@@ -264,7 +288,7 @@
           (let [states-to-scan    (into [atomic-state] (get-proper-ancestors machine atomic-state))
                 transition-to-add (first
                                     (for [s states-to-scan
-                                          t (in-document-order machine (transitions s))
+                                          t (in-document-order machine (transitions machine s))
                                           :when (and
                                                   (not (contains? t :event))
                                                   (condition-match machine working-memory t))]
@@ -286,7 +310,7 @@
           (let [states-to-scan    (into [atomic-state] (get-proper-ancestors machine atomic-state))
                 transition-to-add (first
                                     (for [s states-to-scan
-                                          t (in-document-order machine (transitions s))
+                                          t (in-document-order machine (transitions machine s))
                                           :when (and
                                                   (contains? t :event)
                                                   (= (:event t) (:name event))
@@ -325,7 +349,7 @@
         (reduce
           (partial invoke! machine)
           wmem
-          (invocations state-to-invoke)))
+          (invocations machine state-to-invoke)))
       (assoc working-memory ::sc/states-to-invoke #{})
       states-to-invoke)))
 
@@ -346,7 +370,7 @@
   )
 
 (defn- cancel-active-invocations [working-memory state]
-  (doseq [i (invocations state)] (cancel-invoke i))
+  (doseq [i (invocations machine state)] (cancel-invoke i))
   working-memory)
 
 
@@ -359,13 +383,13 @@
   (let [states-to-exit   (in-exit-order machine (compute-exit-set machine working-memory enabled-transitions))
         states-to-invoke (set/difference states-to-invoke (set states-to-exit))
         history-nodes    (into {}
-                           (map (fn [s] [s (history-nodes (get-parent s))]))
+                           (map (fn [s] [s (history-elements machine (get-parent machine s))]))
                            states-to-exit)
         history-value    (reduce-kv
                            (fn [acc s {:keys [id deep?] :as hn}]
                              (let [f (if deep?
-                                       (fn [s0] (and (atomic-state? s0) (descendant? s0 s)))
-                                       (fn [s0] (= s (get-parent s0))))]
+                                       (fn [s0] (and (atomic-state? machine s0) (descendant? machine s0 s)))
+                                       (fn [s0] (= s (get-parent machine s0))))]
                                (assoc acc id (into #{} (filter f configuration)))))
                            history-value
                            history-nodes)
@@ -374,7 +398,7 @@
                            ::sc/history-value history-value)]
     (reduce
       (fn [wmem s]
-        (let [to-exit (exit-handlers s)
+        (let [to-exit (exit-handlers machine s)
               run     (partial run-many machine)]
           (-> wmem
             (run to-exit)
@@ -414,7 +438,7 @@
   (reduce
     (fn [wmem handler] (update wmem ::sc/data-model handler))
     working-memory
-    (exit-handlers state)))
+    (exit-handlers machine state)))
 
 (defn- exit-interpreter [machine {::sc/keys [configuration] :as working-memory}]
   (let [states-to-exit (in-exit-order machine configuration)]
@@ -462,4 +486,48 @@
       (microstep machine $)
       (before-event machine $))))
 
+;; VALIDATION HELPERS
 
+(defn configuration-problems
+  "Returns a list of problems with the current machine's working-memory configuration (active states)."
+  [m {::sc/keys [configuration] :as working-memory}]
+  (let [top-states             (set (child-states m m))
+        active-top-states      (set/intersection top-states configuration)
+        atomic-states          (filter #(atomic-state? m %) configuration)
+        necessary-ancestors    (into #{} (mapcat (fn [s] (get-proper-ancestors m s)) atomic-states))
+        compound-states        (filter #(compound-state? m %) configuration)
+        broken-compound-states (for [cs compound-states
+                                     :let [cs-children (child-states m cs)]
+                                     :when (not= 1 (count (set/intersection configuration cs-children)))]
+                                 cs)
+        active-parallel-states (filter #(parallel-state? m %) configuration)
+        broken-parallel-states (for [cs active-parallel-states
+                                     :let [cs-children (child-states m cs)]
+                                     :when (not= cs-children (set/intersection configuration cs-children))]
+                                 cs)]
+    (cond-> []
+      (not= 1 (count active-top-states)) (conj "The number of top-level active states != 1")
+      (zero? (count atomic-states)) (conj "There are zero active atomic states")
+      (not= (set/intersection configuration necessary-ancestors) necessary-ancestors) (conj (str "Some active states are missing their necessary ancestors"
+                                                                                              necessary-ancestors " should all be in " configuration))
+      (seq broken-compound-states) (conj (str "The compound states " broken-compound-states " should have exactly one child active (each) in " configuration))
+      (seq broken-parallel-states) (conj (str "The parallel states " broken-parallel-states " should have all of their children in " configuration)))))
+
+(defn invalid-history-elements
+  "Returns a sequence of history elements from `machine` that have errors. Each node will contain a `:msgs` key
+   with the problem descriptions. This is a static check."
+  [machine]
+  (let [history-nodes (filter #(history-element? machine %) (vals (::sc/elements-by-id machine)))
+        e             (fn [n msg] (update n :msgs conj msg))]
+    (for [{:keys [parent deep?] :as hn} history-nodes       ; Section 3.10.2 of spec
+          :let [transitions        (transitions machine hn)
+                {:keys [target event cond] :as transition} (first transitions)
+                immediate-children (set (child-states machine parent))
+                possible-problem   (cond-> (assoc hn :msgs [])
+                                     (= 1 (count transitions)) (e "A history node MUST have exactly one transition")
+                                     (and (nil? event) (nil? cond)) (e "A history transition MUST NOT have cond/event.")
+                                     (and (not deep?) (not= 1 (count target))) (e "Exactly ONE transition target is required for shallow history.")
+                                     ;; TODO: Validate deep history
+                                     (or deep? (= 1 (count immediate-children))) (e "Exactly ONE transition target for shallow. If many, then deep history is required."))]
+          :when (pos-int? (count (:msgs possible-problem)))]
+      possible-problem)))

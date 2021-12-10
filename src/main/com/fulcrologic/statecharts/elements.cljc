@@ -12,11 +12,15 @@
                                       :children  (vec children)}))
 
 (defn history
-  "Create a history node. Set `:deep? true` for deep history."
-  [{:keys [deep? id] :as attrs}]
-  (merge {:id (genid "history")}
-    attrs
-    {:node-type :history}))
+  "Create a history node. Set `:deep? true` for deep history. `transition` is required, and specifies the
+   configuration of the machine in which it is embedded if there is no history (as a single keyword or a
+   set of state IDs)."
+  [{:keys [deep? id transition] :as attrs}]
+  (let [t (if (keyword? transition) #{transition} (set transition))]
+    (merge {:id (genid "history")}
+      attrs
+      {:node-type  :history
+       :transition t})))
 
 (defn final [{:keys [id] :as attrs} & children]
   (merge {:id (genid "final")}
@@ -71,13 +75,24 @@
      :expression expr}))
 
 (defn transition
-  ([{:keys [event cond target type] :as attrs}]
-   (transition attrs nil))
-  ([{:keys [event cond target type] :as attrs} action]
-   (merge
-     {:id   (genid "transition")
-      :type (or type :external)}
-     attrs
-     (cond-> {:node-type :transition}
-       action (assoc :action action)))))
+  "Define a transition. The `target` parameter can be a single keyword or a set of them (when the transition activates
+   multiple specific states (e.g. parallel children).
+
+   :type - :internal or :external
+   :event - Name of the event as a keyword
+   :target - Target state(s)
+   :action - Action to run. See execution model.
+   :cond - Expression that must be true for this transition to be enabled. See execution model."
+  [{:keys [event cond target type action] :as attrs}]
+  (let [t (cond
+            (keyword? target) #{target}
+            (set? target) target
+            (sequential? target) (set target)
+            :else (throw (ex-info "Invalid target" {:target t})))]
+    (merge
+      {:id   (genid "transition")
+       :type (or type :external)}
+      attrs
+      {:node-type :transition
+       :target    t})))
 

@@ -17,6 +17,7 @@
            :dev        {:extra-paths ["src/dev"]
                         :extra-deps  {thheller/shadow-cljs        {:mvn/version "2.16.7"}
                                       vvvvalvalval/scope-capture  {:mvn/version "0.3.2"}
+                                      com.taoensso/timbre         {:mvn/version "5.1.2"}
                                       djblue/portal               {:mvn/version "0.18.1"}
                                       org.clojure/clojure         {:mvn/version "1.10.3"}
                                       org.clojure/clojurescript   {:mvn/version "1.10.891"}
