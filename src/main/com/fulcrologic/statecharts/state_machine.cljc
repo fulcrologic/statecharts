@@ -5,6 +5,8 @@
 
    ::sc/k in the docstrings of this namespace assumes the alias `[com.fulcrologic.statecharts :as sc]`, which
    can be generated as only an alias, though an empty namespace of that name does exist."
+  #?(:cljs (:require-macros [com.fulcrologic.statecharts.state-machine
+                             :refer [with-working-memory]]))
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [queue genid]]
@@ -57,6 +59,7 @@
 (defn machine
   "Create a new state machine definition that mimics the structure and semantics of SCXML."
   [{:keys [initial name script] :as attrs} & children]
+  ;; TODO: enforce unique IDs
   (let [node         (assoc attrs
                        :node-type :machine
                        :children (assign-parents nil children))
@@ -216,26 +219,38 @@
   [machine nodes]
   (into [] (reverse (in-document-order machine nodes))))
 
+#?(:clj
+   (defmacro with-working-memory [binding & body]
+     (let [[sym expr] binding]
+       `(let [~'sym (merge {::sc/enabled-transitions #{}
+                            ::sc/states-to-invoke    #{}
+                            ::sc/internal-queue      (queue)}
+                      ~expr)
+              next-mem# (do
+                          ~@body)]
+          (dissoc next-mem# ::sc/enabled-transitions ::sc/states-to-invoke ::sc/internal-queue)))))
+
 (defn initialize
   "Create working memory for a new machine. Auto-assigns a session ID unless you supply one."
   [{:keys [id name script] :as machine}]
   (let [t    (trace "initial transition" (->> machine (initial-element machine) (transition-element machine)))
         wmem {::sc/configuration       #{}
               ::sc/initialized-states  #{}                  ; states that have been entered (initialized data model) before
-              ::sc/states-to-invoke    #{}
               ::sc/enabled-transitions (if t #{t} #{})
-              ::sc/internal-queue      (queue)
               ::sc/history-value       {}
+              ;; FIXME: Should be defined by external thing that has an entry/exit when processing
               ::sc/data-model          {:_name         (or name (genid "name"))
                                         :_x            {}   ; system variables
                                         :_ioprocessors {}
                                         :_sessionid    (or id (genid "workingmemory"))}
               ::sc/running?            true}]
-    (as-> wmem $
-      (enter-states machine $)
-      (before-event machine $)
-      (cond-> $
-        script (as-> $ (execute machine $ script))))))
+    (with-working-memory [wmem wmem]
+      (as-> wmem $
+        (enter-states machine $)
+        (before-event machine $)
+        (cond-> $
+          script (as-> $ (execute machine $ script)))
+        (dissoc $ ::sc/enabled-transitions)))))
 
 (defn get-proper-ancestors
   "Returns the node ids from `machine` that are proper ancestors of `node-or-id` (an id or actual node-or-id). If `stopping-node-or-id-or-id`
@@ -635,18 +650,19 @@
   "Steps that are run before processing the next event."
   [machine working-memory]
   {:post [(map? %)]}
-  (loop [step-memory working-memory]
-    (let [working-memory (assoc step-memory
-                           ::sc/enabled-transitions #{}
-                           ::sc/macrostep-done? false)
-          {::sc/keys [states-to-invoke running?]
-           :as       working-memory2} (handle-eventless-transitions machine working-memory)]
-      (if (trace running?)
-        (let [final-mem (run-invocations machine working-memory2)]
-          (if (seq (::sc/internal-queue final-mem))
-            (recur final-mem)
-            final-mem))
-        (exit-interpreter machine working-memory2)))))
+  (with-working-memory [working-memory working-memory]
+    (loop [step-memory working-memory]
+      (let [working-memory (assoc step-memory
+                             ::sc/enabled-transitions #{}
+                             ::sc/macrostep-done? false)
+            {::sc/keys [states-to-invoke running?]
+             :as       working-memory2} (handle-eventless-transitions machine working-memory)]
+        (if (trace running?)
+          (let [final-mem (run-invocations machine working-memory2)]
+            (if (seq (::sc/internal-queue final-mem))
+              (recur final-mem)
+              final-mem))
+          (exit-interpreter machine working-memory2))))))
 
 (defn- cancel? [event] false)
 (defn- handle-external-invocations [machine working-memory]
@@ -656,14 +672,15 @@
 (defn process-event
   "Process the given `external-event` given a state `machine` with the `working-memory` as its current status/state."
   [machine working-memory external-event]
-  (if (cancel? external-event)
-    (exit-interpreter machine working-memory)
-    (as-> working-memory $
-      (select-transitions machine $ external-event)
-      (trace $)
-      (handle-external-invocations machine $)
-      (microstep machine $)
-      (before-event machine $))))
+  (with-working-memory [working-memory working-memory]
+    (if (cancel? external-event)
+      (exit-interpreter machine working-memory)
+      (as-> working-memory $
+        (select-transitions machine $ external-event)
+        (trace $)
+        (handle-external-invocations machine $)
+        (microstep machine $)
+        (before-event machine $)))))
 
 ;; VALIDATION HELPERS
 
