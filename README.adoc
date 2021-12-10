@@ -1,21 +1,62 @@
 = State Charts for Clojure(script)
 
 A Clojure implementation of state charts that use the SCXML
-structure and semantics, without the need for XML.
+structure and semantics (as far as they are defined), without the need for XML.
 
 It is a simple exercise to convert an SCXML document to/from the
 Clojure data structures used by this library, which
 means existing tooling can pretty easily be used to design or
-document your machine.
+document your machine. Contributions of this sort are welcome, or could be
+built as external add-ons.
 
 == Status
 
-Work in progress translating pseudocode of spec to CLJ. Not done yet.
+Work in progress translating and testing the pseudocode of the SCXML spec to CLJC. Not done yet.
 
 See Conformance.adoc at the root of this repository for notes on
 decisions that might affect exact conformance to the standard.
 
+== Related Work
+
+The primary alternative to this library is https://github.com/lucywang000/clj-statecharts[clj-statecharts],
+which is a fine library modelled after xstate.
+
+This library exists for the following reasons:
+
+* At the time this library was created, clj-statecharts was missing features. In particular history nodes,
+  which we needed. I looked at clj-statecharts in order to try to add history, but some of the internal
+  decisions made it more difficult to add (with correct semantics) and the Eclipse license made it less
+  appealing for internal customization as a base in commercial software (see https://www.juxt.pro/blog/prefer-mit).
+* To create an SCXML-like implementation that uses the algorithm defined
+  in the W3C Recommended document, and can (grow to) run (with minor transformations) SCXML docs that are
+  targeted to Clojure with the semantics defined there (such as they are).
+* To define more refined abstract mechanisms such that the state charts can be associated to long-lived things
+  (such as a monetary transaction that happens over time) and
+  be customized to interface with things like durable queues for events (e.g. AWS SQS) and
+  reliable timers.
+* MIT licensing instead of Eclipse.
+
+Other implementations:
+
+* XState : Javascript. Could be used from CLJS.
+* Apache SCXML : Stateful and imperative. Requires writing classes. Requires you use XML.
+
 == Execution
+
+WORK IN PROGRESS.
+
+The SCXML standard defines various elements and subsections that describe how the
+data model should work. I plan to simplify this somewhat from XML since machines
+in this library are defined via code already, and need not be translated from strings.
+
+I can imagine someone (perhaps me in the future) providing a `sci`-based system that
+can read SCXML with embedded CLJ(s) expressions and run them. That is not my priority for
+the project.
+
+Version 1 is likely to have a simplified execution model and data model that is sufficient
+for my current needs.
+
+Something like:
 
 SCXML allows for expressions to be placed in the machine design, functions
 to be invoked, and parameters to be passed from the state machine's data model.
@@ -37,13 +78,23 @@ It is serializable by nippy, transit, etc. Therefore, you can easily save
 an active state machine by value into any data store. The value
 is intended to be as small as possible so that storage can be efficient.
 
-Every active state machine is assigned a random UUID on creation (which you
-can override via `initialize`). This allows you to coordinate external
-event sources with instances of running machines.
+Every active state machine is assigned a ID on creation (which you
+can override via `initialize`). This is intended as part of the story to
+allow you to coordinate external event sources with working with
+instances of machines that are archived in durable storage while idle.
 
 == Conformance
 
 This library was written using the reference implementation described in
 the https://www.w3.org/TR/scxml[SCXML standard], but without the requirement
-that the machine be written in XML. Any deviation from the standard should
-be considered a bug.
+that the machine be written in XML.
+
+Any deviation from the standard (as far as general operation of state transitions, order
+of execution of entry/exit, etc.) should be considered a bug. Note that it is possible
+for a bugfix in this library to change the behavior of your code (if you wrote it in
+a way that depends on the misbehavior); therefore, even though
+this library does not intend to make breaking changes, it is possible that a bugfix could affect
+your code's operation.
+
+If future versions of the standard are released that cause incompatible changes, then
+this library will add a new namespace for that new standard (not break versioning).
