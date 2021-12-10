@@ -13,6 +13,8 @@ built as external add-ons.
 
 Work in progress translating and testing the pseudocode of the SCXML spec to CLJC. Not done yet.
 
+Alpha versions expected by mid-December 2021.
+
 See Conformance.adoc at the root of this repository for notes on
 decisions that might affect exact conformance to the standard.
 
