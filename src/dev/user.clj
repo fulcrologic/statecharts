@@ -1,5 +1,6 @@
 (ns user
   (:require
+    [clojure.spec.alpha :as s]
     [expound.alpha :as expound]
     [taoensso.timbre :as log])
   (:import (clojure.lang PersistentQueue)
