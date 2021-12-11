@@ -11,6 +11,9 @@ built as external add-ons.
 
 == Status
 
+image:https://img.shields.io/clojars/v/com.fulcrologic/statecharts.svg[link=https://clojars.org/com.fulcrologic/statecharts]
+image:https://circleci.com/gh/fulcrologic/statecharts/tree/master.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/statecharts/tree/master"]
+
 ALPHA. The algorithm is written and (seems to be) working. Some aspects exist and are "called", but are currently stubs.
 
 * Implemented:
