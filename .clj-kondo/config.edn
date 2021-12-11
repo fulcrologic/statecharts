@@ -1,1 +1,2 @@
-{:config-paths []}
+{:lint-as {com.fulcrologic.statecharts.state-machine/with-working-memory clojure.core/let}
+ :config-paths []}

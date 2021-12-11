@@ -1,7 +1,6 @@
 (ns com.fulcrologic.statecharts.elements
+  (:refer-clojure :exclude [send])
   (:require
-    [clojure.spec.alpha :as s]
-    [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [genid]]))
 
 (defn state
@@ -89,7 +88,7 @@
    multiple specific states (e.g. parallel children).
 
    :type - :internal or :external
-   :event - Name of the event as a keyword
+   :event - Name of the event as a keyword, or a list of such keywords. See `events/name-match?` or SCXML for semantics.
    :target - Target state(s)
    :action (known internally as :content) - Action to run. See execution model.
    :cond - Expression that must be true for this transition to be enabled. See execution model."
@@ -125,10 +124,9 @@
            type
            delay] :as attrs}]
   (merge
-    {:id         (genid "done-data")
-     :expression (or expr {})}
+    {:id (genid "done-data")}
     attrs
-    {:node-type :done-data}))
+    {:node-type :send}))
 
 (defn invoke
   "NOT IMPLEMENTED YET.
@@ -152,7 +150,6 @@
            type
            finalize
            delay] :as attrs}]
-  (assert (or id idlocation) "invoke MUST have either an id or idlocation")
   (merge attrs
     {:id        (or id (genid "invoke"))
      :node-type :invoke}))

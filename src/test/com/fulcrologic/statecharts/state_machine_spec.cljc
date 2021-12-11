@@ -178,7 +178,53 @@
       "can find the transition element (first) of a state"
       (:id (sm/transition-element m (sm/initial-element m m))) => :it)))
 
-(specification "Basic machine" :focus
+(specification "with-working-mem"
+  (assertions
+    "Returns the working memory with only the internal additions."
+    (sm/with-working-memory [m {}]
+      (assertions
+        "Adds required processing initial items to memory"
+        (::sc/enabled-transitions m) => #{}
+        (::sc/states-to-invoke m) => #{}
+        (::sc/internal-queue m) => (queue))
+      (assoc m :x 1))
+    => {:x 1}))
+
+(def equipment
+  (machine {}
+    (initial {}
+      (transition {:target :Eq}))
+
+    (parallel {:id :Eq}
+      (state {:id :motor}
+        (initial {}
+          (transition {:target :motor/off}))
+        (state {:id :motor/off}
+          (transition {:event :start :target :motor/on}))
+        (state {:id :motor/on}
+          (transition {:event :stop :target :motor/off})))
+      (state {:id :LED}
+        (initial {}
+          (transition {:target :led/off}))
+        (state {:id :led/on}
+          (transition {:event :stop :target :led/off}))
+        (state {:id :led/off}
+          (transition {:event :start :target :led/on}))))))
+
+(specification "Root parallel state" :focus
+  (let [wmem (sm/initialize equipment)
+        c    (fn [mem] (::sc/configuration mem))]
+    (assertions
+      "Enters proper states from initial"
+      (c wmem) => #{:led/off :motor/off :Eq :motor :LED}
+      "Transitions on events"
+      (c (sm/process-event machine wmem :start)) => #{:led/on :motor/on :Eq :motor :LED}
+      "Transitions on additional events"
+      (c (as-> wmem $
+           (sm/process-event machine $ :start)
+           (sm/process-event machine $ :stop))) => #{:led/off :motor/off :Eq :motor :LED})))
+
+(specification "Basic machine"
   (let [machine (machine {}
                   (initial {}
                     (transition {:target :A}))

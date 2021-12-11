@@ -1,9 +1,16 @@
 This library attempts to conform to the https://www.w3.org/TR/scxml standard
-and suggested implementation. There are some notable exceptions, which
-are documented here.
+and suggested implementation.
 
-* Only early data binding is supported.
+It diverges in the following places:
+
 * The specification is vague about "Document Order". The default in this
-library is "depth first" document order, but you can choose "breadth first"
-when creating the machine. This should only have a visible difference in
-parallel nodes that have nested structure deeper than one.
+  library is "depth first" document order (since that is element physical order
+  in reading order), but you can choose "breadth first"
+  when creating the machine to prefer a structural interpretation.
+  This should only have a visible difference in
+  parallel nodes that have nested structure deeper than one.
+* Some sub-element types are not defined as elements, and are instead encompassed by attributes
+  of the (would-be) parent.
+* The specification requires certain XML-style things (such as supporting the explicit type
+  "http://www.w3.org/TR/scxml/#SCXMLEventProcessor" for `<send>`). Things like URLs
+  may be replaced by an equivalently-functional thing.
