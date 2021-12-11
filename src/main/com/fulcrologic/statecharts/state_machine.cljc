@@ -8,11 +8,14 @@
   #?(:cljs (:require-macros [com.fulcrologic.statecharts.state-machine
                              :refer [with-working-memory]]))
   (:require
+    com.fulcrologic.statecharts.specs
+    [com.fulcrologic.guardrails.core :refer [>defn => ? >defn-]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.elements :as elements]
     [com.fulcrologic.statecharts.events :as evts :refer [new-event]]
     [com.fulcrologic.statecharts.util :refer [queue genid]]
     [clojure.set :as set]
+    [clojure.spec.alpha :as s]
     [taoensso.timbre :as log]))
 
 ;; I did try to translate all that imperative code to something more functional...got really tiring, and generated
@@ -24,13 +27,15 @@
 (declare execute enter-states invalid-history-elements configuration-problems get-transition-domain before-event
   initial-element transition-element child-states)
 
-(defn- ids-in-document-order
+(>defn- ids-in-document-order
   "Returns the IDs of the states in the given node, in document order (not including the node itself).
    You can specify `::sc/document-order :breadth-first` on the top-level machine definition to get a
    depth-first interpretation vs. breadth."
   ([machine]
+   [::sc/machine => (s/every keyword? :kind vector?)]
    (ids-in-document-order machine machine))
   ([{desired-order ::sc/document-order :as machine} {:keys [id] :as node}]
+   [::sc/machine ::sc/element => (s/every keyword? :kind vector?)]
    (if (= :breadth-first desired-order)
      (let [states     (:children node)
            base-order (mapv :id states)]
@@ -42,10 +47,11 @@
          id (conj id)
          (seq children) (into (mapcat #(ids-in-document-order machine %) children)))))))
 
-(defn- with-default-initial-state
+(>defn- with-default-initial-state
   "Scans children for an initial state. If no such state is found then it creates one and sets the target to the
    first child that is a state."
   [children]
+  [(s/every ::sc/element) => (s/every ::sc/element)]
   (let [states (filter #(#{:state :parallel} (:node-type %)) children)]
     (cond
       (some :initial? states) children
@@ -53,8 +59,9 @@
       :else (conj children (elements/initial {}
                              (elements/transition {:target (:id (first states))}))))))
 
-(defn- assign-parents
+(>defn- assign-parents
   [{parent-id :id :as parent} nodes]
+  [(? ::sc/element) (s/every ::sc/element) => (s/every ::sc/element)]
   (if nodes
     (let [nodes (if (or (nil? parent) (= :state (:node-type parent)))
                   (with-default-initial-state nodes)
@@ -68,151 +75,213 @@
         nodes))
     []))
 
-(defn machine
+(>defn machine
   "Create a new state machine definition that mimics the structure and semantics of SCXML."
   [{:keys [initial name script] :as attrs} & children]
-  ;; TODO: enforce unique IDs
+  [map? (s/* ::sc/element) => ::sc/machine]
   (let [children     (assign-parents nil children)
         node         (assoc attrs
+                       :id :ROOT
                        :node-type :machine
                        :children children)
         ids-in-order (ids-in-document-order node)
         node         (assoc node
                        :children (mapv :id children)
-                       ::sc/elements-by-id (into {}
-                                             (keep (fn [{:keys [id children] :as n}]
-                                                     (when id [id (cond-> n
-                                                                    (seq children) (assoc :children
-                                                                                     (mapv :id children)))])))
+                       ::sc/elements-by-id (reduce
+                                             (fn [acc {:keys [id children] :as n}]
+                                               (let [n (cond-> n
+                                                         (seq children) (assoc :children
+                                                                          (mapv :id children)))]
+                                                 (cond
+                                                   (= :ROOT id) acc
+                                                   (and id (contains? acc id))
+                                                   (throw (ex-info (str "Duplicate element ID on machine: " id) {}))
+                                                   id (assoc acc id n)
+                                                   :else acc)))
+                                             {}
                                              (tree-seq :children :children node))
+                       :id :ROOT
                        ::sc/ids-in-document-order ids-in-order)
         problems     (concat (invalid-history-elements node))]
     (when (seq problems)
       (throw (ex-info "Invalid machine specification" {:problems problems})))
     node))
 
-(defn element
+(>defn element
   "Find the node in the machine that has the given ID (of any type)"
-  [machine node-or-id]
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (? ::sc/element)]
   (cond
-    (and (map? node-or-id)
-      (contains? (::sc/elements-by-id machine) (:id node-or-id)))
-    (get-in machine [::sc/elements-by-id (:id node-or-id)])
+    (= element-or-id :ROOT) machine
+    (and (map? element-or-id)
+      (contains? (::sc/elements-by-id machine) (:id element-or-id)))
+    (get-in machine [::sc/elements-by-id (:id element-or-id)])
 
-    (map? node-or-id)
-    node-or-id
+    (map? element-or-id)
+    element-or-id
 
     :else
-    (get-in machine [::sc/elements-by-id node-or-id])))
+    (get-in machine [::sc/elements-by-id element-or-id])))
 
-(defn element-id [machine node-or-id] (:id (element machine node-or-id)))
+(>defn element-id
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (? ::sc/id)]
+  (:id (element machine element-or-id)))
 
-(defn dispatch
+(>defn dispatch
   "Use the machine definition to figure out how to run the given code sym."
   [machine sym working-memory]
+  [::sc/machine symbol? ::sc/working-memory => ::sc/working-memory]
   ;; FIXME: Use formal data model, (allow to use, but not require to use, working memory)
-  (when-let [f (::sc/dispatcher machine)]
+  (if-let [f (::sc/dispatcher machine)]
     (if f
       (update working-memory ::sc/data-model (fn [m] (f sym m)))
-      working-memory)))
+      working-memory)
+    working-memory))
 
-(defn get-parent
-  "Get the immediate parent (id) of the given node-or-id"
-  [machine node-or-id]
-  (:parent (element machine node-or-id)))
+(>defn get-parent
+  "Get the immediate parent (id) of the given element-or-id. Returns nil if the element is the root."
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (? ::sc/id)]
+  (cond
+    (nil? element-or-id) nil
+    (= :ROOT (element-id machine element-or-id)) nil
+    :else (or
+            (:parent (element machine element-or-id))
+            :ROOT)))
 
-(defn get-children
-  "Returns the ID of the child nodes of the given `node-or-id` which
+(>defn get-children
+  "Returns the ID of the child nodes of the given `element-or-id` which
   have the given type."
-  [machine node-or-id type]
+  [machine element-or-id type]
+  [::sc/machine (? ::sc/element-or-id) ::sc/node-type => (s/every ::sc/id :kind vector?)]
   (filterv #(= (:node-type (element machine %)) type)
-    (:children (element machine node-or-id))))
+    (:children (element machine element-or-id))))
 
-(defn invocations
-  "Returns the IDs of the nodes that are invocations within `node-or-id-or-id`"
-  [machine node-or-id] (get-children machine node-or-id :invoke))
+(>defn invocations
+  "Returns the IDs of the nodes that are invocations within `element-or-id`"
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (s/every ::sc/id)]
+  (get-children machine element-or-id :invoke))
 
-(defn transitions [machine node-or-id] (get-children machine node-or-id :transition))
+(>defn transitions [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (s/every ::sc/id)]
+  (get-children machine element-or-id :transition))
 
-(defn transition-element
-  "Returns the element that represents the first transition of node-or-id.
+(>defn transition-element
+  "Returns the element that represents the first transition of element-or-id.
    This should only be used on nodes that have a single required transition, such as
    <initial> and <history> nodes."
-  [machine node-or-id]
-  (element machine (first (get-children machine node-or-id :transition))))
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (? ::sc/transition-element)]
+  (some->> (transitions machine element-or-id) first (element machine)))
 
-(defn exit-handlers [machine node-or-id] (get-children machine node-or-id :on-exit))
-(defn entry-handlers [machine node-or-id] (get-children machine node-or-id :on-entry))
-(defn history-elements [machine node-or-id] (get-children machine node-or-id :history))
-(defn history-element? [machine node-or-id] (= :history (:node-type (element machine node-or-id))))
-(defn final-state? [machine node-or-id] (= :final (:node-type (element machine node-or-id))))
-(defn state? [machine node-or-id]
-  (let [n (element machine node-or-id)]
+(>defn exit-handlers [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (s/every ::sc/on-exit-element :kind vector?)]
+  (mapv (partial element machine) (get-children machine element-or-id :on-exit)))
+
+(>defn entry-handlers [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (s/every ::sc/on-entry-element :kind vector?)]
+  (mapv (partial element machine) (get-children machine element-or-id :on-entry)))
+
+(>defn history-elements [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (s/every ::sc/history-element :kind vector?)]
+  (mapv #(element machine %) (get-children machine element-or-id :history)))
+
+(>defn history-element? [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => boolean?]
+  (boolean
+    (= :history (:node-type (element machine element-or-id)))))
+
+(>defn final-state? [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => boolean?]
+  (boolean
+    (= :final (:node-type (element machine element-or-id)))))
+
+(>defn state? [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => boolean?]
+  (let [n (element machine element-or-id)]
     (boolean
       (and
-        (map? n)
-        (#{:final :state :parallel} (:node-type n))))))
-(defn child-states
-  "Find all of the immediate children (IDs) of `node-or-id` that are states
-   (final, node-or-id, or parallel)"
-  [machine node-or-id]
+        (map? (log/spy :trace n))
+        (#{:final :state :parallel} (log/spy :trace (:node-type n)))))))
+
+(>defn child-states
+  "Find all of the immediate children (IDs) of `element-or-id` that are states
+   (final, element-or-id, or parallel)"
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (s/every ::sc/id :kind vector?)]
   (into []
     (concat
-      (get-children machine node-or-id :final)
-      (get-children machine node-or-id :state)
-      (get-children machine node-or-id :parallel))))
+      (get-children machine element-or-id :final)
+      (get-children machine element-or-id :state)
+      (get-children machine element-or-id :parallel))))
 
-(defn initial-element
-  "Returns the element that represents the <initial> element of a compound state node-or-id."
-  [machine node-or-id]
+(>defn initial-element
+  "Returns the element that represents the <initial> element of a compound state element-or-id.
+   Returns nil if the element isn't a compound state."
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (? ::sc/initial-element)]
   (->>
-    (child-states machine node-or-id)
+    (child-states machine element-or-id)
     (map #(element machine %))
     (filter :initial?)
     first))
 
-(defn atomic-state? [machine node-or-id]
-  (and
-    (log/spy :warn (state? machine node-or-id))
-    (log/spy :warn (empty? (child-states machine node-or-id)))))
+(>defn atomic-state?
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => boolean?]
+  (boolean
+    (and
+      (log/spy :trace (state? machine (log/spy :trace element-or-id)))
+      (log/spy :trace (empty? (child-states machine element-or-id))))))
 
-(defn parallel-state? [machine node-or-id]
-  (= :parallel (:node-type (element machine node-or-id))))
+(>defn parallel-state? [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => boolean?]
+  (boolean
+    (= :parallel (:node-type (element machine element-or-id)))))
 
-(defn compound-state?
+(>defn compound-state?
   "Returns true if the given state contains other states."
-  [machine node-or-id]
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => boolean?]
   (and
-    (not (parallel-state? machine node-or-id))
-    (not (atomic-state? machine node-or-id))))
+    (not (parallel-state? machine element-or-id))
+    (not (atomic-state? machine element-or-id))))
 
-(defn nearest-ancestor-state
-  "Returns the ID of the state (if any) that encloses the given node-or-id"
-  [machine node-or-id]
-  (let [p (get-parent machine node-or-id)]
+(>defn nearest-ancestor-state
+  "Returns the ID of the state (if any) that encloses the given element-or-id, or nil if there is no
+   ancestor state."
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => (? ::sc/id)]
+  (let [p (get-parent machine element-or-id)]
     (cond
       (state? machine p) p
       (nil? p) nil
       :else (nearest-ancestor-state machine p))))
 
-(def source "[machine node-or-id]" nearest-ancestor-state)
+(def source "[machine element-or-id]" nearest-ancestor-state)
 
-(defn all-descendants
+(>defn all-descendants
   "Returns a set of IDs of the (recursive) descendants (children) of s"
   [machine s]
+  [::sc/machine (? ::sc/element-or-id) => (s/every ::sc/id :kind set?)]
   (if-let [immediate-children (:children (element machine s))]
     (into (set immediate-children)
       (mapcat #(all-descendants machine %) immediate-children))
     #{}))
 
-(defn descendant? [machine s1 s2]
+(>defn descendant?
+  [machine s1 s2]
+  [::sc/machine ::sc/element-or-id ::sc/element-or-id => boolean?]
   (let [s1-id (element-id machine s1)]
     (boolean
-      (contains? (all-descendants machine s2) s1-id))))
+      (contains? (log/spy :info (all-descendants machine s2)) (log/spy :info s1-id)))))
 
-(defn in-document-order
+(>defn in-document-order
   "Given a set/sequence of actual nodes-or-ids (as maps), returns a vector of those nodes-or-ids, but in document order."
   [machine nodes-or-ids]
+  [::sc/machine (s/every ::sc/element-or-id) => (s/every ::sc/element-or-id :kind vector?)]
   (let [ordered-ids (::sc/ids-in-document-order machine)
         ids         (set (map #(if (map? %) (:id %) %) nodes-or-ids))]
     (vec
@@ -226,9 +295,10 @@
    Same as in-document-order."
   in-document-order)
 
-(defn in-exit-order
+(>defn in-exit-order
   "The reverse of in-document-order."
   [machine nodes]
+  [::sc/machine (s/every ::sc/element-or-id) => (s/every ::sc/element-or-id :kind vector?)]
   (into [] (reverse (in-document-order machine nodes))))
 
 #?(:clj
@@ -242,10 +312,15 @@
                           ~@body)]
           (dissoc next-mem# ::sc/enabled-transitions ::sc/states-to-invoke ::sc/internal-queue)))))
 
-(defn initialize
+#?(:clj
+   (s/fdef with-working-memory
+     :args (s/cat :binding (s/tuple symbol? any?) :body (s/* any?))))
+
+(>defn initialize
   "Create working memory for a new machine. Auto-assigns a session ID unless you supply one."
   [{:keys [id name script] :as machine}]
-  (let [t    (log/spy :trace "initial transition" (->> machine (initial-element machine) (transition-element machine)))
+  [::sc/machine => ::sc/working-memory]
+  (let [t    (log/spy :trace "initial transition" (some->> machine (initial-element machine) (transition-element machine) (element-id machine)))
         wmem {::sc/configuration       #{}
               ::sc/initialized-states  #{}                  ; states that have been entered (initialized data model) before
               ::sc/enabled-transitions (if t #{t} #{})
@@ -263,43 +338,55 @@
         (cond-> $
           script (as-> $ (execute machine $ script)))))))
 
-(defn get-proper-ancestors
-  "Returns the node ids from `machine` that are proper ancestors of `node-or-id` (an id or actual node-or-id). If `stopping-node-or-id-or-id`
-   is included, then that will stop the retrieval (not including the stopping node-or-id). The results are
-   in the ancestry order (i.e. deepest node-or-id first)."
-  ([machine node-or-id] (get-proper-ancestors machine node-or-id nil))
-  ([machine node-or-id stopping-node-or-id]
-   (let [stop-id (:id (element machine stopping-node-or-id))]
-     (loop [n      node-or-id
+(>defn get-proper-ancestors
+  "Returns the node ids from `machine` that are proper ancestors of `element-or-id` (an id or actual element-or-id). If `stopping-element-or-id-or-id`
+   is included, then that will stop the retrieval (not including the stopping element-or-id). The results are
+   in the ancestry order (i.e. deepest element-or-id first)."
+  ([machine element-or-id]
+   [::sc/machine ::sc/element-or-id => (s/every ::sc/id :kind vector?)]
+   (get-proper-ancestors machine element-or-id nil))
+  ([machine element-or-id stopping-element-or-id]
+   [::sc/machine ::sc/element-or-id (? ::sc/element-or-id) => (s/every ::sc/id :kind vector?)]
+   (let [stop-id (:id (element machine stopping-element-or-id))]
+     (loop [n      element-or-id
             result []]
-       (let [parent-id (get-parent machine n)]
+       (let [parent-id (log/spy :debug (get-parent machine (log/spy :debug n)))]
          (if (or (nil? parent-id) (= parent-id stop-id))
            result
            (recur parent-id (conj result parent-id))))))))
 
 ;; TODO: implement
-(defn condition-match [machine working-memory node] true)
+(>defn condition-match
+  [machine working-memory element-or-id]
+  [::sc/machine ::sc/working-memory ::sc/element-or-id => boolean?]
+  true)
 
-(defn find-least-common-compound-ancestor
+(>defn find-least-common-compound-ancestor
   "Returns the ELEMENT that is the common compound ancestor of all the `states`. NOTE: This may be
    the state machine itself. The compound state returned will be the one closest to all of the states."
   [machine states]
-  (let [possible-ancestors (conj
-                             (into []
-                               (comp
-                                 (map #(element machine %))
-                                 (filter #(compound-state? machine %)))
-                               (get-proper-ancestors machine (first states)))
-                             machine)
-        other-states       (rest states)]
-    (first
-      (keep
-        (fn [anc] (when (every? (fn [s] (descendant? machine s anc)) other-states) anc))
-        possible-ancestors))))
+  [::sc/machine (s/every ::sc/element-or-id) => ::sc/element]
+  (let [possible-ancestors (log/spy :info "possible" (conj
+                                                       (into []
+                                                         (comp
+                                                           (filter #(or
+                                                                      (= :ROOT %)
+                                                                      (compound-state? machine %)))
+                                                           (map (partial element-id machine)))
+                                                         (log/spy :info "PA" (get-proper-ancestors machine (log/spy :debug (first states)))))
+                                                       machine))
+        other-states       (log/spy :info "other states" (rest states))]
+    (element machine
+      (log/spy :debug "LCCA"
+        (first
+          (keep
+            (fn [anc] (when (log/spy :info (every? (fn [s] (descendant? machine s anc)) other-states)) anc))
+            possible-ancestors))))))
 
-(defn in-final-state?
+(>defn in-final-state?
   "Returns true if `non-atomic-state` is completely done."
   [machine {::sc/keys [configuration] :as wmem} non-atomic-state]
+  [::sc/machine ::sc/working-memory (? ::sc/element-or-id) => boolean?]
   (boolean
     (cond
       (compound-state? machine non-atomic-state) (some
@@ -312,18 +399,22 @@
 
 (declare add-descendant-states-to-enter!)
 
-(defn add-ancestor-states-to-enter! [machine wmem state ancestor
-                                     states-to-enter states-for-default-entry default-history-content]
-  (doseq [anc (get-proper-ancestors state ancestor)]
+(>defn add-ancestor-states-to-enter! [machine wmem state ancestor
+                                      states-to-enter states-for-default-entry default-history-content]
+  [::sc/machine ::sc/active-working-memory ::sc/element-or-id ::sc/element-or-id volatile? volatile? volatile? => nil?]
+  (log/spy :debug [state ancestor])
+  (doseq [anc (log/spy :debug "add proper-ancestors" (get-proper-ancestors machine state ancestor))]
     (vswap! states-to-enter conj (element-id machine anc))
-    (when (parallel-state? machine anc)
+    (when (log/spy :debug "parallel anc?" (parallel-state? machine anc))
       (doseq [child (child-states machine anc)]
         (when-not (some (fn [s] (descendant? machine s child)) @states-to-enter)
           (add-descendant-states-to-enter! machine wmem child states-to-enter
-            states-for-default-entry default-history-content))))))
+            states-for-default-entry default-history-content)))))
+  nil)
 
-(defn add-descendant-states-to-enter! [machine {::sc/keys [history-value] :as wmem}
-                                       state states-to-enter states-for-default-entry default-history-content]
+(>defn add-descendant-states-to-enter! [machine {::sc/keys [history-value] :as wmem}
+                                        state states-to-enter states-for-default-entry default-history-content]
+  [::sc/machine ::sc/active-working-memory ::sc/element-or-id volatile? volatile? volatile? => nil?]
   (letfn [(add-elements! [target parent]
             (doseq [s target]
               (add-descendant-states-to-enter! machine wmem s states-to-enter
@@ -349,9 +440,12 @@
               (doseq [child (child-states machine state)]
                 (when-not (some (fn [s] (descendant? machine s child)) @states-to-enter)
                   (add-descendant-states-to-enter! machine wmem child states-to-enter
-                    states-for-default-entry default-history-content))))))))))
+                    states-for-default-entry default-history-content))))))))
+    nil))
 
-(defn get-effective-target-states [machine {::sc/keys [history-value] :as working-memory} t]
+(>defn get-effective-target-states
+  [machine {::sc/keys [history-value] :as working-memory} t]
+  [::sc/machine ::sc/active-working-memory ::sc/element-or-id => (s/every ::sc/element-or-id :kind set?)]
   (reduce
     (fn [targets s]
       (let [{:keys [id] :as s} (element machine s)]
@@ -367,16 +461,17 @@
     #{}
     (:target (element machine t))))
 
-(defn compute-entry-set
+(>defn compute-entry-set
   "Returns [states-to-enter states-for-default-entry default-history-content]."
   [machine {::sc/keys [enabled-transitions] :as working-memory}]
+  [::sc/machine ::sc/active-working-memory => (s/tuple set? set? map?)]
   (let [states-to-enter          (volatile! #{})
         states-for-default-entry (volatile! #{})
         default-history-content  (volatile! {})
         transitions              (mapv #(or (element machine %)
                                           (elements/transition {:target %})) enabled-transitions)]
     (doseq [{:keys [target] :as t} transitions]
-      (let [ancestor (log/spy :info "ancestor" (element-id machine (get-transition-domain machine working-memory t)))]
+      (let [ancestor (log/spy :trace "ancestor" (element-id machine (get-transition-domain machine working-memory t)))]
         (doseq [s target]
           (add-descendant-states-to-enter! machine working-memory (log/spy :trace s) states-to-enter
             states-for-default-entry default-history-content))
@@ -390,15 +485,17 @@
   "Initialize the data models in volatile working memory `wmem` for the given states, if necessary."
   [machine wmem states])
 
-(defn- execute
+(>defn- execute
   "Run the content/action of s. Returns an updated wmem."
   [machine wmem s]
+  [::sc/machine ::sc/active-working-memory ::sc/element-or-id => ::sc/working-memory]
   wmem)
 
-(defn enter-states
+(>defn enter-states
   "Enters states, triggers actions, tracks long-running invocations, and
    returns updated working memory."
   [machine wmem]
+  [::sc/machine ::sc/active-working-memory => ::sc/working-memory]
   (let [[states-to-enter
          states-for-default-entry
          default-history-content] (log/spy :trace (compute-entry-set machine wmem))
@@ -414,7 +511,7 @@
         (vreset! ma (execute machine @ma t)))
       (when-let [content (get default-history-content (element-id machine s))]
         (vreset! ma (execute machine @ma content)))
-      (if (final-state? machine s)
+      (when (final-state? machine s)
         (if (nil? (get-parent machine s))
           (vswap! ma assoc ::sc/running? false)
           (let [parent      (get-parent machine s)
@@ -429,13 +526,17 @@
                 (new-event ::sc/done {:state (element-id machine grandparent)})))))))
     @ma))
 
-(defn execute-transition-content [machine {::sc/keys [enabled-transitions] :as wmem}]
+(>defn execute-transition-content
+  [machine {::sc/keys [enabled-transitions] :as wmem}]
+  [::sc/machine ::sc/active-working-memory => ::sc/working-memory]
   (reduce
     (fn [wmem t] (execute machine wmem t))
     wmem
     enabled-transitions))
 
-(defn get-transition-domain [machine working-memory t]
+(>defn get-transition-domain
+  [machine working-memory t]
+  [::sc/machine ::sc/working-memory ::sc/element-or-id => (? ::sc/id)]
   (let [tstates (log/spy :trace (get-effective-target-states machine working-memory t))
         tsource (log/spy :trace (nearest-ancestor-state machine t))]
     (cond
@@ -444,9 +545,11 @@
         (= :internal (:type t))
         (compound-state? machine tsource)
         (every? (fn [s] (descendant? machine s tsource)) tstates)) tsource
-      :else (find-least-common-compound-ancestor machine (into [tsource] tstates)))))
+      :else (:id (find-least-common-compound-ancestor machine (into [tsource] tstates))))))
 
-(defn compute-exit-set [machine {::sc/keys [configuration] :as working-mem} transitions]
+(>defn compute-exit-set
+  [machine {::sc/keys [configuration] :as working-mem} transitions]
+  [::sc/machine ::sc/active-working-memory (s/every ::sc/element-or-id) => (s/every ::sc/id :kind set?)]
   (reduce
     (fn [acc t]
       (if (log/spy :trace (contains? (element machine t) :target))
@@ -458,9 +561,10 @@
     #{}
     transitions))
 
-(defn remove-conflicting-transitions
+(>defn remove-conflicting-transitions
   "Updates working-mem so that enabled-transitions no longer includes any conflicting ones."
   [machine {::sc/keys [configuration enabled-transitions] :as wmem}]
+  [::sc/machine ::sc/active-working-memory => ::sc/active-working-memory]
   (log/spy :trace enabled-transitions)
   (let [filtered-transitions (volatile! #{})]
     (doseq [t1 enabled-transitions
@@ -481,12 +585,13 @@
           (vswap! filtered-transitions conj t1))))
     (assoc wmem ::sc/enabled-transitions (log/spy :trace @filtered-transitions))))
 
-(defn- select-transitions* [machine configuration predicate]
+(>defn- select-transitions* [machine configuration predicate]
+  [::sc/machine ::sc/configuration ifn? => ::sc/enabled-transitions]
   (let [enabled-transitions (volatile! #{})
         looping?            (volatile! true)
         start-loop!         #(vreset! looping? true)
         break!              #(vreset! looping? false)
-        atomic-states       (in-document-order machine (log/spy :info (filterv #(atomic-state? machine %) configuration)))]
+        atomic-states       (in-document-order machine (log/spy :trace (filterv #(atomic-state? machine %) configuration)))]
     (doseq [state (log/spy :trace atomic-states)]
       (start-loop!)
       (doseq [s (into [state] (get-proper-ancestors machine state))
@@ -497,9 +602,10 @@
           (break!))))
     (log/spy :trace @enabled-transitions)))
 
-(defn select-eventless-transitions
+(>defn select-eventless-transitions
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [machine {::sc/keys [configuration] :as working-memory}]
+  [::sc/machine ::sc/active-working-memory => ::sc/active-working-memory]
   (remove-conflicting-transitions machine
     (assoc working-memory ::sc/enabled-transitions (select-transitions* machine configuration
                                                      (fn [t]
@@ -507,13 +613,14 @@
                                                          (not (:event t))
                                                          (condition-match machine working-memory t)))))))
 
-(defn select-transitions
+(>defn select-transitions
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [machine {::sc/keys [configuration] :as working-memory} event]
+  [::sc/machine ::sc/active-working-memory ::sc/event-or-name => ::sc/active-working-memory]
   (remove-conflicting-transitions machine
     (assoc working-memory ::sc/enabled-transitions (select-transitions* machine configuration
                                                      (fn [t]
-                                                       (log/spy :info "pred t" t)
+                                                       (log/spy :trace "pred t" t)
                                                        (and
                                                          (log/spy :trace (contains? t :event))
                                                          (log/spy :trace (evts/name-match?
@@ -521,11 +628,13 @@
                                                                            (log/spy :trace event)))
                                                          (condition-match machine working-memory t)))))))
 
-(defn invoke! [machine working-memory invocation]
+(>defn invoke! [machine working-memory invocation]
+  [::sc/machine ::sc/active-working-memory ::sc/element-or-id => ::sc/active-working-memory]
   (log/spy :trace "invoke (NOT IMPLEMENTED)" invocation)
   working-memory)
 
-(defn- run-invocations [machine working-memory]
+(>defn- run-invocations [machine working-memory]
+  [::sc/machine ::sc/active-working-memory => ::sc/active-working-memory]
   (let [{::sc/keys [states-to-invoke]} working-memory]
     (reduce
       (fn [wmem state-to-invoke]
@@ -536,9 +645,10 @@
       (assoc working-memory ::sc/states-to-invoke #{})
       states-to-invoke)))
 
-(defn- run-many
+(>defn- run-many
   "Run the code associated with the given nodes. Returns a new working-memory with an update data model (context)."
   [machine working-memory nodes]
+  [::sc/machine ::sc/active-working-memory (s/every ::sc/element-or-id) => ::sc/active-working-memory]
   (reduce
     (fn [wmem {:keys [function]}]
       (cond
@@ -556,17 +666,20 @@
   #_(doseq [i (invocations machine state)] (cancel-invoke i))
   working-memory)
 
-
-(defn exit-states
+(>defn exit-states
   "Does all of the processing for exiting states. Returns new working memory."
   [machine {::sc/keys [enabled-transitions
                        states-to-invoke
                        history-value
                        configuration] :as working-memory}]
+  [::sc/machine ::sc/active-working-memory => ::sc/active-working-memory]
   (let [states-to-exit   (in-exit-order machine (compute-exit-set machine working-memory enabled-transitions))
         states-to-invoke (set/difference states-to-invoke (set states-to-exit))
         history-nodes    (into {}
-                           (map (fn [s] [s (history-elements machine (get-parent machine s))]))
+                           (keep (fn [s]
+                                   (let [eles (history-elements machine (get-parent machine s))]
+                                     (when (seq eles)
+                                       [(element-id machine s) eles]))))
                            states-to-exit)
         history-value    (reduce-kv
                            (fn [acc s {:keys [id deep?] :as hn}]
@@ -590,15 +703,18 @@
       working-memory
       states-to-exit)))
 
-(defn- microstep [machine working-memory]
+(>defn- microstep
+  [machine working-memory]
+  [::sc/machine ::sc/active-working-memory => ::sc/active-working-memory]
   (->> working-memory
     (exit-states machine)
     (execute-transition-content machine)
     (enter-states machine)))
 
-(defn- handle-eventless-transitions
+(>defn- handle-eventless-transitions
   "Work through eventless transitions, returning the updated working memory"
   [machine working-memory]
+  [::sc/machine ::sc/active-working-memory => ::sc/active-working-memory]
   {:post [(map? %)]}
   (let [macrostep-done? (volatile! false)]
     (loop [wmem working-memory]
@@ -622,16 +738,21 @@
           (recur wmem)
           wmem)))))
 
-(defn- run-exit-handlers [machine working-memory state]
+(>defn- run-exit-handlers [machine working-memory state]
+  [::sc/machine ::sc/active-working-memory ::sc/element-or-id => ::sc/active-working-memory]
   (reduce
     (fn [wmem handler] (update wmem ::sc/data-model handler))
     working-memory
     (exit-handlers machine state)))
 
 ;; TODO: Sending events back to the machine that started this one, if there is one
-(defn- send-done-event! [machine wmem state])
+(>defn- send-done-event! [machine wmem state]
+  [::sc/machine ::sc/active-working-memory ::sc/element-or-id => nil?]
+  nil)
 
-(defn- exit-interpreter [machine {::sc/keys [configuration] :as working-memory}]
+(>defn- exit-interpreter
+  [machine {::sc/keys [configuration] :as working-memory}]
+  [::sc/machine ::sc/active-working-memory => ::sc/working-memory]
   (let [states-to-exit (in-exit-order machine configuration)]
     (reduce (fn [wmem state]
               (let [result (as-> wmem $
@@ -644,9 +765,10 @@
       working-memory
       states-to-exit)))
 
-(defn- before-event
+(>defn- before-event
   "Steps that are run before processing the next event."
   [machine {::sc/keys [running?] :as working-memory}]
+  [::sc/machine ::sc/active-working-memory => ::sc/working-memory]
   {:post [(map? %)]}
   (if running?
     (with-working-memory [working-memory working-memory]
@@ -665,14 +787,16 @@
     working-memory))
 
 (defn- cancel? [event] false)
-(defn- handle-external-invocations [machine working-memory]
+(>defn- handle-external-invocations [machine working-memory]
+  [::sc/machine ::sc/active-working-memory => ::sc/active-working-memory]
   ;; TODO
   working-memory)
 
-(defn process-event
+(>defn process-event
   "Process the given `external-event` given a state `machine` with the `working-memory` as its current status/state."
   [machine working-memory external-event]
-  (log/trace "process event" external-event)
+  [::sc/machine ::sc/working-memory ::sc/event-or-name => ::sc/working-memory]
+  (log/spy :debug "EVENT" external-event)
   (with-working-memory [working-memory working-memory]
     (if (cancel? external-event)
       (exit-interpreter machine working-memory)

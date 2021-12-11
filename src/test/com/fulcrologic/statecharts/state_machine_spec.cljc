@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [queue]]
     [com.fulcrologic.statecharts.state-machine :as sm]
-    [fulcro-spec.core :refer [specification assertions =>]]
+    [fulcro-spec.core :refer [specification assertions component behavior =>]]
     [taoensso.timbre :as log])
   #?(:clj
      (:import (clojure.lang PersistentQueue))))
@@ -24,8 +24,11 @@
                      (transition {:target :s0.0}))
                    (state {:id :s0.0}))
                  (state {:id :s1}
-                   (initial {:id :s1.1}
-                     (state {:id :s1.1.1})))
+                   (initial {:id :s1i} (transition {:id :t1i :target :s1.1}))
+                   (state {:id :s1.1}
+                     (initial {:id :s1.1i} (transition {:id :t1.1i :target :s1.1.1}))
+                     (state {:id :s1.1.1})
+                     (state {:id :s1.1.2})))
                  (state {:id :s2}
                    (parallel {:id :p}
                      (state {:id :p1}
@@ -38,6 +41,8 @@
       (assertions
         "returns the machine if passed the machine as a node"
         (sm/element m m) => m
+        "returns the machine if passed the special key :ROOT as a node"
+        (sm/element m :ROOT) => m
         "Can find any node by ID"
         (n :s0) => true
         (n :s0.0) => true
@@ -57,7 +62,16 @@
       (sm/get-parent m :s1.1.1) => :s1.1
       (sm/get-parent m :s1.1) => :s1
       (sm/get-parent m :s0.0) => :s0
-      (sm/get-parent m :s0) => nil))
+      "A node without a parent returns :ROOT"
+      (sm/get-parent m :s0) => :ROOT))
+
+  (specification "all-descendants"
+    (let [all-ids (set (keys (::sc/elements-by-id m)))]
+      (assertions
+        "Can find the descendants of the entire machine"
+        (sm/all-descendants m :ROOT) => all-ids
+        "Can find the descendants of any node"
+        (sm/all-descendants m :s1) => #{:s1.1.2 :s1.1 :s1.1.1 :t1i :s1.1i :s1i :t1.1i})))
 
   (specification "get-children"
     (assertions
@@ -85,27 +99,6 @@
       (sm/nearest-ancestor-state m :t1) => :s0
       (sm/nearest-ancestor-state m :p1) => :p
       (sm/nearest-ancestor-state m :s1.1.1) => :s1.1))
-
-  (specification "child-states"
-    #_(assertions
-        "Returns the IDs of children that are any kind of state"
-        (sm/child-states m :s2) => [:p]
-        (sm/child-states m :p) => [:p1 :p2 :p3]
-        (sm/child-states m :p1) => [:f2]
-        (sm/child-states m m) => [:I :s0 :s1 :s2]))
-
-  (specification "descendant?"
-    #_(assertions
-        (sm/all-descendants m :s2) => #{:p :p1 :p2 :p3 :f2}
-        "Returns true if s1 is a descendant of s2"
-        (sm/descendant? m :p3 :p) => true
-        (sm/descendant? m :p3 :s2) => true
-        (sm/descendant? m :s1.1.1 :s1.1) => true
-        (sm/descendant? m :s1.1 :s1) => true
-        (sm/descendant? m :s1.1.1 :s1) => true
-        (sm/descendant? m :s1 :s1.1.1) => false
-        (sm/descendant? m :s2 :s1.1.1) => false
-        (sm/descendant? m :p :s1) => false))
 
   (specification "atomic-state?"
     (assertions
@@ -141,13 +134,13 @@
         "Can be forced to use breadth-first"
         (sm/in-document-order mb #{:s2 :t1 :s1.1.1 :s1.1 :s0}) => [:s0 :s2 :t1 :s1.1 :s1.1.1])))
 
-  (specification "get-proper-ancestors"
+  (specification "get-proper-ancestors" :focus
     (assertions
-      "Returns an empty list if there are no ancestors"
-      (sm/get-proper-ancestors m :s2) => []
+      "Returns :ROOT if there are no ancestors"
+      (sm/get-proper-ancestors m :s2) => [:ROOT]
       "Returns a vector of node IDs that are ancestors of the specified ID, in ancestry order"
-      (sm/get-proper-ancestors m :s1.1.1) => [:s1.1 :s1]
-      (sm/get-proper-ancestors m :t2) => [:s0]
+      (sm/get-proper-ancestors m :s1.1.1) => [:s1.1 :s1 :ROOT]
+      (sm/get-proper-ancestors m :t2) => [:s0 :ROOT]
       "Can stop at (and not include) a given node"
       (sm/get-proper-ancestors m :s1.1.1 :s1) => [:s1.1]))
 
@@ -174,7 +167,7 @@
       (map? (sm/initial-element m m)) => true
       (:id (sm/initial-element m m)) => :I
       "can find the initial element of a substate"
-      (:id (sm/initial-element m :s1)) => :s1.1))
+      (:id (sm/initial-element m :s1)) => :s1i))
 
   (specification "transition-element"
     (assertions
@@ -221,8 +214,7 @@
                                  :target :B}))
                   (state {:id :B}
                     (transition {:event  :trigger
-                                 :target :A}
-                      )
+                                 :target :A})
                     (state {:id :C}
                       (state {:id :C1}))
                     (state {:id :D})))
@@ -271,54 +263,88 @@
       (sm/in-final-state? machine (config #{:p1e :p2e}) :P) => false
       (sm/in-final-state? machine (config #{:p1e :p2e :p3e}) :P) => true)))
 
-(specification "compute-entry-set"
-  #_(let [machine (machine {}
-                    (initial {}
-                      (transition {:id     :I
-                                   :target :A}))
-                    (state {:id :A}
-                      (initial {:target :P})
-                      (transition {:id     :t1
-                                   :event  :trigger
-                                   :target :B})
-                      (parallel {:id :P}
-                        (state {:id :P1}
-                          (state {:id :p1i})
-                          (final {:id :p1e}))
-                        (state {:id :P2}
-                          (state {:id :p2i})
-                          (final {:id :p2e}))
-                        (state {:id :P3}
-                          (state {:id :p3i})
-                          (final {:id :p3e}))))
-                    (state {:id :B}
-                      (transition {:event  :trigger
-                                   :target :A})
-                      (final {:id :END})
-                      (state {:id :C}
-                        (state {:id :C1}))
-                      (state {:id :D})))
-          config  (fn [c ts] {::sc/enabled-transitions ts
-                              ::sc/configuration       c})]
-      (assertions
-        "An initialized machine's computed entry state is in the first state"
-        (sm/compute-entry-set machine (config #{} #{:I})) => [#{:A :P :P1 :P2 :P3} #{:A} {}]
-        (sm/compute-entry-set machine (config #{:A :P :P1 :P2 :P3} #{:t1}))
-        => [#{:B} #{:B} {}])))
+(specification "Root parallel state"
+  (letfn [(run-assertions [equipment]
+            (let [wmem (sm/initialize equipment)
+                  c    (fn [mem] (::sc/configuration mem))]
+              (assertions
+                "Enters proper states from initial"
+                (c wmem) => #{:led/off :motor/off :Eq :motor :LED}
+                "Transitions on events"
+                (c (sm/process-event equipment wmem :start)) => #{:led/on :motor/on :Eq :motor :LED}
+                "Transitions on additional events"
+                (c (as-> wmem $
+                     (sm/process-event equipment $ :start)
+                     (sm/process-event equipment $ :stop))) => #{:led/off :motor/off :Eq :motor :LED}
+                (c (as-> wmem $
+                     (sm/process-event equipment $ :start)
+                     (sm/process-event equipment $ :stop)
+                     (sm/process-event equipment $ :start))) => #{:led/on :motor/on :Eq :motor :LED})))]
+    (component "with an explicit initial states"
+      (run-assertions (sm/machine {}
+                        (initial {}
+                          (transition {:target :Eq}))
+                        (parallel {:id :Eq}
+                          (state {:id :motor}
+                            (initial {}
+                              (transition {:target :motor/off}))
+                            (state {:id :motor/off}
+                              (transition {:event :start :target :motor/on}))
+                            (state {:id :motor/on}
+                              (transition {:event :stop :target :motor/off})))
+                          (state {:id :LED}
+                            (initial {}
+                              (transition {:target :led/off}))
+                            (state {:id :led/on}
+                              (transition {:event :stop :target :led/off}))
+                            (state {:id :led/off}
+                              (transition {:event :start :target :led/on})))))))
+    (component "without an explicit initial states"
+      (run-assertions (sm/machine {}
+                        (parallel {:id :Eq}
+                          (state {:id :motor}
+                            (state {:id :motor/off}
+                              (transition {:event :start :target :motor/on}))
+                            (state {:id :motor/on}
+                              (transition {:event :stop :target :motor/off})))
+                          (state {:id :LED}
+                            (state {:id :led/off}
+                              (transition {:event :start :target :led/on}))
+                            (state {:id :led/on}
+                              (transition {:event :stop :target :led/off})))))))))
 
-(specification "Root parallel state" :focus
-  (let [wmem (sm/initialize equipment)
+(specification "Nested parallel state"
+  (let [m    (sm/machine {}
+               (state {:id :S0}
+                 (transition {:event :trigger :target :S1})
+                 (parallel {:id :S0p}
+                   (state {:id :s0p/motor})
+                   (state {:id :s0p/LED})))
+               (state {:id :S1}
+                 (transition {:event :trigger :target :S0})
+                 (parallel {:id :S1p}
+                   (state {:id :s1p/motor}
+                     (transition {:event :remote :target :s0p/LED}))
+                   (state {:id :s1p/LED}))))
+        wmem (sm/initialize m)
         c    (fn [mem] (::sc/configuration mem))]
-    (log/info "********************************************************************************")
+    (log/info "************************************************************************************************************************")
     (assertions
-      "Enters proper states from initial"
-      (c wmem) => #{:led/off :motor/off :Eq :motor :LED}
-      "Transitions on events"
-      (c (sm/process-event equipment wmem :start)) => #{:led/on :motor/on :Eq :motor :LED}
-      "Transitions on additional events"
+      "ancestors"
+      (sm/get-proper-ancestors m :s0p/LED) => [:S0p :S0 :ROOT]
+      ;"Enters proper states from initial"
+      ;(c wmem) => #{:S0 :S0p :s0p/motor :s0p/LED}
+      ;"Transitions to correct configuration when swapping parallel state set"
+      ;(c (as-> wmem $
+      ;(sm/process-event m $ :trigger))) => #{:S1 :S1p :s1p/motor :s1p/LED}
+      ;(c (as-> wmem $
+      ;(sm/process-event m $ :trigger)
+      ;(sm/process-event m $ :trigger))) => #{:S0 :S0p :s0p/motor :s0p/LED}
+      "Can target a nested node of an alternate parallel set"
       (c (as-> wmem $
-           (sm/process-event equipment $ :start)
-           (sm/process-event equipment $ :stop))) => #{:led/off :motor/off :Eq :motor :LED})))
+           (sm/process-event m $ :trigger)
+           (sm/process-event m $ :remote))) => #{:S0 :S0p :s0p/motor :s0p/LED}
+      )))
 
 (specification "Basic machine"
   (let [machine (sm/machine {}
