@@ -11,12 +11,66 @@ built as external add-ons.
 
 == Status
 
-Work in progress translating and testing the pseudocode of the SCXML spec to CLJC. Not done yet.
+ALPHA. The algorithm is written and (seems to be) working. Some aspects exist and are "called", but are currently stubs.
 
-Alpha versions expected by mid-December 2021.
+* Implemented:
+** Compound, parallel, atomic, initial, and final states
+** Internal and external transitions
+** History (deep and shallow)
+
+* In Progress
+** Data model
+** Enter, exit, and action
+** Send/invoke
 
 See Conformance.adoc at the root of this repository for notes on
 decisions that might affect exact conformance to the standard.
+
+== Basic Usage
+
+-----
+(ns app
+  (:require
+    [com.fulcrologic.statecharts.elements :refer [state parallel
+                                                  history final initial
+                                                  on-enter on-exit invoke
+                                                  data-model
+                                                  transition]]
+    [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.state-machine :as sm]))
+
+(def machine (sm/machine {}
+                  (state {:id :A}
+                    (transition {:event  :trigger
+                                 :target :B}))
+                  (state {:id :B}
+                    (transition {:event  :trigger
+                                 :target :A}))))
+
+;; Create an initial (immutable) working memory
+(def wmem    (sm/initialize machine))
+
+(defn c
+  "get current machine's active (states)"
+  [mem]
+  (::sc/configuration mem))
+
+;; The initial working memory will have already put the machine into a valid configuration (set of states)
+(c wmem)
+;; #{:A}
+
+;; `process-event` returns a new working memory
+(c (sm/process-event machine wmem :trigger))
+
+;; #{:B}
+(c (as-> wmem $
+     (sm/process-event machine $ :trigger)
+     (sm/process-event machine $ :trigger)))
+;; #{:A}
+-----
+
+See the SCXML spec for how to structure elements. The structure and naming are kept close to that spec for easy
+cross-referencing with its documentation.
 
 == Related Work
 

@@ -9,9 +9,7 @@
     [com.fulcrologic.statecharts.util :refer [queue]]
     [com.fulcrologic.statecharts.state-machine :as sm]
     [fulcro-spec.core :refer [specification assertions component behavior =>]]
-    [taoensso.timbre :as log])
-  #?(:clj
-     (:import (clojure.lang PersistentQueue))))
+    [taoensso.timbre :as log]))
 
 (let [substates [(initial {:id :I}
                    (transition {:id     :it
@@ -134,7 +132,7 @@
         "Can be forced to use breadth-first"
         (sm/in-document-order mb #{:s2 :t1 :s1.1.1 :s1.1 :s0}) => [:s0 :s2 :t1 :s1.1 :s1.1.1])))
 
-  (specification "get-proper-ancestors" :focus
+  (specification "get-proper-ancestors"
     (assertions
       "Returns :ROOT if there are no ancestors"
       (sm/get-proper-ancestors m :s2) => [:ROOT]
@@ -328,28 +326,24 @@
                    (state {:id :s1p/LED}))))
         wmem (sm/initialize m)
         c    (fn [mem] (::sc/configuration mem))]
-    (log/info "************************************************************************************************************************")
     (assertions
       "ancestors"
       (sm/get-proper-ancestors m :s0p/LED) => [:S0p :S0 :ROOT]
-      ;"Enters proper states from initial"
-      ;(c wmem) => #{:S0 :S0p :s0p/motor :s0p/LED}
-      ;"Transitions to correct configuration when swapping parallel state set"
-      ;(c (as-> wmem $
-      ;(sm/process-event m $ :trigger))) => #{:S1 :S1p :s1p/motor :s1p/LED}
-      ;(c (as-> wmem $
-      ;(sm/process-event m $ :trigger)
-      ;(sm/process-event m $ :trigger))) => #{:S0 :S0p :s0p/motor :s0p/LED}
+      "Enters proper states from initial"
+      (c wmem) => #{:S0 :S0p :s0p/motor :s0p/LED}
+      "Transitions to correct configuration when swapping parallel state set"
+      (c (as-> wmem $
+           (sm/process-event m $ :trigger))) => #{:S1 :S1p :s1p/motor :s1p/LED}
+      (c (as-> wmem $
+           (sm/process-event m $ :trigger)
+           (sm/process-event m $ :trigger))) => #{:S0 :S0p :s0p/motor :s0p/LED}
       "Can target a nested node of an alternate parallel set"
       (c (as-> wmem $
            (sm/process-event m $ :trigger)
-           (sm/process-event m $ :remote))) => #{:S0 :S0p :s0p/motor :s0p/LED}
-      )))
+           (sm/process-event m $ :remote))) => #{:S0 :S0p :s0p/motor :s0p/LED})))
 
 (specification "Basic machine"
   (let [machine (sm/machine {}
-                  #_(initial {}
-                      (transition {:target :A}))
                   (state {:id :A}
                     (transition {:event  :trigger
                                  :target :B}))

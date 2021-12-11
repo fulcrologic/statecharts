@@ -276,7 +276,7 @@
   [::sc/machine ::sc/element-or-id ::sc/element-or-id => boolean?]
   (let [s1-id (element-id machine s1)]
     (boolean
-      (contains? (log/spy :info (all-descendants machine s2)) (log/spy :info s1-id)))))
+      (contains? (log/spy :trace (all-descendants machine s2)) (log/spy :trace s1-id)))))
 
 (>defn in-document-order
   "Given a set/sequence of actual nodes-or-ids (as maps), returns a vector of those nodes-or-ids, but in document order."
@@ -350,7 +350,7 @@
    (let [stop-id (:id (element machine stopping-element-or-id))]
      (loop [n      element-or-id
             result []]
-       (let [parent-id (log/spy :debug (get-parent machine (log/spy :debug n)))]
+       (let [parent-id (log/spy :trace (get-parent machine (log/spy :trace n)))]
          (if (or (nil? parent-id) (= parent-id stop-id))
            result
            (recur parent-id (conj result parent-id))))))))
@@ -366,21 +366,21 @@
    the state machine itself. The compound state returned will be the one closest to all of the states."
   [machine states]
   [::sc/machine (s/every ::sc/element-or-id) => ::sc/element]
-  (let [possible-ancestors (log/spy :info "possible" (conj
-                                                       (into []
-                                                         (comp
-                                                           (filter #(or
-                                                                      (= :ROOT %)
-                                                                      (compound-state? machine %)))
-                                                           (map (partial element-id machine)))
-                                                         (log/spy :info "PA" (get-proper-ancestors machine (log/spy :debug (first states)))))
-                                                       machine))
-        other-states       (log/spy :info "other states" (rest states))]
+  (let [possible-ancestors (log/spy :trace "possible" (conj
+                                                        (into []
+                                                          (comp
+                                                            (filter #(or
+                                                                       (= :ROOT %)
+                                                                       (compound-state? machine %)))
+                                                            (map (partial element-id machine)))
+                                                          (log/spy :trace "PA" (get-proper-ancestors machine (log/spy :trace (first states)))))
+                                                        machine))
+        other-states       (log/spy :trace "other states" (rest states))]
     (element machine
-      (log/spy :debug "LCCA"
+      (log/spy :trace "LCCA"
         (first
           (keep
-            (fn [anc] (when (log/spy :info (every? (fn [s] (descendant? machine s anc)) other-states)) anc))
+            (fn [anc] (when (log/spy :trace (every? (fn [s] (descendant? machine s anc)) other-states)) anc))
             possible-ancestors))))))
 
 (>defn in-final-state?
@@ -402,10 +402,10 @@
 (>defn add-ancestor-states-to-enter! [machine wmem state ancestor
                                       states-to-enter states-for-default-entry default-history-content]
   [::sc/machine ::sc/active-working-memory ::sc/element-or-id ::sc/element-or-id volatile? volatile? volatile? => nil?]
-  (log/spy :debug [state ancestor])
-  (doseq [anc (log/spy :debug "add proper-ancestors" (get-proper-ancestors machine state ancestor))]
+  (log/spy :trace [state ancestor])
+  (doseq [anc (log/spy :trace "add proper-ancestors" (get-proper-ancestors machine state ancestor))]
     (vswap! states-to-enter conj (element-id machine anc))
-    (when (log/spy :debug "parallel anc?" (parallel-state? machine anc))
+    (when (log/spy :trace "parallel anc?" (parallel-state? machine anc))
       (doseq [child (child-states machine anc)]
         (when-not (some (fn [s] (descendant? machine s child)) @states-to-enter)
           (add-descendant-states-to-enter! machine wmem child states-to-enter
@@ -796,7 +796,7 @@
   "Process the given `external-event` given a state `machine` with the `working-memory` as its current status/state."
   [machine working-memory external-event]
   [::sc/machine ::sc/working-memory ::sc/event-or-name => ::sc/working-memory]
-  (log/spy :debug "EVENT" external-event)
+  (log/spy :trace "EVENT" external-event)
   (with-working-memory [working-memory working-memory]
     (if (cancel? external-event)
       (exit-interpreter machine working-memory)
