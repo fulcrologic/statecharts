@@ -110,16 +110,14 @@
    "
   [{:keys [id type deep?] :as attrs} default-transition]
   [map? ::sc/transition-element => ::sc/element]
-  (let [t (if (keyword? transition) #{transition} (set transition))]
-    (merge {:id (genid "history")}
-      attrs
-      {:node-type  :history
-       :deep?      (= type :deep)
-       :type       (if (or (true? deep?) (= type :deep)) :deep :shallow)
-       :children   [(if (map? default-transition)
-                      default-transition
-                      (transition {:target default-transition}))]
-       :transition t})))
+  (merge {:id (genid "history")}
+    attrs
+    {:node-type :history
+     :deep?     (= type :deep)
+     :type      (if (or (true? deep?) (= type :deep)) :deep :shallow)
+     :children  [(if (map? default-transition)
+                   default-transition
+                   (transition {:target default-transition}))]}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Executable Content
