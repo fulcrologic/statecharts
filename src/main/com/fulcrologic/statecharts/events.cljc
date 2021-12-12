@@ -44,7 +44,20 @@
   "Generate a new event containing `data`. It is recommended that `data` be
    easily serializable (plain EDN without code) if you wish to use it
    in a distributed or durable environment."
-  [event-name data]
-  [::sc/event-name (? map?) => ::sc/event]
-  (merge data
-    {::sc/event-name event-name}))
+  ([event-name]
+   [::sc/event-name => ::sc/event]
+   (new-event {:name event-name} nil))
+  ([{:keys [name type sendid origin origintype invokeid] :as base-event} data]
+   [map? (? map?) => ::sc/event]
+   (merge
+     {:type :external}
+     base-event
+     {:name           name
+      :data           (or data {})
+      ::sc/event-name name})))
+
+(>defn event-name [event-or-name]
+  [::sc/event-or-name => ::sc/event-name]
+  (if (keyword? event-or-name)
+    event-or-name
+    (::sc/event-name event-or-name)))

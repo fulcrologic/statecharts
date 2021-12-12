@@ -7,6 +7,7 @@
 (s/def ::sc/node-type #{:state :parallel :final :history :invoke
                         :on-entry :on-exit :transition :machine})
 (s/def ::sc/id (s/or :u uuid? :n number? :k keyword? :s string?))
+(s/def ::sc/session-id ::sc/id)
 (s/def ::sc/children (s/every (s/or :i ::sc/id :e ::sc/element)))
 (s/def ::sc/element (s/keys
                       :req-un [::sc/node-type ::sc/id]
@@ -37,7 +38,23 @@
                        (= :machine (:node-type %))))
 
 (s/def ::sc/event-name keyword?)
-(s/def ::sc/event (s/keys :req [::sc/event-name]))
+(s/def :org.w3.scxml.event/name ::sc/event-name)
+(s/def :org.w3.scxml.event/data map?)
+(s/def :org.w3.scxml.event/type #{:internal :external :platform})
+(s/def :org.w3.scxml.event/sendid ::sc/id)
+(s/def :org.w3.scxml.event/origin vector?)
+(s/def :org.w3.scxml.event/origintype keyword?)
+(s/def :org.w3.scxml.event/invokeid ::sc/id)
+
+(s/def ::sc/event (s/keys
+                    :req-un [:org.w3.scxml.event/name
+                             :org.w3.scxml.event/data
+                             :org.w3.scxml.event/type]
+                    :opt-un [:org.w3.scxml.event/sendid
+                             :org.w3.scxml.event/origin
+                             :org.w3.scxml.event/origintype
+                             :org.w3.scxml.event/invokeid]
+                    :req [::sc/event-name]))
 (s/def ::sc/event-or-name (s/or
                             :n ::sc/event-name
                             :e ::sc/event))

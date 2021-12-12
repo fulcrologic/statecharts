@@ -140,7 +140,8 @@
     working-memory))
 
 (>defn get-parent
-  "Get the immediate parent (id) of the given element-or-id. Returns nil if the element is the root."
+  "Get the immediate parent (id) of the given element-or-id. Returns :ROOT if the parent is the root,
+   and nil if the element queried is already the root."
   [machine element-or-id]
   [::sc/machine (? ::sc/element-or-id) => (? ::sc/id)]
   (cond
@@ -321,7 +322,8 @@
   [{:keys [id name script] :as machine}]
   [::sc/machine => ::sc/working-memory]
   (let [t    (log/spy :trace "initial transition" (some->> machine (initial-element machine) (transition-element machine) (element-id machine)))
-        wmem {::sc/configuration       #{}
+        wmem {::sc/session-id          #?(:clj (java.util.UUID/randomUUID) :cljs (random-uuid))
+              ::sc/configuration       #{}
               ::sc/initialized-states  #{}                  ; states that have been entered (initialized data model) before
               ::sc/enabled-transitions (if t #{t} #{})
               ::sc/history-value       {}
@@ -337,6 +339,12 @@
         (before-event machine $)
         (cond-> $
           script (as-> $ (execute machine $ script)))))))
+
+(>defn session-id
+  "Returns the unique session id of the machine instance with `working-memory`"
+  [working-memory]
+  [::sc/working-memory => ::sc/session-id]
+  (::sc/session-id working-memory))
 
 (>defn get-proper-ancestors
   "Returns the node ids from `machine` that are proper ancestors of `element-or-id` (an id or actual element-or-id). If `stopping-element-or-id-or-id`
@@ -512,18 +520,21 @@
       (when-let [content (get default-history-content (element-id machine s))]
         (vreset! ma (execute machine @ma content)))
       (when (final-state? machine s)
-        (if (nil? (get-parent machine s))
+        (if (= :ROOT (get-parent machine s))
           (vswap! ma assoc ::sc/running? false)
           (let [parent      (get-parent machine s)
                 grandparent (get-parent machine parent)
-                done-data   {}]                             ;; TODO: What is done-data?
+                done-data   {}]                             ;; TODO: done-data
             (vswap! ma update ::sc/internal-queue conj
-              (new-event ::sc/done {:state (element-id machine parent)
-                                    :data  done-data}))
+              (new-event {:sendid (element-id machine s)
+                          :type   :internal
+                          :name   (keyword (str "done.state." (element-id machine parent)))} done-data))
             (when (and (parallel-state? machine grandparent)
                     (every? (fn [s] (in-final-state? machine @ma s)) (child-states machine grandparent)))
               (vswap! ma update ::sc/internal-queue conj
-                (new-event ::sc/done {:state (element-id machine grandparent)})))))))
+                (new-event {:sendid (element-id machine s)
+                            :type   :internal
+                            :name   (keyword (str "done.state." (element-id machine grandparent)))} done-data)))))))
     @ma))
 
 (>defn execute-transition-content
@@ -793,10 +804,10 @@
   working-memory)
 
 (>defn process-event
-  "Process the given `external-event` given a state `machine` with the `working-memory` as its current status/state."
+  "Process the given `external-event` given a state `machine` with the `working-memory` as its current status/state.
+   Returns the new version of working memory."
   [machine working-memory external-event]
   [::sc/machine ::sc/working-memory ::sc/event-or-name => ::sc/working-memory]
-  (log/spy :trace "EVENT" external-event)
   (with-working-memory [working-memory working-memory]
     (if (cancel? external-event)
       (exit-interpreter machine working-memory)

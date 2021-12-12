@@ -16,7 +16,9 @@ image:https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg["C
 
 ALPHA. The algorithm is written and (seems to be) working. Some aspects exist and are "called", but are currently stubs.
 
-* Implemented:
+NOT API STABLE, though the definition of machines won't radically change.
+
+* Implemented
 ** Compound, parallel, atomic, initial, and final states
 ** Internal and external transitions
 ** History (deep and shallow)
