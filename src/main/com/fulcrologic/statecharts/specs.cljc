@@ -5,8 +5,7 @@
     [clojure.spec.alpha :as s]))
 
 (s/def ::sc/document-order #{:breadth-first :depth-first})
-(s/def ::sc/node-type #{:state :parallel :final :history :invoke
-                        :on-entry :on-exit :transition :machine})
+(s/def ::sc/node-type keyword?)
 (s/def ::sc/id (s/or :u uuid? :n number? :k keyword? :s string?))
 (s/def ::sc/session-id ::sc/id)
 (s/def ::sc/children (s/every (s/or :i ::sc/id :e ::sc/element)))
