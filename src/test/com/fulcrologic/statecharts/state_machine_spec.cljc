@@ -3,7 +3,7 @@
     [com.fulcrologic.statecharts.elements :refer [state parallel
                                                   history final initial
                                                   onentry onexit invoke
-                                                  data-model
+                                                  datamodel
                                                   transition]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [queue]]

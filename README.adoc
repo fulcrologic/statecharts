@@ -1,25 +1,23 @@
 = State Charts for Clojure(script)
 
-A Clojure implementation of state charts that use the SCXML
+An implementation of state charts that use the SCXML
 structure and semantics (as far as they are defined), without the need for XML.
 
 It is a simple exercise to convert an SCXML document to/from the
 Clojure data structures used by this library, which
 means existing tooling can pretty easily be used to design or
-document your machine. Contributions of this sort are welcome, or could be
-built as external add-ons.
+document your machine.
 
 == Status
 
 image:https://img.shields.io/clojars/v/com.fulcrologic/statecharts.svg[link=https://clojars.org/com.fulcrologic/statecharts]
 image:https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/statecharts/tree/main"]
 
-If you want to play with it, I recommend using deps with a git SHA of the latest
+Partially working. NOT API STABLE.
+
+ALPHA. The algorithm is written and (seems to be) working. Some aspects exist and are "called",
+but are currently stubs. If you want to play with it, I recommend using deps with a git SHA of the latest
 commit.
-
-ALPHA. The algorithm is written and (seems to be) working. Some aspects exist and are "called", but are currently stubs.
-
-NOT API STABLE, though the definition of machines won't radically change.
 
 * Implemented
 ** Compound, parallel, atomic, initial, and final states
@@ -87,6 +85,65 @@ decisions that might affect exact conformance to the standard.
 See the SCXML spec for how to structure elements. The structure and naming are kept close to that spec for easy
 cross-referencing with its documentation.
 
+== Relationship to SCXML
+
+This library's internal implementation follows (as closely as possible) the official
+https://www.w3.org/TR/2015/REC-scxml-20150901/#AlgorithmforSCXMLInterpretation[State Chart XML Algorithm].
+
+
+The actual structure of the live CLJC data used to represent machines also closely mimics
+the structure described there, but with some differences for convenient use in CLJC.
+
+Specifically, executable content is *still* treated as *data*, but the XML nodes that
+are described in the standard do *not* exist in this library, because a conformant
+XML reader (which would need to be aware of the target execution model) can easily
+translate such nodes into the target data representation (even if that target
+representation is script strings).
+
+Some of the data model elements are also abbreviated in a similar manner. See
+the docstrings for details.
+
+Thus, if you are trying to read SCXML documents you will need to write (or find) an
+XML reader that can do this interpretation.
+
+For example, an XML reader that targets https://github.com/babashka/sci[sci] (the
+Clojure interpreter) might convert the XML (where `a` and `do-something` are implied
+values in the data and excution model):
+
+[source, xml]
+-----
+<if cond="(= 1 a)">
+  (let [b (inc a)]
+    (do-something b))
+</if>
+-----
+
+into (scope and args still determined by the execution model selected):
+
+[source, clojure]
+-----
+;; String-based interpretation
+(script {:expr
+  "(if (= 1 a)
+     (let [b (inc a)]
+       (do-something b)))"})
+
+;; OR eval-based
+(script {:expr
+  '(if (= 1 a)
+     (let [b (inc a)]
+       (do-something b)))})
+
+;; OR functional
+(script {:expr (fn [env {:keys [a]}]
+                  (if (= 1 a)
+                    (let [b (inc a)]
+                      (do-something b))))})
+-----
+
+If you're using XML tools to generate you machines, though, it's probably easiest to use
+`script` tags to begin with.
+
 == Related Work
 
 The primary alternative to this library is https://github.com/lucywang000/clj-statecharts[clj-statecharts],
@@ -94,7 +151,7 @@ which is a fine library modelled after xstate.
 
 This library exists for the following reasons:
 
-* At the time this library was created, clj-statecharts was missing features. In particular history nodes,
+* At the time this library was created, https://github.com/lucywang000/clj-statecharts/[clj-statecharts] was missing features. In particular history nodes,
   which we needed. I looked at clj-statecharts in order to try to add history, but some of the internal
   decisions made it more difficult to add (with correct semantics) and the Eclipse license made it less
   appealing for internal customization as a base in commercial software (see https://www.juxt.pro/blog/prefer-mit).
@@ -107,10 +164,13 @@ This library exists for the following reasons:
   reliable timers.
 * MIT licensing instead of Eclipse.
 
-Other implementations:
+Other related libraries and implementations:
 
-* XState : Javascript. Could be used from CLJS.
-* Apache SCXML : Stateful and imperative. Requires writing classes. Requires you use XML.
+* https://xstate.js.org/[XState] : Javascript. Could be used from CLJS.
+* https://commons.apache.org/proper/commons-scxml/[Apache SCXML] : Stateful and imperative. Requires writing classes. Requires you use XML.
+* https://github.com/fulcrologic/fulcro/blob/develop/src/main/com/fulcrologic/fulcro/ui_state_machines.cljc[Fulcro UI State Machines]
+: A finite state machine namespace (part of Fulcro) that is tightly coupled to Fulcro's needs (full stack operation in the context of
+Fulcro UI and I/O).
 
 == Execution
 

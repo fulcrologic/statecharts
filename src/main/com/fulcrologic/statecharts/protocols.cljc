@@ -13,6 +13,8 @@
   ")
 
 (defprotocol DataModel
+  (load-data [provider src]
+    "OPTIONAL. Attempt to load data from the given `src` (as declared on a datamodel element in the machine.)")
   (current-data [provider env]
     "Returns the current data (must be map-like) for the given state `machine` with `working-memory` for the
      given `context-element-id`. The data can be context-free (global for all elements), scoped, etc.
@@ -75,12 +77,11 @@
 (defprotocol ExecutionModel
   (run-expression! [model env expr]
     "Run an expression. `env` will include the `data-model`.
-    `expr` is defined by the execution model selected. For example it could be
-    a `fn?`, an EQL transaction specification.
+    `expr` is defined by the execution model selected. For example, it could be
+    a `fn?`, an EQL transaction specification, etc.
 
-    See ns docstring for description of `env`.")
-  (run-predicate [model env predicate-expr]
-    "Run the given `predicate-expr` according to the context in `env` (which includes the data-model)
-     and return the value of that predicate, a boolean.
+    This method MUST return the value of the expression, and it MUST also support expressions that need to update
+    the data model. If the execution model is imperative, this can be support for imperative statements. If the
+    expression model is functional, then typically the return value of the expression can be used.
 
-     See ns docstring for description of `env`."))
+    See ns docstring for description of `env`."))

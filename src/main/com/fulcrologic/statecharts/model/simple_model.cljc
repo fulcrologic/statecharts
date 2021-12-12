@@ -23,6 +23,7 @@
 
 (deftype SimpleDataModel [wmem-atom data-atom system-atom Q delayed-events cancelled-events]
   sp/DataModel
+  (load-data [_ _] (log/error "src not supported by simple model."))
   (current-data [_ _] (assoc @data-atom :_x (assoc @system-atom :_ioprocessors [])))
   (set-system-variable! [_ _ k v]
     (if (nil? v)
@@ -45,7 +46,7 @@
           (async/<! (async/timeout delay))
           (when-not (contains? @cancelled-events nm)
             (async/>! Q event))
-          (when (zero? (swap! delayed-events update (evts/event-name event) dec))
+          (when (zero? (swap! delayed-events update nm dec))
             (swap! cancelled-events disj nm)))
         (async/>! Q event))))
   (cancel! [_ _ {:keys [event]}]
@@ -73,18 +74,7 @@
             update? (replacement-data? result)]
         (when update?
           (sp/replace-data! this env result))
-        nil)))
-  (run-predicate [this env expr]
-    (boolean
-      (when (fn? expr)
-        (let [data   (sp/current-data this env)
-              result (try (expr env data)
-                          (catch #?(:clj Throwable :cljs :default) e
-                            (env/send-error-event! env :error.execution e (select-keys env #{:context-element-id
-                                                                                             :session-id
-                                                                                             :working-memory}))
-                            false))]
-          result)))))
+        result))))
 
 (defn new-simple-model
   "Creates a new simple model that can act as a data model, event queue, AND execution model with all-local resources.

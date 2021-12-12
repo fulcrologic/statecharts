@@ -1,9 +1,16 @@
 (ns com.fulcrologic.statecharts.elements
-  "The elements you can define in charts.
+  "The elements you can define in charts. The intention is for this model to be potentially serializable for users
+   that need that. Thus, the expressions used in these data structures *MAY* use CLJC functions/code, or may represent
+   such elements a strings or other (quoted) EDN. The ExecutionModel is responsible for this part of the interpretation.
 
-   NOTE: The SCXML standard defines a number of elements for executable content. In cases where you want to transform
-   an SCXML document to this library you should note that we treat those XML nodes as content
-   that can be translated ON DOCUMENT READ into the code form used by this library."
+   The overall data model is represented as a map. The DataModel implementation MAY choose scoping and resolution
+   rules. Location expressions are interpreted by the DataModel, but it is recommended they be keywords or vectors
+   of keywords.
+
+   NOTE: The SCXML standard defines a number of elements (if, else, elseif, foreach, log) for abstract
+   executable content. In cases where you want to transform an SCXML document to this library you should note that we
+   treat those XML nodes as content that can be translated ON DOCUMENT READ into the code form used by this library.
+   "
   (:refer-clojure :exclude [send])
   (:require
     com.fulcrologic.statecharts.specs
@@ -126,136 +133,110 @@
   [map? => ::sc/element]
   (new-element :raise attrs nil))
 
-(comment
-  ;; These are defined in the spec, but should be converted by an XML reader into the executable content format
-  ;; of the execution engine.
-  (>defn if
-    "https://www.w3.org/TR/scxml/#if"
-    [{:keys [id cond] :as attrs} & children]
-    [map? (s/* ::sc/element) => ::sc/element]
-    (new-element :if attrs children))
+(>defn log
+  "Log a message.
 
-  (>defn elseif
-    "https://www.w3.org/TR/scxml/#elseif"
-    [{:keys [id cond] :as attrs}]
-    [map? => ::sc/element]
-    (new-element :elseif attrs nil))
-
-  (>defn else
-    "https://www.w3.org/TR/scxml/#else"
-    [{:keys [id] :as attrs}]
-    [map? => ::sc/element]
-    (new-element :else attrs children))
-
-  (>defn foreach
-    "https://www.w3.org/TR/scxml/#foreach"
-    [{:keys [id array item index] :as attrs} & children]
-    [map? (s/+ ::sc/element) => ::sc/element]
-    (new-element :foreach attrs children))
-
-  (>defn log
-    "https://www.w3.org/TR/scxml/#log"
-    [{:keys [id label expr] :as attrs}]
-    [map? => ::sc/element]
-    (new-element :log attrs nil)))
-
+  https://www.w3.org/TR/scxml/#log"
+  [{:keys [id label expr] :as attrs}]
+  [map? => ::sc/element]
+  (new-element :log attrs nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Data Model
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(>defn data-model
-  "Create a data model (in a state or machine context). `expr` is an expression
-   (value or function) that will result in the initial value of the data.
+(>defn datamodel
+  "Create a data model (in a state or machine context).
 
-   If the expression is a value, then you are using early binding. If it is
-   a lambda, then the data will be bound when its surrounding state is entered, but
-   before any `on-entry` is invoked.
+   `:expr` is an expression that can be run by your current ExecutionModel. The result of the expression
+   becomes the value of your initial data model (typically a map).
+   `:src` (if the data model supports it) is a location from which to read the data for the data model.
 
    https://www.w3.org/TR/scxml/#data-module"
-  [{:keys [id] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :data-model attrs children))
-
-(>defn data
-  "https://www.w3.org/TR/scxml/#data"
-  [{:keys [id src expr] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :data attrs children))
+  [{:keys [id src expr] :as attrs}]
+  [map? => ::sc/element]
+  (new-element :data-model attrs))
 
 (>defn assign
-  "https://www.w3.org/TR/scxml/#assign"
+  "Assign the value of `expr` into the data model at `location`. Location expressions are typically vectors of
+   keywords in the DataModel.
+
+  https://www.w3.org/TR/scxml/#assign"
   [{:keys [id location expr] :as attrs} & children]
   [map? (s/* ::sc/element) => ::sc/element]
   (new-element :assign attrs children))
 
 (>defn donedata
-  "Value to return when final state is entered.
+  "Data (calculated by expr) to return to caller when a final state is entered. See `datamodel`.
 
-  https://www.w3.org/TR/scxml/#done-data"
-  [{:keys [id] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :donedata attrs children))
-
-(>defn param
-  "Parameter to include. Use `location` to pull the value from the data model, and `expr` to calculate it.
-
-   https://www.w3.org/TR/scxml/#param"
-  [{:keys [id name location expr] :as attrs}]
+  https://www.w3.org/TR/scxml/#donedata"
+  [{:keys [id expr] :as attrs}]
   [map? => ::sc/element]
-  (new-element :param attrs nil))
+  (new-element :donedata attrs))
 
 (>defn script
-  "https://www.w3.org/TR/scxml/#script"
-  [{:keys [id src] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :script attrs children))
+  "A script to execute. MAY support loading the code via `src`, or supply the code via `expr` (in the format required
+   by your ExecutionModel).
+
+  See the documentation for you data model to understand the semantics and operation of this element.
+
+  https://www.w3.org/TR/scxml/#script"
+  [{:keys [id src expr] :as attrs}]
+  [map? => ::sc/element]
+  (new-element :script attrs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; External Communication
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (>defn send
-  "Sends an event to the specified (external) target, and can also be used to place events on the current machine's
-   external event queue (e.g. with some delay).
+  "Sends an event to the specified (external) target (which could be an external system, this machine,
+   or another machine).
 
-  * `:event` is the external event to send.
-  * `:eventexpr` is the external event to send.
-  * `:target` is where to send it.
-  * `:targetexpr` is where to send it.
-  * `:type` is which mechanism to use for sending.
-  * `:typeexpr` is which mechanism to use for sending.
-  * `:delay` ms to wait before delivery (note everything is evaluated
-    BEFORE this delay).
-  * `:delayexpr`
-  * `:namelist` - List of location expression (to include from the data model)
+  * `:event` An expression that results in the event *name* to send.
+  * `:params` An expression that results in data to be included in the event.
+  * `:target` An expression that gives the target to send to.
+  * `:type` An expression generating a selector for which mechanism to use for sending.
+  * `:delay` A number of milliseconds to delay the send, or an expression for computing it.
+  * `:namelist` - List of location expressions (vector of vectors) to include from the data model.
   * `:idlocation` a vector of keywords that specifies a location in the DataModel
     to store a generated ID that uniquely identifies the event instance
     being sent. If not supplied then `id` will be the id of the element itself.
   "
-  [{:keys [id idlocation event type typeexpr eventexpr
-           target targetexpr delay] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :send attrs children))
+  [attrs]
+  [map? => ::sc/element]
+  (new-element :send attrs))
 
 (>defn cancel
-  "Cancel a delayed send.
+  "Cancel a delayed send (see `send`'s idlocation parameter). `:sendid` can be an expression.
 
   https://www.w3.org/TR/scxml/#cancel"
-  [{:keys [id sendid sendidexpr] :as attrs}]
+  [{:keys [id sendid] :as attrs}]
   [map? => ::sc/element]
   (new-element :cancel attrs nil))
 
 (>defn invoke
-  "Create an instance of an external service.
+  "Create an instance of an external service that can return data (and send events) back to the calling state(s). An
+  invoked service stays active while the state is active, and is terminated when the parent state is exited.
+
+  When the invocation is created it will be associated with the identifier `<state-id>.<platform-id>` where `<state-id>`
+  is the ID of the state in which the invocation lives, and `<platform-id>` is a unique autogenerated id. This is
+  stored in `idlocation` (if supplied) in the data model. This identifier is known as the `invokeid`.
+
+  Events generated by the invoked service will cause `finalize` to be called (if supplied). Note that each event causes
+  this, and `finalize` MAY update the data model. Such processing happens before the event is handed to the rest of
+  the state machine for evaluation.
+
+  A `:done.invoke.<invokeid>` event is generated if the invoked service reaches a final state and exits.
+
+  If the state of the (local) machine is exited before receiving the done event, then it cancels the invoked service
+  and ignores any events received by it after that point.
 
   * `:id` The id of the element. See below for special considerations.
-  * `:type` The type of external service
-  * `:typeexpr` Expression variant for `:type`
-  * `:src` A URI to send to the external service. Can be string or expression that results in a URI.
-  * `:srcexpr` Expression alt for src
-  * `:namelist` A vector of data model locations from the data model to include in the invocation.
-  * `:autoforward` Enable forwarding of (external) events to the invoked process.
+  * `:params` An expression in the execution model's notation that can calculate the data to send to the invocation.
+  * `:finalize` An expression to run when the invocation returns, and may update the data model.
+  * `:type` The type of external service (expression allowed)
+  * `:autoforward?` Enable forwarding of (external) events to the invoked process.
   * `:idlocation` a vector of keywords that specifies a location in the DataModel
     to store a generated ID that uniquely identifies the event instance
     being sent. If not supplied then `id` will be the id of the send.
@@ -268,16 +249,6 @@
      at each execution.
 
   https://www.w3.org/TR/scxml/#invoke"
-  [{:keys [id type typeexpr id idlocation autoforward namelist src srcexpr] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :invoke attrs children))
-
-(>defn finalize
-  "Update the data model (via executable content) with data contained in events returned by an invoked session.
-
-  Executable content can find the returned event in `_event`.
-
-  https://www.w3.org/TR/scxml/#finalize"
-  [{:keys [id] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :finalize attrs children))
+  [attrs]
+  [map? => ::sc/element]
+  (new-element :invoke attrs))
