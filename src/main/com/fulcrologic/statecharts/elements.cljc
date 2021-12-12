@@ -34,10 +34,10 @@
 
 (>defn state
   "Create a state. ID will be generated if not supplied. The `initial` element is an alias for this
-   element with `:initial? true`.
+   element with `:initial? true`. The `:initial` key can be used in PLACE of a nested initial element.
 
    https://www.w3.org/TR/scxml/#state"
-  [{:keys [id initial?] :as attrs} & children]
+  [{:keys [id initial initial?] :as attrs} & children]
   [map? (s/* ::sc/element) => ::sc/element]
   (new-element :state attrs children))
 

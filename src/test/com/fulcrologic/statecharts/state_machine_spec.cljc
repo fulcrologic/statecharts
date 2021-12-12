@@ -234,13 +234,12 @@
                                  :target :B})
                     (parallel {:id :P}
                       (state {:id :P1}
-                        (initial {})
+                        (initial {} :p1e)
                         (final {:id :p1e}))
                       (state {:id :P2}
-                        (initial {})
+                        (initial {} :p2e)
                         (final {:id :p2e}))
-                      (state {:id :P3}
-                        (initial {})
+                      (state {:id :P3 :initial :p3e}
                         (final {:id :p3e}))))
                   (state {:id :B}
                     (transition {:event  :trigger
@@ -341,6 +340,23 @@
       (c (as-> wmem $
            (sm/process-event m $ :trigger)
            (sm/process-event m $ :remote))) => #{:S0 :S0p :s0p/motor :s0p/LED})))
+
+(specification "Root node initial processing" :focus
+  (let [m    (sm/machine {:initial #{:s0p.1.2 :s1p.1.1}}
+               (state {:id :S0}
+                 (transition {:event :trigger :target :S1})
+                 (parallel {:id :S0p}
+                   (state {:id :s0p.1}
+                     (state {:id :s0p.1.1})
+                     (state {:id :s0p.1.2}))
+                   (state {:id :s1p.1}
+                     (state {:id :s1p.1.1})
+                     (state {:id :s1p.1.2})))))
+        wmem (sm/initialize m)
+        c    (fn [mem] (::sc/configuration mem))]
+    (assertions
+      "Honors the root node initial parameter"
+      (c wmem) => #{:S0 :S0p :s0p.1 :s1p.1.1 :s1p.1 :s0p.1.2})))
 
 (specification "Basic machine"
   (let [machine (sm/machine {}

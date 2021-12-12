@@ -16,7 +16,8 @@
     [com.fulcrologic.statecharts.util :refer [queue genid]]
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  #?(:clj (:import (java.util UUID))))
 
 ;; I did try to translate all that imperative code to something more functional...got really tiring, and generated
 ;; subtle bugs divergent from spec.
@@ -50,21 +51,25 @@
 (>defn- with-default-initial-state
   "Scans children for an initial state. If no such state is found then it creates one and sets the target to the
    first child that is a state."
-  [children]
-  [(s/every ::sc/element) => (s/every ::sc/element)]
+  [{:keys [id initial] :as parent} children]
+  [(? ::sc/element) (s/every ::sc/element) => (s/every ::sc/element)]
   (let [states (filter #(#{:state :parallel} (:node-type %)) children)]
+    (when (and initial (some :initial? states))
+      (log/warn "You specified BOTH an :initial attribute and state in element. Preferring the element." id))
     (cond
       (some :initial? states) children
       (empty? states) children
       :else (conj children (elements/initial {}
-                             (elements/transition {:target (:id (first states))}))))))
+                             (elements/transition {:target (or initial (:id (first states)))}))))))
 
 (>defn- assign-parents
-  [{parent-id :id :as parent} nodes]
-  [(? ::sc/element) (s/every ::sc/element) => (s/every ::sc/element)]
+  [{parent-id :id
+    initial   :initial
+    :as       parent} nodes]
+  [::sc/element (s/every ::sc/element) => (s/every ::sc/element)]
   (if nodes
-    (let [nodes (if (or (nil? parent) (= :state (:node-type parent)))
-                  (with-default-initial-state nodes)
+    (let [nodes (if (or (nil? parent) (= :ROOT parent-id) (= :state (:node-type parent)))
+                  (with-default-initial-state parent nodes)
                   nodes)]
       (mapv
         (fn [n]
@@ -83,18 +88,15 @@
   :initial - ID of initial state(s) of the machine. Default is the top-most `initial` element,
              or the first element in document order.
   :name - Optional name
-  :xmlns - ignored
-  :version - ignored
-  :datamodel - Extensible. See data models
   :binding - :late or :early
   "
-  [{:keys [initial name script] :as attrs} & children]
+  [{:keys [initial name binding] :as attrs} & children]
   [map? (s/* ::sc/element) => ::sc/machine]
-  (let [children     (assign-parents nil children)
-        node         (assoc attrs
+  (let [node         (assoc attrs
                        :id :ROOT
-                       :node-type :machine
-                       :children children)
+                       :node-type :machine)
+        children     (assign-parents node children)
+        node         (assoc node :children (vec children))
         ids-in-order (ids-in-document-order node)
         node         (assoc node
                        :children (mapv :id children)
@@ -334,10 +336,10 @@
 
 (>defn initialize
   "Create working memory for a new machine. Auto-assigns a session ID unless you supply one."
-  [{:keys [id name script] :as machine}]
+  [{:keys [id name initial script] :as machine}]
   [::sc/machine => ::sc/working-memory]
   (let [t    (log/spy :trace "initial transition" (some->> machine (initial-element machine) (transition-element machine) (element-id machine)))
-        wmem {::sc/session-id          #?(:clj (java.util.UUID/randomUUID) :cljs (random-uuid))
+        wmem {::sc/session-id          #?(:clj (UUID/randomUUID) :cljs (random-uuid))
               ::sc/configuration       #{}
               ::sc/initialized-states  #{}                  ; states that have been entered (initialized data model) before
               ::sc/enabled-transitions (if t #{t} #{})
@@ -494,6 +496,7 @@
         transitions              (mapv #(or (element machine %)
                                           (elements/transition {:target %})) enabled-transitions)]
     (doseq [{:keys [target] :as t} transitions]
+      (log/trace "Entry set target(s): " target)
       (let [ancestor (log/spy :trace "ancestor" (element-id machine (get-transition-domain machine working-memory t)))]
         (doseq [s target]
           (add-descendant-states-to-enter! machine working-memory (log/spy :trace s) states-to-enter
