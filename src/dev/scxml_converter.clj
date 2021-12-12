@@ -1,22 +1,8 @@
 (ns scxml-converter
   (:require
-    [camel-snake-kebab.core :as csk]
     [clojure.pprint :refer [pprint]]
-    [clojure.set :as set]
     [clojure.string :as str]
     [hickory.core :as hc]))
-
-(def attr-renames {:class        :className
-                   :for          :htmlFor
-                   :tabindex     :tabIndex
-                   :viewbox      :viewBox
-                   :spellcheck   :spellcheck
-                   :autocorrect  :autoCorrect
-                   :autocomplete :autoComplete})
-
-(def element-renames {'scxml   'machine
-                      'onenter 'on-enter
-                      'onexit  'on-exit})
 
 (def coercions {:id     keyword
                 :event  keyword
@@ -42,17 +28,15 @@
            (re-matches #"^[ \n]*$" elem)))) nil
      (string? elem) (str/trim elem)
      (vector? elem) (let [tag               (symbol (name (first elem)))
-                          tag               (get element-renames tag tag)
                           raw-props         (second elem)
                           attrs             (reduce-kv
                                               (fn [acc k v]
-                                                (let [k (get element-renames k k)
-                                                      v (if (contains? coercions k)
+                                                (let [v (if (contains? coercions k)
                                                           ((get coercions k) v)
                                                           v)]
                                                   (assoc acc k v)))
                                               {}
-                                              (set/rename-keys raw-props attr-renames))
+                                              raw-props)
                           children          (keep (fn [c] (element->call c options)) (drop 2 elem))
                           expanded-children (reduce
                                               (fn [acc c]

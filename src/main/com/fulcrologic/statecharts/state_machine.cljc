@@ -76,7 +76,18 @@
     []))
 
 (>defn machine
-  "Create a new state machine definition that mimics the structure and semantics of SCXML."
+  "Create a new state machine definition that mimics the structure and semantics of SCXML.
+
+  Attributes:
+
+  :initial - ID of initial state(s) of the machine. Default is the top-most `initial` element,
+             or the first element in document order.
+  :name - Optional name
+  :xmlns - ignored
+  :version - ignored
+  :datamodel - Extensible. See data models
+  :binding - :late or :early
+  "
   [{:keys [initial name script] :as attrs} & children]
   [map? (s/* ::sc/element) => ::sc/machine]
   (let [children     (assign-parents nil children)
@@ -106,6 +117,10 @@
     (when (seq problems)
       (throw (ex-info "Invalid machine specification" {:problems problems})))
     node))
+
+(def scxml
+  "See `machine`. SCXML-compliant name for top-level element."
+  machine)
 
 (>defn element
   "Find the node in the machine that has the given ID (of any type)"

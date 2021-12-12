@@ -1,7 +1,7 @@
 {:paths   ["src/main"]
 
- :deps    {com.fulcrologic/guardrails {:mvn/version "1.1.7"}
-           org.clojure/core.async     {:mvn/version "1.4.627"}}
+ :deps    {com.fulcrologic/guardrails {:mvn/version "1.1.10"}
+           org.clojure/core.async     {:mvn/version "1.5.640"}}
 
  :aliases {:test       {:extra-paths ["src/test"]
                         :extra-deps  {org.clojure/test.check  {:mvn/version "1.1.0"}
@@ -18,7 +18,6 @@
            :dev        {:extra-paths ["src/dev"]
                         :extra-deps  {thheller/shadow-cljs        {:mvn/version "2.16.7"}
                                       hickory                     {:mvn/version "0.7.1"}
-                                      camel-snake-kebab           {:mvn/version "0.4.2"}
                                       vvvvalvalval/scope-capture  {:mvn/version "0.3.2"}
                                       com.taoensso/timbre         {:mvn/version "5.1.2"}
                                       djblue/portal               {:mvn/version "0.18.1"}

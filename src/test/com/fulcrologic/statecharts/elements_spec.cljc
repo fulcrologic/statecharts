@@ -3,13 +3,13 @@
     [clojure.test :refer [is are]]
     [com.fulcrologic.statecharts.elements
      :refer [data-model final history initial invoke
-             on-enter on-exit parallel state transition]]
+             onentry onexit parallel state transition]]
     [fulcro-spec.core :refer [specification behavior assertions =>]])
   #?(:clj
      (:import (clojure.lang PersistentQueue))))
 
 (def all-elements [data-model final history initial invoke
-                   on-enter on-exit parallel state transition])
+                   onentry onexit parallel state transition])
 
 (def elements-with-children
   [final parallel state])

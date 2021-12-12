@@ -2,7 +2,7 @@
   (:require
     [com.fulcrologic.statecharts.elements :refer [state parallel
                                                   history final initial
-                                                  on-enter on-exit invoke
+                                                  onentry onexit invoke
                                                   data-model
                                                   transition]]
     [com.fulcrologic.statecharts :as sc]

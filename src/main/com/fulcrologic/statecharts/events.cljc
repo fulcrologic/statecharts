@@ -1,4 +1,7 @@
 (ns com.fulcrologic.statecharts.events
+  "See https://www.w3.org/TR/scxml/#events.
+
+  Note that there are built-in errors and events https://www.w3.org/TR/scxml/#errorsAndEvents."
   (:require
     [clojure.spec.alpha :as s]
     com.fulcrologic.statecharts.specs
@@ -43,7 +46,9 @@
 (>defn new-event
   "Generate a new event containing `data`. It is recommended that `data` be
    easily serializable (plain EDN without code) if you wish to use it
-   in a distributed or durable environment."
+   in a distributed or durable environment.
+
+   https://www.w3.org/TR/scxml/#events"
   ([event-name]
    [::sc/event-name => ::sc/event]
    (new-event {:name event-name} nil))
