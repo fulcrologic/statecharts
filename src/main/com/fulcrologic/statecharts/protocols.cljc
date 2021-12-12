@@ -1,10 +1,9 @@
 (ns com.fulcrologic.statecharts.protocols
   "Many methods in the namespace take an `env`. This map will contain at least:
 
-  :session-id - The unique session id of the instance of the machine
   :context-element-id  - The ID of the element in which the action/content appears
   :machine  - The machine definition
-  :working-memory - The current working memory of the machine
+  :working-memory - The current working memory of the machine (which includes the session id)
   :pending-events - An atom containing a queue. Swap and conj against this to add events to the
                      internal event queue to be delivered.
   :data-model - The current implementation of the DataModel

@@ -339,10 +339,11 @@
      :args (s/cat :binding (s/tuple symbol? any?) :body (s/* any?))))
 
 (>defn initialize
-  "Create working memory for a new machine. Auto-assigns a session ID unless you supply one."
-  [{:keys [id name initial script] :as machine}]
-  [::sc/machine => ::sc/working-memory]
-  (let [t    (log/spy :trace "initial transition" (some->> machine (initial-element machine) (transition-element machine) (element-id machine)))
+  "Create working memory for a new machine env. Auto-assigns a session ID unless you supply one."
+  [{:keys [machine] :as env}]
+  [::sc/env => ::sc/working-memory]
+  (let [{:keys [id name initial script]} machine
+        t    (log/spy :trace "initial transition" (some->> machine (initial-element machine) (transition-element machine) (element-id machine)))
         wmem {::sc/session-id          #?(:clj (UUID/randomUUID) :cljs (random-uuid))
               ::sc/configuration       #{}                  ; currently active states
               ::sc/initialized-states  #{}                  ; states that have been entered (initialized data model) before
@@ -547,13 +548,13 @@
             (vswap! ma update ::sc/internal-queue conj
               (new-event {:sendid (element-id machine s)
                           :type   :internal
-                          :name   (keyword (str "done.state." (element-id machine parent)))} done-data))
+                          :name   (keyword (str "done.state." (name (element-id machine parent))))} done-data))
             (when (and (parallel-state? machine grandparent)
                     (every? (fn [s] (in-final-state? machine @ma s)) (child-states machine grandparent)))
               (vswap! ma update ::sc/internal-queue conj
                 (new-event {:sendid (element-id machine s)
                             :type   :internal
-                            :name   (keyword (str "done.state." (element-id machine grandparent)))} done-data)))))))
+                            :name   (keyword (str "done.state." (name (element-id machine grandparent))))} done-data)))))))
     @ma))
 
 (>defn execute-transition-content
@@ -753,7 +754,6 @@
                      (let [internal-event (first internal-queue)]
                        (as-> wmem $
                          (update $ ::sc/internal-queue pop)
-                         (assoc-in $ [::sc/data-model :_event] internal-event)
                          (select-transitions machine $ internal-event))))
                    wmem)
             {::sc/keys [running?]

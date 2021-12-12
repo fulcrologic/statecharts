@@ -1,6 +1,7 @@
 (ns com.fulcrologic.statecharts.specs
   (:require
     [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.protocols :as sp]
     [clojure.spec.alpha :as s]))
 
 (s/def ::sc/document-order #{:breadth-first :depth-first})
@@ -26,7 +27,8 @@
 (s/def ::sc/initialized-states (s/every ::sc/id :kind set?))
 (s/def ::sc/enabled-transitions (s/every ::sc/id :kind set?))
 (s/def ::sc/history-value (s/map-of ::sc/id ::sc/configuration))
-(s/def ::sc/working-memory (s/keys :req [::sc/configuration
+(s/def ::sc/working-memory (s/keys :req [::sc/session-id
+                                         ::sc/configuration
                                          ::sc/initialized-states
                                          ::sc/history-value
                                          ::sc/running?]))
@@ -59,4 +61,14 @@
                             :n ::sc/event-name
                             :e ::sc/event))
 
-(s/def ::sc/env (s/keys :req-un [::sc/machine]))
+(s/def ::sc/context-element-id ::sc/id)
+(s/def ::sc/data-model #(satisfies? sp/DataModel %))
+(s/def ::sc/event-queue #(satisfies? sp/EventQueue %))
+(s/def ::sc/execution-model #(satisfies? sp/ExecutionModel %))
+
+(s/def ::sc/env (s/keys :req-un [::sc/machine]
+                  :opt-un [::sc/context-element-id
+                           ::sc/working-memory
+                           ::sc/data-model
+                           ::sc/event-queue
+                           ::sc/execution-model]))

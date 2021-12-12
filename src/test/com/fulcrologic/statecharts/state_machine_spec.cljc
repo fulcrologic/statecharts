@@ -8,13 +8,26 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [queue]]
     [com.fulcrologic.statecharts.state-machine :as sm]
+    [com.fulcrologic.statecharts.model.environment :as env]
+    [com.fulcrologic.statecharts.model.simple-model :as model]
     [fulcro-spec.core :refer [specification assertions component behavior =>]]
     [taoensso.timbre :as log]))
 
+(defn test-env
+  ([machine simple-model]
+   (env/new-env machine nil simple-model simple-model simple-model))
+  ([machine]
+   (test-env machine (model/new-simple-model (atom {})))))
+
 (defn test-process-event [machine wmem event]
-  (let [env {:machine machine}]
+  (let [env (test-env machine)]
     (binding [sm/*exec?* false]
       (sm/process-event env wmem event))))
+
+(defn test-initialize [machine]
+  (let [env (test-env machine)]
+    (binding [sm/*exec?* false]
+      (sm/initialize env))))
 
 (let [substates [(initial {:id :I}
                    (transition {:id     :it
@@ -221,7 +234,7 @@
                     (state {:id :C}
                       (state {:id :C1}))
                     (state {:id :D})))
-        wmem    (sm/initialize machine)]
+        wmem    (test-initialize machine)]
     (assertions
       "Finds the machine if there is no other alternative"
       (sm/find-least-common-compound-ancestor machine #{:A :B}) => machine
@@ -253,7 +266,7 @@
                     (state {:id :C}
                       (state {:id :C1}))
                     (state {:id :D})))
-        wmem    (sm/initialize machine)
+        wmem    (test-initialize machine)
         config  (fn [c] (assoc wmem ::sc/configuration c))]
     (assertions
       "Returns true if the given compound state is in it's final state "
@@ -267,7 +280,7 @@
 
 (specification "Root parallel state"
   (letfn [(run-assertions [equipment]
-            (let [wmem (sm/initialize equipment)
+            (let [wmem (test-initialize equipment)
                   c    (fn [mem] (::sc/configuration mem))]
               (assertions
                 "Enters proper states from initial"
@@ -328,7 +341,7 @@
                    (state {:id :s1p/motor}
                      (transition {:event :remote :target :s0p/LED}))
                    (state {:id :s1p/LED}))))
-        wmem (sm/initialize m)
+        wmem (test-initialize m)
         c    (fn [mem] (::sc/configuration mem))]
     (assertions
       "ancestors"
@@ -357,7 +370,7 @@
                    (state {:id :s1p.1}
                      (state {:id :s1p.1.1})
                      (state {:id :s1p.1.2})))))
-        wmem (sm/initialize m)
+        wmem (test-initialize m)
         c    (fn [mem] (::sc/configuration mem))]
     (assertions
       "Uses the :initial parameter on nested nodes, when provided"
@@ -372,7 +385,7 @@
                    (state {:id :s1p.1}
                      (state {:id :s1p.1.1})
                      (state {:id :s1p.1.2})))))
-        wmem (sm/initialize m)
+        wmem (test-initialize m)
         c    (fn [mem] (::sc/configuration mem))]
     (assertions
       "Honors the root node initial parameter"
@@ -386,7 +399,7 @@
                   (state {:id :B}
                     (transition {:event  :trigger
                                  :target :A})))
-        wmem    (sm/initialize machine)
+        wmem    (test-initialize machine)
         c       (fn [mem] (::sc/configuration mem))]
     (assertions
       "Enters the first state if there is no initial"
