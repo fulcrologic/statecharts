@@ -88,8 +88,9 @@ cross-referencing with its documentation.
 == Relationship to SCXML
 
 This library's internal implementation follows (as closely as possible) the official
-https://www.w3.org/TR/2015/REC-scxml-20150901/#AlgorithmforSCXMLInterpretation[State Chart XML Algorithm].
-
+https://www.w3.org/TR/2015/REC-scxml-20150901/#AlgorithmforSCXMLInterpretation[State Chart XML Algorithm]. In fact,
+much of the implementation uses internal volatiles in order to match the imperative style of that doc for easier
+comparison and avoidance of bugs.
 
 The actual structure of the live CLJC data used to represent machines also closely mimics
 the structure described there, but with some differences for convenient use in CLJC.
