@@ -11,6 +11,11 @@
     [fulcro-spec.core :refer [specification assertions component behavior =>]]
     [taoensso.timbre :as log]))
 
+(defn test-process-event [machine wmem event]
+  (let [env {:machine machine}]
+    (binding [sm/*exec?* false]
+      (sm/process-event env wmem event))))
+
 (let [substates [(initial {:id :I}
                    (transition {:id     :it
                                 :target :s0}))
@@ -268,15 +273,15 @@
                 "Enters proper states from initial"
                 (c wmem) => #{:led/off :motor/off :Eq :motor :LED}
                 "Transitions on events"
-                (c (sm/process-event equipment wmem :start)) => #{:led/on :motor/on :Eq :motor :LED}
+                (c (test-process-event equipment wmem :start)) => #{:led/on :motor/on :Eq :motor :LED}
                 "Transitions on additional events"
                 (c (as-> wmem $
-                     (sm/process-event equipment $ :start)
-                     (sm/process-event equipment $ :stop))) => #{:led/off :motor/off :Eq :motor :LED}
+                     (test-process-event equipment $ :start)
+                     (test-process-event equipment $ :stop))) => #{:led/off :motor/off :Eq :motor :LED}
                 (c (as-> wmem $
-                     (sm/process-event equipment $ :start)
-                     (sm/process-event equipment $ :stop)
-                     (sm/process-event equipment $ :start))) => #{:led/on :motor/on :Eq :motor :LED})))]
+                     (test-process-event equipment $ :start)
+                     (test-process-event equipment $ :stop)
+                     (test-process-event equipment $ :start))) => #{:led/on :motor/on :Eq :motor :LED})))]
     (component "with an explicit initial states"
       (run-assertions (sm/machine {}
                         (initial {}
@@ -332,16 +337,31 @@
       (c wmem) => #{:S0 :S0p :s0p/motor :s0p/LED}
       "Transitions to correct configuration when swapping parallel state set"
       (c (as-> wmem $
-           (sm/process-event m $ :trigger))) => #{:S1 :S1p :s1p/motor :s1p/LED}
+           (test-process-event m $ :trigger))) => #{:S1 :S1p :s1p/motor :s1p/LED}
       (c (as-> wmem $
-           (sm/process-event m $ :trigger)
-           (sm/process-event m $ :trigger))) => #{:S0 :S0p :s0p/motor :s0p/LED}
+           (test-process-event m $ :trigger)
+           (test-process-event m $ :trigger))) => #{:S0 :S0p :s0p/motor :s0p/LED}
       "Can target a nested node of an alternate parallel set"
       (c (as-> wmem $
-           (sm/process-event m $ :trigger)
-           (sm/process-event m $ :remote))) => #{:S0 :S0p :s0p/motor :s0p/LED})))
+           (test-process-event m $ :trigger)
+           (test-process-event m $ :remote))) => #{:S0 :S0p :s0p/motor :s0p/LED})))
 
-(specification "Root node initial processing" :focus
+(specification ":initial attribute processing" :focus
+  (let [m    (sm/machine {}
+               (state {:id :S0}
+                 (transition {:event :trigger :target :S1})
+                 (parallel {:id :S0p}
+                   (state {:id :s0p.1 :initial #{:s0p.1.2}}
+                     (state {:id :s0p.1.1})
+                     (state {:id :s0p.1.2}))
+                   (state {:id :s1p.1}
+                     (state {:id :s1p.1.1})
+                     (state {:id :s1p.1.2})))))
+        wmem (sm/initialize m)
+        c    (fn [mem] (::sc/configuration mem))]
+    (assertions
+      "Uses the :initial parameter on nested nodes, when provided"
+      (c wmem) => #{:S0 :S0p :s0p.1 :s1p.1.1 :s1p.1 :s0p.1.2}))
   (let [m    (sm/machine {:initial #{:s0p.1.2 :s1p.1.1}}
                (state {:id :S0}
                  (transition {:event :trigger :target :S1})
@@ -372,7 +392,7 @@
       "Enters the first state if there is no initial"
       (c wmem) => #{:A}
       "Transitions on events"
-      (c (sm/process-event machine wmem :trigger)) => #{:B}
+      (c (test-process-event machine wmem :trigger)) => #{:B}
       (c (as-> wmem $
-           (sm/process-event machine $ :trigger)
-           (sm/process-event machine $ :trigger))) => #{:A})))
+           (test-process-event machine $ :trigger)
+           (test-process-event machine $ :trigger))) => #{:A})))

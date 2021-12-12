@@ -111,7 +111,7 @@
                     (fn [_ event]
                       (try
                         (fill-system-variables! model env (sm/session-id @wmem-atom) (:name machine) event)
-                        (swap! wmem-atom (fn [wmem] (sm/process-event machine wmem event)))
+                        (swap! wmem-atom (fn [wmem] (sm/process-event env wmem event)))
                         (catch #?(:clj Throwable :cljs :default) e
                           (env/send-error-event! env :error.execution e {:source-event   event
                                                                          :working-memory @wmem-atom}))

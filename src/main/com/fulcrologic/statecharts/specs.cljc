@@ -58,3 +58,5 @@
 (s/def ::sc/event-or-name (s/or
                             :n ::sc/event-name
                             :e ::sc/event))
+
+(s/def ::sc/env (s/keys :req-un [::sc/machine]))
