@@ -14,6 +14,9 @@ built as external add-ons.
 image:https://img.shields.io/clojars/v/com.fulcrologic/statecharts.svg[link=https://clojars.org/com.fulcrologic/statecharts]
 image:https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/statecharts/tree/main"]
 
+If you want to play with it, I recommend using deps with a git SHA of the latest
+commit.
+
 ALPHA. The algorithm is written and (seems to be) working. Some aspects exist and are "called", but are currently stubs.
 
 NOT API STABLE, though the definition of machines won't radically change.

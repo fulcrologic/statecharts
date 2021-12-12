@@ -8,6 +8,7 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.state-machine :as sm]
     [com.fulcrologic.statecharts.model.environment :as env]
+    [com.fulcrologic.statecharts.elements :as e]
     [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
@@ -92,8 +93,8 @@
 
    See `run-event-loop!` for a pre-implemented way to run the machine on this model.
    "
-  []
-  (->SimpleDataModel (atom nil) (atom {}) (atom {}) (async/chan 1000) (atom {}) (atom #{})))
+  [wmem-atom]
+  (->SimpleDataModel wmem-atom (atom {}) (atom {}) (async/chan 1000) (atom {}) (atom #{})))
 
 (defn- fill-system-variables! [data-model env session-id machine-name event]
   (sp/set-system-variable! data-model env :_event event)
@@ -111,7 +112,7 @@
 
    You can look at the working memory via that atom to see if the machine is still running, etc."
   [machine wmem-atom]
-  (let [model (new-simple-model)]
+  (let [model (new-simple-model wmem-atom)]
     (reset! wmem-atom (sm/initialize machine))
     (async/go-loop []
       (let [env (env/new-env machine @wmem-atom nil model model model)
@@ -120,11 +121,31 @@
                     (fn [_ event]
                       (try
                         (fill-system-variables! model env (sm/session-id @wmem-atom) (:name machine) event)
-                        (catch #(:clj Throwable :cljs :default) e
+                        (swap! wmem-atom (fn [wmem] (sm/process-event machine wmem event)))
+                        (catch #?(:clj Throwable :cljs :default) e
                           (env/send-error-event! env :error.execution e {:source-event   event
                                                                          :working-memory @wmem-atom}))
-                        (swap! wmem-atom (fn [wmem] (sm/process-event machine wmem event)))
                         (finally
                           (clear-system-variables! model env))))))])
       (when (::sc/running? @wmem-atom)
-        (recur)))))
+        (recur)))
+    model))
+
+(comment
+  (def test
+    (sm/machine {}
+      (e/state {:id :A}
+        (e/transition {:event  :trigger
+                       :target :B}))
+      (e/state {:id :B}
+        (e/transition {:event  :trigger
+                       :target :A}))))
+
+  (def wmem-atom (atom {}))
+  (def _model (run-event-loop! test wmem-atom))
+  (defn make-env [] (env/new-env test @wmem-atom nil _model _model _model))
+
+
+  (sp/send! _model (make-env) {:event (evts/new-event :trigger)})
+
+  )
