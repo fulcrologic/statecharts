@@ -6,7 +6,7 @@
 
 (defn genid
   "Generate a unique ID with a base prefix. Like `gensym` but returns a keyword."
-  [s] (keyword (str (gensym s))))
+  [s] (keyword (str (gensym (name s)))))
 
 (defn queue [& args]
   (reduce conj

@@ -1,4 +1,5 @@
 {:deps     {:aliases [:dev :test]}
+ :nrepl    {:port 9000}
  :jvm-opts ["-Xmx2G"]
  :dev-http {9001 "resources/public"}
  :builds   {:test     {:target           :browser-test

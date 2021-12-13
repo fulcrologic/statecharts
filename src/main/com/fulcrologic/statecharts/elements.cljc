@@ -27,7 +27,7 @@
   ([type {:keys [id] :as attrs}]
    (new-element type attrs nil))
   ([type {:keys [id] :as attrs} children]
-   (merge {:id (or id (genid (str type)))}
+   (merge {:id (or id (genid (name type)))}
      attrs
      (cond-> {:node-type type}
        (seq children) (assoc :children (vec children))))))
@@ -49,7 +49,7 @@
   [map? (s/* ::sc/element) => ::sc/element]
   (new-element :parallel attrs children))
 
-(>defn transition
+(defn transition
   "Define a transition. The `target` parameter can be a single keyword or a set of them (when the transition activates
    multiple specific states (e.g. parallel children).
 
@@ -60,7 +60,6 @@
 
    https://www.w3.org/TR/scxml/#transition"
   [{:keys [event cond target type] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
   (let [t    (if (keyword? target) [target] target)
         type (or type :external)]
     (new-element :transition (assoc attrs :target t :type type) children)))
@@ -87,17 +86,17 @@
   [map? (s/* ::sc/element) => ::sc/element]
   (new-element :final attrs children))
 
-(>defn onentry
+(>defn on-entry
   "https://www.w3.org/TR/scxml/#onentry"
   [{:keys [id] :as attrs} & children]
   [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :onentry attrs children))
+  (new-element :on-entry attrs children))
 
-(>defn onexit
+(>defn on-exit
   "https://www.w3.org/TR/scxml/#onexit"
   [{:keys [id] :as attrs} & children]
   [map? (s/* ::sc/element) => ::sc/element]
-  (new-element :onexit attrs children))
+  (new-element :on-exit attrs children))
 
 (>defn history
   "Create a history node.
@@ -143,7 +142,7 @@
 ;; Data Model
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(>defn datamodel
+(>defn data-model
   "Create a data model (in a state or machine context).
 
    `:expr` is an expression that can be run by your current ExecutionModel. The result of the expression
@@ -164,13 +163,13 @@
   [map? (s/* ::sc/element) => ::sc/element]
   (new-element :assign attrs children))
 
-(>defn donedata
-  "Data (calculated by expr) to return to caller when a final state is entered. See `datamodel`.
+(>defn done-data
+  "Data (calculated by expr) to return to caller when a final state is entered. See `data-model`.
 
   https://www.w3.org/TR/scxml/#donedata"
   [{:keys [id expr] :as attrs}]
   [map? => ::sc/element]
-  (new-element :donedata attrs))
+  (new-element :done-data attrs))
 
 (>defn script
   "A script to execute. MAY support loading the code via `src`, or supply the code via `expr` (in the format required

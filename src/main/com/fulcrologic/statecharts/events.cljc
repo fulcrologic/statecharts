@@ -48,21 +48,31 @@
    easily serializable (plain EDN without code) if you wish to use it
    in a distributed or durable environment.
 
+   `type` - defaults to :external
+
    https://www.w3.org/TR/scxml/#events"
-  ([event-name]
-   [::sc/event-name => ::sc/event]
-   (new-event {:name event-name} nil))
-  ([{:keys [name type sendid origin origintype invokeid] :as base-event} data]
-   [map? (? map?) => ::sc/event]
-   (merge
-     {:type :external}
-     base-event
-     {:name           name
-      :data           (or data {})
-      ::sc/event-name name})))
+  [event-name-or-map]
+  [(s/or :k keyword :evt map?) => ::sc/event]
+  (if (map? event-name-or-map)
+    (let [{:keys [name data type sendid origin origintype invokeid] :as base-event} event-name-or-map]
+      (merge
+        {:type :external}
+        base-event
+        {:name           name
+         :data           (or data {})
+         ::sc/event-name name}))
+    {:type           :external
+     :name           event-name-or-map
+     :data           {}
+     ::sc/event-name event-name-or-map}))
 
 (>defn event-name [event-or-name]
   [::sc/event-or-name => ::sc/event-name]
   (if (keyword? event-or-name)
     event-or-name
     (::sc/event-name event-or-name)))
+
+(def cancel-event
+  "An event that will cause the state machine to exit."
+  {:id        :CANCEL
+   :node-type :EXIT})

@@ -20,21 +20,18 @@ but are currently stubs. If you want to play with it, I recommend using deps wit
 commit.
 
 * Implemented
+** DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.
 ** Compound, parallel, atomic, initial, and final states
-** Internal and external transitions
-** History (deep and shallow)
+** Transitions
+** Transition guards
+** Transition execution
+** Extensible executable elements (partially implemented)
 ** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
 
 * In Progress
-** Data model
-** Enter, exit, and action
-** Send/invoke
-
-* Planning
-** Distributed machines
-*** External event queues
-*** External timers
-** Durability
+** History (deep and shallow). written, not tested
+** Enter, exit (written, untested)
+** Send/invoke (unimplemented)
 
 See Conformance.adoc at the root of this repository for notes on
 decisions that might affect exact conformance to the standard.

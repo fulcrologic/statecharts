@@ -56,12 +56,11 @@
   (process-next-event! [_ env handler]
     (async/go
       (let [event (async/<! Q)]
-        (log/debug "Processing event: " event)
         (handler env event)
-        (log/debug "New configuration: " (::sc/configuration @wmem-atom))
         :ok)))
   sp/ExecutionModel
   (run-expression! [this env expr]
+    (log/info "Trying to run" expr)
     (when (fn? expr)
       (let [data    (sp/current-data this env)
             result  (try
@@ -71,8 +70,9 @@
                                                                                          :session-id
                                                                                          :working-memory}))
                         nil))
-            update? (replacement-data? result)]
+            update? (log/spy :info (replacement-data? result))]
         (when update?
+          (log/debug "replacing data model with" result)
           (sp/replace-data! this env result))
         result))))
 
@@ -98,25 +98,27 @@
 
 (defn run-event-loop!
   "Creates a simple model for `machine` and starts an async loop (returns immediately) that runs the `machine`
-   using the `wmem-atom` you supply.
+   using the `wmem-atom` you supply. Returns the simple model that is created (which is an EventQueue, DataModel,
+   and ExecutionModel.
 
-   You can look at the working memory via that atom to see if the machine is still running, etc."
+   You can look at the working memory via your atom to see if the machine is still running, etc."
   [machine wmem-atom]
-  (let [model (new-simple-model wmem-atom)]
-    (reset! wmem-atom (sm/initialize machine))
+  (let [model (new-simple-model wmem-atom)
+        env   (env/new-env machine model model model)]
+    (reset! wmem-atom (sm/initialize env))
     (async/go-loop []
-      (let [env (env/new-env machine @wmem-atom nil model model model)
-            _   (async/<!
-                  (sp/process-next-event! model env
-                    (fn [_ event]
-                      (try
-                        (fill-system-variables! model env (sm/session-id @wmem-atom) (:name machine) event)
-                        (swap! wmem-atom (fn [wmem] (sm/process-event env wmem event)))
-                        (catch #?(:clj Throwable :cljs :default) e
-                          (env/send-error-event! env :error.execution e {:source-event   event
-                                                                         :working-memory @wmem-atom}))
-                        (finally
-                          (clear-system-variables! model env))))))])
+      (async/<!
+        (sp/process-next-event! model env
+          (fn handler* [env event]
+            (try
+              (fill-system-variables! model env (sm/session-id @wmem-atom) (:name machine) event)
+              (let [next-mem (sm/process-event env @wmem-atom event)]
+                (reset! wmem-atom next-mem))
+              (catch #?(:clj Throwable :cljs :default) e
+                (env/send-error-event! env :error.execution e {:source-event   event
+                                                               :working-memory @wmem-atom}))
+              (finally
+                (clear-system-variables! model env))))))
       (when (::sc/running? @wmem-atom)
         (recur)))
     model))
@@ -133,7 +135,7 @@
 
   (def wmem-atom (atom {}))
   (def _model (run-event-loop! test wmem-atom))
-  (defn make-env [] (env/new-env test @wmem-atom nil _model _model _model))
+  (defn make-env [] (env/new-env test _model _model _model))
 
 
   (sp/send! _model (make-env) {:event (evts/new-event :trigger)})

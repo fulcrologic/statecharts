@@ -1,21 +1,24 @@
 (ns com.fulcrologic.statecharts.state-machine-spec
   (:require
-    [com.fulcrologic.statecharts.elements :refer [state parallel
+    [com.fulcrologic.statecharts.elements :refer [state parallel script
                                                   history final initial
-                                                  onentry onexit invoke
-                                                  datamodel
-                                                  transition]]
+                                                  on-entry on-exit invoke
+                                                  data-model transition]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [queue]]
     [com.fulcrologic.statecharts.state-machine :as sm]
     [com.fulcrologic.statecharts.model.environment :as env]
     [com.fulcrologic.statecharts.model.simple-model :as model]
     [fulcro-spec.core :refer [specification assertions component behavior =>]]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [com.fulcrologic.statecharts.events :as evts]))
+(comment
+  (transition {}))
 
 (defn test-env
   ([machine simple-model]
-   (env/new-env machine nil simple-model simple-model simple-model))
+   (env/new-env machine simple-model simple-model simple-model))
   ([machine]
    (test-env machine (model/new-simple-model (atom {})))))
 
@@ -359,7 +362,7 @@
            (test-process-event m $ :trigger)
            (test-process-event m $ :remote))) => #{:S0 :S0p :s0p/motor :s0p/LED})))
 
-(specification ":initial attribute processing" :focus
+(specification ":initial attribute processing"
   (let [m    (sm/machine {}
                (state {:id :S0}
                  (transition {:event :trigger :target :S1})
@@ -409,3 +412,60 @@
       (c (as-> wmem $
            (test-process-event machine $ :trigger)
            (test-process-event machine $ :trigger))) => #{:A})))
+
+#?(:clj
+   (specification "State Machine with a Simple Data Model" :focus
+     (let [machine   (sm/machine {}
+                       (data-model {:id   :model
+                                    :expr {:allow? false}})
+                       (initial {:id :I} (transition {:id :It :target :A}))
+                       (state {:id :A}
+                         (transition {:event :toggle
+                                      :id    :t1
+                                      :type  :internal}
+                           (script {:id   :script
+                                    :expr (fn script* [env data]
+                                            (log/info "script")
+                                            (model/replacement-data (update data :allow? not)))}))
+                         (transition {:event  :trigger
+                                      :id     :t2
+                                      :cond   (fn cond* [env {:keys [allow?] :as data}]
+                                                (log/info "cond" data)
+                                                (log/spy :info allow?))
+                                      :target :B}))
+                       (state {:id :B}
+                         (transition {:event  :trigger
+                                      :id     :t3
+                                      :target :A})))
+           wmem-atom (atom {})
+           M         (model/run-event-loop! machine wmem-atom)
+           base-env  (env/new-env machine M M M)
+           config    (fn [] (::sc/configuration @wmem-atom))
+           data      (fn [] (dissoc (sp/current-data M base-env) :_x))]
+       (Thread/sleep 5)
+       (try
+         (assertions
+           "Sets the initial data model (early binding)"
+           (config) => #{:A}
+           (data) => {:allow? false})
+
+         (sp/send! M base-env {:event (evts/new-event :trigger)})
+         (Thread/sleep 5)
+
+         (assertions
+           "Transition conditions prevent transitions"
+           (config) => #{:A}
+           (data) => {:allow? false})
+
+         (sp/send! M base-env {:event (evts/new-event :toggle)})
+         (Thread/sleep 100)
+
+         (assertions
+           "Transition content evolves the data model"
+           (config) => #{:A}
+           (data) => {:allow? true})
+         (Thread/sleep 100)
+
+         (finally
+           (sp/send! M base-env {:event evts/cancel-event}))))))
+

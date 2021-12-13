@@ -39,7 +39,7 @@
      See ns docstring for description of `env`."))
 
 (defprotocol EventQueue
-  (send! [event-queue env send-request]
+  (send! [event-queue env {:keys [event delay] :as send-request}]
     "Put a send-request on the queue. The send request can have a delay, and must have
      an id. The id need not be unique.
 
