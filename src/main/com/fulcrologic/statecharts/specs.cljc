@@ -61,13 +61,15 @@
                             :e ::sc/event))
 
 (s/def ::sc/context-element-id ::sc/id)
+(s/def ::sc/processor #(satisfies? sp/Processor %))
 (s/def ::sc/data-model #(satisfies? sp/DataModel %))
 (s/def ::sc/event-queue #(satisfies? sp/EventQueue %))
 (s/def ::sc/execution-model #(satisfies? sp/ExecutionModel %))
+(s/def ::sc/vwmem volatile?)
 
-(s/def ::sc/env (s/keys :req-un [::sc/machine]
-                  :opt-un [::sc/context-element-id
-                           ::sc/working-memory
-                           ::sc/data-model
-                           ::sc/event-queue
-                           ::sc/execution-model]))
+(s/def ::sc/env (s/keys :req [::sc/machine
+                              ::sc/vwmem
+                              ::sc/context-element-id
+                              ::sc/data-model
+                              ::sc/event-queue
+                              ::sc/execution-model]))

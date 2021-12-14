@@ -1,4 +1,4 @@
-(ns com.fulcrologic.statecharts.model.environment
+(ns com.fulcrologic.statecharts.environment
   "Helper functions related to the environment used by models."
   (:require
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
@@ -13,18 +13,11 @@
    (merge addl (new-env machine DM Q Ex)))
   ([machine DM Q Ex]
    [::sc/machine ::sc/data-model ::sc/event-queue ::sc/execution-model => ::sc/env]
-   (cond-> {:machine         machine
-            :data-model      DM
-            :event-queue     Q
-            :execution-model Ex
-            :pending-events  (atom (queue))})))
-
-(>defn runtime-env
-  [{:keys [machine] :as env} state wmem]
-  [::sc/env ::sc/element-or-id ::sc/working-memory => ::sc/env]
-  (assoc env
-    :context-element-id (if (keyword? state) state (:id state))
-    :working-memory wmem))
+   (cond-> {::sc/machine         machine
+            ::sc/data-model      DM
+            ::sc/event-queue     Q
+            ::sc/execution-model Ex
+            ::sc/pending-events  (volatile! (queue))})))
 
 (>defn send-internal-event!
   "Put an event on the pending queue. Only usable from within the implementation of a model (a function
@@ -32,20 +25,20 @@
   [env event]
   [::sc/env ::sc/event => nil?]
   (when event
-    (swap! (:pending-events env) conj event))
+    (vswap! (::sc/pending-events env) conj event))
   nil)
 
 (>defn session-id
   "Returns the session ID from an env."
-  [env]
+  [{::sc/keys [vwmem] :as env}]
   [::sc/env => (? ::sc/session-id)]
-  (get-in env [:working-memory ::sc/session-id]))
+  (some-> vwmem deref ::sc/session-id))
 
 (>defn context-element-id
   "Returns the ID of the context (state of interest for the current operation) from an env, if set."
   [env]
   [::sc/env => (? ::sc/id)]
-  (get env :context-element-id))
+  (::sc/context-element-id env))
 
 (>defn send-error-event!
   "Put an error (typically an exception) on the pending internal queue. Only usable from within the implementation of a model (a function
