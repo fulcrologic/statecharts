@@ -16,7 +16,8 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [queue now-ms]]
-    [com.fulcrologic.statecharts.protocols :as sp]))
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [taoensso.timbre :as log]))
 
 (defrecord ManuallyPolledQueue [Qs delayed-events]
   sp/EventQueue
@@ -27,27 +28,30 @@
                               delay] :as send-request}]
     (when (and target (map? event))
       (let [event (assoc event ::sc/source-session-id source-session-id)]
-        (when (pos? delay)
+        (if (and delay (number? delay) (pos? delay))
           (let [trigger-time (+ (now-ms) delay)
                 evts         (sort-by ::sc/trigger-time
                                (conj (get @delayed-events target [])
                                  {:event            event
                                   ::sc/send-id      send-id
                                   ::sc/trigger-time trigger-time}))]
-            (swap! delayed-events assoc target evts))))))
+            (swap! delayed-events assoc target evts))
+          (swap! Qs update target (fnil conj (queue)) event)))))
   (cancel! [event-queue session-id send-id]
     (swap! delayed-events update session-id (fn [evts]
                                               (filterv
                                                 #(not= send-id (::sc/send-id %))
                                                 evts))))
-  (process-next-event! [event-queue {:keys [session-id] :as options} handler]
+  (receive-events! [event-queue {:keys [session-id] :as options} handler]
     (let [now  (now-ms)
           [old-delayed _] (swap-vals! delayed-events update session-id
                             (fn [evts] (remove #(< (::sc/trigger-time %) now) evts)))
           [oldQs _] (swap-vals! Qs assoc session-id (queue))
-          evts (into
-                 (get oldQs session-id [])
-                 (filter #(< (::sc/trigger-time %) now) (get old-delayed session-id)))]
+          evts (into (get oldQs session-id [])
+                 (comp
+                   (filter #(< (::sc/trigger-time %) now))
+                   (map :event))
+                 (get old-delayed session-id))]
       (doseq [evt evts]
         (handler evt)))))
 

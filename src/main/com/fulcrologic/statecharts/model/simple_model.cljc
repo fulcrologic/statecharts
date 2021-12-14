@@ -108,7 +108,7 @@
     (reset! wmem-atom (sm/initialize env))
     (async/go-loop []
       (async/<!
-        (sp/process-next-event! model env
+        (sp/receive-events! model env
           (fn handler* [env event]
             (try
               (fill-system-variables! model env (sm/session-id @wmem-atom) (:name machine) event)

@@ -86,8 +86,8 @@
   (cancel! [event-queue session-id send-id]
     "Cancel the send(s) with the given `id` that were `sent!` by `session-id`.
      This is only possible for events that have a delay and have not yet been delivered.")
-  (process-next-event! [event-queue {:keys [session-id] :as options} handler]
-    "Pull the next event from the queue for `session-id` (in env) and process it with `handler`, a
+  (receive-events! [event-queue {:keys [session-id] :as options} handler]
+    "Pull the next event(s) from the queue for `session-id` (in env) and process with `handler`, a
      `(fn [event])` that MUST process the event in a way that ensures the event is
      delivered, processed, and safe to remove from the event queue.
 
