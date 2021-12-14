@@ -26,7 +26,11 @@
                               source-session-id
                               target
                               delay] :as send-request}]
-    (when (and target (map? event))
+    (if-not (and
+              source-session-id
+              target
+              (map? event))
+      (log/error "Cannot enqueue an event. The source-session-id, target, and event are required.")
       (let [event (assoc event ::sc/source-session-id source-session-id)]
         (if (and delay (number? delay) (pos? delay))
           (let [trigger-time (+ (now-ms) delay)
@@ -38,22 +42,30 @@
             (swap! delayed-events assoc target evts))
           (swap! Qs update target (fnil conj (queue)) event)))))
   (cancel! [event-queue session-id send-id]
-    (swap! delayed-events update session-id (fn [evts]
-                                              (filterv
-                                                #(not= send-id (::sc/send-id %))
-                                                evts))))
+    (if (and session-id send-id)
+      (swap! delayed-events update session-id (fn [evts]
+                                                (filterv
+                                                  #(not= send-id (::sc/send-id %))
+                                                  evts)))
+      (log/warn "Cannot cancel events with a nil session/send ID")))
   (receive-events! [event-queue {:keys [session-id] :as options} handler]
-    (let [now  (now-ms)
-          [old-delayed _] (swap-vals! delayed-events update session-id
-                            (fn [evts] (remove #(< (::sc/trigger-time %) now) evts)))
-          [oldQs _] (swap-vals! Qs assoc session-id (queue))
-          evts (into (get oldQs session-id [])
-                 (comp
-                   (filter #(< (::sc/trigger-time %) now))
-                   (map :event))
-                 (get old-delayed session-id))]
-      (doseq [evt evts]
-        (handler evt)))))
+    (if-not session-id
+      (log/warn "Cannot receive events without the session-id")
+      (let [now  (now-ms)
+            [old-delayed _] (swap-vals! delayed-events update session-id
+                              (fn [evts] (remove #(< (::sc/trigger-time %) now) evts)))
+            [oldQs _] (swap-vals! Qs assoc session-id (queue))
+            evts (into (get oldQs session-id [])
+                   (comp
+                     (filter #(< (::sc/trigger-time %) now))
+                     (map :event))
+                   (get old-delayed session-id))]
+        (doseq [evt evts]
+          (try
+            (handler evt)
+            (catch #?(:clj  Throwable
+                      :cljs :default) t
+              (log/error t "Handler threw an exception"))))))))
 
 (defn new-queue []
   (->ManuallyPolledQueue (atom {}) (atom {})))
