@@ -270,7 +270,7 @@
 (>defn remove-conflicting-transitions
   "Updates working-mem so that enabled-transitions no longer includes any conflicting ones."
   [{::sc/keys [machine] :as env} enabled-transitions]
-  [::sc/machine (s/every ::sc/id) => (s/every ::sc/id)]
+  [::sc/env (s/every ::sc/id) => (s/every ::sc/id)]
   (let [filtered-transitions (volatile! #{})]
     (doseq [t1 enabled-transitions
             :let [to-remove  (volatile! #{})
@@ -314,7 +314,8 @@
   (let [tns (remove-conflicting-transitions env
               (select-transitions* machine (::sc/configuration @vwmem)
                 (fn [t] (and (not (:event t)) (condition-match env t)))))]
-    (vswap! vwmem assoc ::sc/enabled-transitions tns)))
+    (vswap! vwmem assoc ::sc/enabled-transitions tns))
+  nil)
 
 (>defn select-transitions!
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
@@ -480,12 +481,12 @@
 
 (>defn runtime-env
   "Set up `env` to track live data that is needed during the algorithm."
-  [env wmem]
-  [::sc/env ::sc/working-memory => ::sc/env]
+  [env base-wmem]
+  [map? map? => ::sc/env]
   (assoc env
     ::sc/context-element-id :ROOT
     ::sc/vwmem (volatile! (assoc
-                            wmem
+                            base-wmem
                             ::sc/enabled-transitions #{}
                             ::sc/states-to-invoke #{}
                             ::sc/macrostep-done? false))))
@@ -521,7 +522,7 @@
   (let [{:keys [binding name initial script]} machine
         early? (= binding :early)
         t      (some->> machine (sm/initial-element machine) (sm/transition-element machine) (sm/element-id machine))
-        wmem   (runtime-env
+        env    (runtime-env
                  env
                  {::sc/session-id          #?(:clj (UUID/randomUUID) :cljs (random-uuid))
                   ::sc/configuration       #{}              ; currently active states
@@ -529,7 +530,6 @@
                   ::sc/enabled-transitions (if t #{t} #{})
                   ::sc/history-value       {}
                   ::sc/running?            true})]
-    (vreset! vwmem wmem)
     (when early?
       (let [all-data-model-nodes (filter #(= :data-model (:node-type %)) (vals (::sc/elements-by-id machine)))]
         (doseq [n all-data-model-nodes]

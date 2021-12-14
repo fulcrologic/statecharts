@@ -48,13 +48,17 @@
    easily serializable (plain EDN without code) if you wish to use it
    in a distributed or durable environment.
 
-   `type` - defaults to :external
+   If using a map:
+
+   `name` - the event name
+   `data` - Extra data to send with the event
+   `type` - :internal, :external, or :platform. Defaults to :external
 
    https://www.w3.org/TR/scxml/#events"
   [event-name-or-map]
   [(s/or :k keyword :evt map?) => ::sc/event]
   (if (map? event-name-or-map)
-    (let [{:keys [name data type sendid origin origintype invokeid] :as base-event} event-name-or-map]
+    (let [{:keys [name data] :as base-event} event-name-or-map]
       (merge
         {:type :external}
         base-event
