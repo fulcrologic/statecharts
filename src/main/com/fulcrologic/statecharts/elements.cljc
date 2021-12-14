@@ -233,7 +233,7 @@
   * `:params` An expression in the execution model's notation that can calculate the data to send to the invocation.
   * `:finalize` An expression to run when the invocation returns, and may update the data model.
   * `:type` The type of external service (expression allowed)
-  * `:autoforward?` Enable forwarding of (external) events to the invoked process.
+  * `:autoforward` Enable forwarding of (external) events to the invoked process.
   * `:idlocation` a vector of keywords that specifies a location in the DataModel
     to store a generated ID that uniquely identifies the event instance
     being sent. If not supplied then `id` will be the id of the send.

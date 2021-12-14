@@ -13,10 +13,10 @@
   sp/ExecutionModel
   (run-expression! [this env expr]
     (if (fn? expr)
-      (let [data       (sp/current-data this env)
+      (let [data       (sp/current-data data-model env)
             session-id (env/session-id env)
             result     (try
-                         (log/info "Trying to run" expr "in" session-id)
+                         (log/debug "Trying to run function in" session-id)
                          (expr env data)
                          (catch #?(:clj Throwable :cljs :default) e
                            (sp/send! event-queue {:event             (evts/new-event {:name :error.execution

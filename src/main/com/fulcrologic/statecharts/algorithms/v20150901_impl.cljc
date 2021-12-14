@@ -3,7 +3,9 @@
 
    Uses an imperative style (internally) to match the pseudocode in the standard for easier translation,
    verification, and avoidance of subtle differences in implementation."
-  #?(:cljs (:require-macros [com.fulcrologic.statecharts.algorithms.v20150901 :refer [in-context ]]))
+  #?(:cljs (:require-macros [com.fulcrologic.statecharts.algorithms.v20150901-impl
+                             :refer [in-state-context
+                                     with-processing-context]]))
   (:require
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
@@ -16,20 +18,37 @@
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.state-machine :as sm]
     [com.fulcrologic.statecharts.util :refer [queue genid]]
-    [taoensso.timbre :as log])
+    [taoensso.timbre :as log]
+    [com.fulcrologic.statecharts.environment :as env])
   #?(:clj (:import (java.util UUID))))
 
-(defmacro in-context
-  "Change the `env` context to the given state element (you can supply id or element itself). Runs the `body` with
-   the update env, and returns the last expression of the body. `env` changes to context
-   are not visible outside of this block."
-  [env-sym state-or-id & body]
-  `(let [m#  (get ~env-sym ::sc/machine)
-         id# (sm/element-id m# ~state-or-id)
-         ~env-sym (assoc ~env-sym ::sc/context-element-id id#)]
-     ~@body))
+#?(:clj
+   (defmacro with-processing-context [env & body]
+     `(let [vwmem# (get ~env ::sc/vwmem)]
+        (vswap! vwmem# (fn [m#] (merge
+                                  {::sc/enabled-transitions #{}
+                                   ::sc/states-to-invoke    #{}
+                                   ::sc/internal-queue      (com.fulcrologic.statecharts.util/queue)}
+                                  m#)))
+        (do ~@body)
+        (vswap! vwmem# dissoc ::sc/enabled-transitions ::sc/states-to-invoke ::sc/internal-queue))))
 
-(s/fdef in-context
+#?(:clj
+   (s/fdef with-processing-context
+     :args (s/cat :env symbol? :body (s/* any?))))
+
+#?(:clj
+   (defmacro in-state-context
+     "Change the `env` context to the given state element (you can supply id or element itself). Runs the `body` with
+      the update env, and returns the last expression of the body. `env` changes to context
+      are not visible outside of this block."
+     [env-sym state-or-id & body]
+     `(let [m#  (get ~env-sym ::sc/machine)
+            id# (sm/element-id m# ~state-or-id)
+            ~env-sym (assoc ~env-sym ::sc/context-element-id id#)]
+        ~@body)))
+
+(s/fdef in-state-context
   :ret any?
   :args (s/cat :s symbol? :sid any? :body (s/* any?)))
 
@@ -145,11 +164,11 @@
   (let [states-to-enter          (volatile! #{})
         states-for-default-entry (volatile! #{})
         default-history-content  (volatile! {})
-        transitions              (mapv #(or (sm/element machine %)
-                                          (elements/transition {:target %}))
+        transitions              (mapv (fn [t]
+                                         (or (sm/element machine t)
+                                           (elements/transition {:target t})))
                                    (::sc/enabled-transitions @vwmem))]
     (doseq [{:keys [target] :as t} transitions]
-      (log/trace "Entry set target(s): " target)
       (let [ancestor (sm/element-id machine (get-transition-domain env t))]
         (doseq [s target]
           (add-descendant-states-to-enter! env s states-to-enter
@@ -161,14 +180,14 @@
 
 (>defn initialize-data-model!
   "Initialize the data models in volatile working memory `wmem` for the given states, if necessary."
-  [{:sc/keys [machine data-model execution-model] :as env} state]
+  [{::sc/keys [machine data-model execution-model] :as env} state]
   [::sc/env ::sc/element-or-id => nil?]
-  (log/info "Initializing data model for" state)
+  (log/debug "**** Initializing data model for" state)
   (let [dm-eles (sm/get-children machine state :data-model)
         {:keys [src expr]} (sm/element machine (first dm-eles))]
     (when (> (count dm-eles) 1)
       (log/warn "Too many data elements on" state))
-    (in-context env state
+    (in-state-context env state
       (cond
         src (sp/load-data data-model env src)
         (fn? expr) (let [txn (sp/run-expression! execution-model env expr)]
@@ -189,16 +208,15 @@
     (sp/run-expression! execution-model env expr)))
 
 (>defn execute!
-  "Run the executable content (immediate children) of s. Returns an updated wmem."
+  "Run the executable content (immediate children) of s."
   [{::sc/keys [machine] :as env} s]
   [::sc/env ::sc/element-or-id => nil?]
-  (log/info "Execute content of" s)
+  (log/trace "Execute content of" s)
   (let [{:keys [children]} (sm/element machine s)]
     (doseq [n children]
       (try
         (let [ele (sm/element machine n)]
-          (in-context env ele
-            (execute-element-content! env ele)))
+          (execute-element-content! env ele))
         (catch #?(:clj Throwable :cljs :default) t
           (log/error t "Unexpected exception in content")))))
   nil)
@@ -208,13 +226,12 @@
    returns updated working memory."
   [{::sc/keys [machine vwmem] :as env}]
   [::sc/env => nil?]
-  (log/info "enter-states")
   (let [[states-to-enter
          states-for-default-entry
          default-history-content] (compute-entry-set! env)]
     (doseq [s (sm/in-entry-order machine states-to-enter)
             :let [state-id (sm/element-id machine s)]]
-      (in-context env s
+      (in-state-context env s
         (vswap! vwmem update ::sc/configuration conj s)
         (vswap! vwmem update ::sc/states-to-invoke conj s)
         (when (and (= :late (:binding machine)) (not (contains? (::sc/initialized-states @vwmem) state-id)))
@@ -340,7 +357,7 @@
   [::sc/env => nil?]
   (let [{::sc/keys [states-to-invoke]} @vwmem]
     (doseq [state-to-invoke states-to-invoke]
-      (in-context env state-to-invoke
+      (in-state-context env state-to-invoke
         (doseq [i (sm/invocations machine state-to-invoke)]
           (invoke! env i)))))
   nil)
@@ -349,12 +366,16 @@
   "Run the code associated with the given nodes. Does NOT set context id of the nodes run."
   [env nodes]
   [::sc/env (s/every ::sc/element-or-id) => nil?]
-  (doseq [n nodes]
-    (execute! env n))
+  (try
+    (doseq [n nodes]
+      (execute! env n))
+    (catch #?(:clj Throwable :cljs :default) e
+      ;; TASK: send internal event
+      (log/error e "Unexpected execution error")))
   nil)
 
 (defn cancel-invoke! [i]
-  ;; TASK
+  ;; TASK: invocation impl
   (log/warn "Cancel not implemented" i))
 
 (>defn cancel-active-invocations!
@@ -392,7 +413,7 @@
         ::sc/states-to-invoke states-to-invoke
         ::sc/history-value history-value)
       (doseq [s states-to-exit]
-        (in-context env s
+        (in-state-context env s
           (let [to-exit (sm/exit-handlers machine s)]
             (run-many! env to-exit)
             (cancel-active-invocations! env s)
@@ -423,7 +444,6 @@
             (vreset! macrostep-done? true)
             (let [internal-event (first internal-queue)]
               (vswap! vwmem update ::sc/internal-queue pop)
-              (sp/transact! data-model env [(ops/assign :_event internal-event)])
               (select-transitions! env internal-event))))
         (when (seq (::sc/enabled-transitions @vwmem))
           (microstep! env)))))
@@ -433,7 +453,7 @@
   "Run the exit handlers of `state`."
   [{::sc/keys [machine] :as env} state]
   [::sc/env ::sc/element-or-id => nil?]
-  (in-context env state
+  (in-state-context env state
     (let [nodes (sm/in-document-order machine (sm/exit-handlers machine state))]
       (run-many! env nodes)))
   nil)
@@ -441,7 +461,7 @@
 ;; TASK: Sending events back to the machine that started this one, if there is one
 (>defn send-done-event! [env state]
   [::sc/env ::sc/element-or-id => nil?]
-  (in-context env state
+  (in-state-context env state
     (log/warn "done event not implements" state))
   nil)
 
@@ -474,10 +494,28 @@
 
 (defn cancel? [event] (= :EXIT (:node-type event)))
 
-(>defn handle-external-invocations! [env]
-  [::sc/env => nil?]
-  ;; TASK
-  (log/warn "External invocations not implemented")
+(defn finalize! [{::sc/keys [machine] :as env} invocation event]
+  (let [parent (or
+                 (sm/nearest-ancestor-state machine invocation)
+                 machine)]
+    (in-state-context env parent
+      (env/assign! env :_event event)
+      (when-let [finalize (sm/get-children machine invocation :finalize)]
+        (execute! (assoc env :_event event) finalize))
+      (env/delete! env :_event))))
+
+(defn forward! [env invocation event]
+  (log/warn "Event forwarding not implemented"))
+
+(>defn handle-external-invocations! [{::sc/keys [machine vwmem event-queue] :as env}
+                                     {:keys [invokeid] :as external-event}]
+  [::sc/env ::sc/event => nil?]
+  (doseq [s (::sc/configuration @vwmem)]
+    (doseq [{:keys [id autoforward] :as inv} (map (partial sm/element machine) (sm/invocations machine s))]
+      (when (= invokeid id)
+        (finalize! env inv external-event))
+      (when (true? autoforward)
+        (forward! env inv external-event))))
   nil)
 
 (>defn runtime-env
@@ -502,18 +540,16 @@
    is called by an overall processing system instead of directly."
   [{::sc/keys [data-model vwmem] :as env} external-event]
   [::sc/env ::sc/event-or-name => ::sc/working-memory]
-  (if (cancel? external-event)
-    (exit-interpreter! env)
-    (do
-      (select-transitions! env external-event)
-      (sp/transact! data-model env {:txn [(ops/assign :_event external-event)]})
-      (handle-external-invocations! env)
-      (microstep! env)
-      (before-event! env)))
-  (dissoc (some-> env ::sc/vwmem deref)
-    ::sc/states-to-invoke
-    ::sc/enabled-transitions
-    ::sc/internal-queue))
+  (with-processing-context env
+    (if (cancel? external-event)
+      (exit-interpreter! env)
+      (do
+        (select-transitions! env external-event)
+        (sp/transact! data-model env {:txn [(ops/assign :_event external-event)]})
+        (handle-external-invocations! env external-event)
+        (microstep! env)
+        (before-event! env))))
+  (some-> env ::sc/vwmem deref))
 
 (>defn initialize!
   "Initializes the state machine and creates an initial working memory for a new machine env.
@@ -522,23 +558,23 @@
    This function processes the initial transition and returns the updated working memory from `env`."
   [{::sc/keys [machine vwmem] :as env}]
   [::sc/env => ::sc/working-memory]
-  (let [{:keys [binding name initial script]} machine
+  (let [{:keys [binding script]} machine
         early? (= binding :early)
-        t      (or initial
-                 (some->> machine
-                   (sm/initial-element machine)
-                   (sm/transition-element machine)
-                   (sm/element-id machine)))]
+        t      (some->> machine
+                 (sm/initial-element machine)
+                 (sm/transition-element machine)
+                 (sm/element-id machine))]
     (vswap! vwmem assoc ::sc/enabled-transitions (if t #{t} #{}))
-    (when early?
-      (let [all-data-model-nodes (filter #(= :data-model (:node-type %)) (vals (::sc/elements-by-id machine)))]
-        (doseq [n all-data-model-nodes]
-          (in-context env n
-            (initialize-data-model! env (sm/get-parent machine n))))))
-    (enter-states! env)
-    (before-event! env)
-    (when script
-      (execute! env script))
+    (with-processing-context env
+      (when early?
+        (let [all-data-model-nodes (filter #(= :data-model (:node-type %)) (vals (::sc/elements-by-id machine)))]
+          (doseq [n all-data-model-nodes]
+            (in-state-context env n
+              (initialize-data-model! env (sm/get-parent machine n))))))
+      (enter-states! env)
+      (before-event! env)
+      (when script
+        (execute! env script)))
     @vwmem))
 
 

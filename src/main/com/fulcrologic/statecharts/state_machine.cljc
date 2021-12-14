@@ -5,8 +5,6 @@
 
    ::sc/k in the docstrings of this namespace assumes the alias `[com.fulcrologic.statecharts :as sc]`, which
    can be generated as only an alias, though an empty namespace of that name does exist."
-  #?(:cljs (:require-macros [com.fulcrologic.statecharts.state-machine
-                             :refer [with-working-memory]]))
   (:require
     com.fulcrologic.statecharts.specs
     [com.fulcrologic.guardrails.core :refer [>defn => ? >defn-]]
@@ -223,7 +221,7 @@
   [machine element-or-id]
   [::sc/machine (? ::sc/element-or-id) => (? ::sc/initial-element)]
   (->>
-    (log/spy :info "children of "(child-states machine element-or-id))
+    (child-states machine element-or-id)
     (map #(element machine %))
     (filter :initial?)
     first))
@@ -259,6 +257,12 @@
       (state? machine p) p
       (nil? p) nil
       :else (nearest-ancestor-state machine p))))
+
+(def get-parent-state
+  "[machine element-or-id]
+
+   Alias for `nearest-ancestor-state`."
+  nearest-ancestor-state)
 
 (def source "[machine element-or-id]
    Returns the source (nearest ancestor that is a state element) of an element (meant to be used for transitions)."

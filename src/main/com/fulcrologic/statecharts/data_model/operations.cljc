@@ -1,5 +1,7 @@
 (ns com.fulcrologic.statecharts.data-model.operations
-  "Convenience helpers for interacting with `DataModel`s")
+  "Convenience helpers for interacting with `DataModel`s"
+  (:require
+    [taoensso.timbre :as log]))
 
 (defn assign
   "A transaction element that indicates the desire to overwrite the given paths in the data model. E.g.
@@ -20,7 +22,7 @@
   "
   [& {:as path-value-pairs}]
   {:op   :assign
-   :data (into {} (partition 2 path-value-pairs))})
+   :data path-value-pairs})
 
 (defn delete
   "A transaction element that indicates the desire to remove certain values from the data model.

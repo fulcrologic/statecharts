@@ -23,35 +23,43 @@
                   ::sc/execution-model (reify sp/ExecutionModel)
                   ::sc/event-queue     (reify sp/EventQueue)
                   ::sc/vwmem           vwmem}
-        context  (fn [c] (assoc mock-env ::sc/context-element-id c))
-        data     (fn [path] (get-in @vwmem (into [::wmdm/data-model] path)))]
+        context  (fn [c] (assoc mock-env ::sc/context-element-id c))]
 
     (component "transact!"
-      (sp/transact! DM (context :A/a) {:txn (ops/set-map-txn {:x 1})})
+      (sp/transact! DM (context :A/a) {:txn [(ops/assign :x 1)]})
+      (sp/transact! DM (context :A) {:txn [(ops/assign :y 9)]})
 
       (assertions
         "Places values into the correct context in working memory"
-        (data [:A/a]) => {:x 1}
-        (data [:A]) => nil
-        (data [:ROOT]) => nil))
+        (::wmdm/data-model @vwmem) => {:A/a {:x 1}
+                                       :A   {:y 9}})
 
-    (vreset! vwmem {})
-    (sp/transact! DM (context :A/a) {:txn (ops/set-map-txn {:x 1})})
-    (sp/transact! DM (context :A) {:txn (ops/set-map-txn {:y 1 :x 2})})
-    (sp/transact! DM (context :ROOT) {:txn (ops/set-map-txn {:z 1 :x 3})})
+      (vswap! vwmem dissoc ::wmdm/data-model)
+
+      (sp/transact! DM (context :ROOT) {:txn [(ops/assign :x 1)]})
+      (sp/transact! DM (context :ROOT) {:txn [(ops/assign :y 2)]})
+      (sp/transact! DM (context :A/a) {:txn [(ops/assign :y 42)]})
+      (sp/transact! DM (context :A/a) {:txn [(ops/assign [:ROOT :z] 3)]})
+      (sp/transact! DM (context :A) {:txn [(ops/assign :z 9)]})
+
+      (assertions
+        "Multiple assigns to context"
+        (::wmdm/data-model @vwmem) => {:ROOT {:x 1 :y 2 :z 3}
+                                       :A/a  {:y 42}
+                                       :A    {:z 9}}))
 
     (component "get-at"
       (assertions
         "shadows in the correct order"
-        (sp/get-at DM (context :ROOT) :x) => 3
-        (sp/get-at DM (context :A) :x) => 2
+        (sp/get-at DM (context :ROOT) :x) => 1
+        (sp/get-at DM (context :A) :x) => 1
         (sp/get-at DM (context :A/a) :x) => 1)
 
       (assertions
         "searches until a value is found"
-        (sp/get-at DM (context :A/a) :y) => 1
-        (sp/get-at DM (context :A) :y) => 1
-        (sp/get-at DM (context :ROOT) :y) => nil))
+        (sp/get-at DM (context :A/a) :y) => 42
+        (sp/get-at DM (context :A) :y) => 2
+        (sp/get-at DM (context :ROOT) :y) => 2))
 
     (component "transacting delete"
       (sp/transact! DM (context :ROOT) {:txn [(ops/delete [:ROOT :z])]})

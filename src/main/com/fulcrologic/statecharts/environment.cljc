@@ -1,11 +1,14 @@
 (ns com.fulcrologic.statecharts.environment
   "Helper functions related to the environment used by models."
   (:require
+    [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     com.fulcrologic.statecharts.specs
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.events :as evts]
-    [com.fulcrologic.statecharts.util :refer [queue]]))
+    [com.fulcrologic.statecharts.data-model.operations :as ops]
+    [com.fulcrologic.statecharts.util :refer [queue]]
+    [com.fulcrologic.statecharts.protocols :as sp]))
 
 (>defn new-env
   ([machine DM Q Ex addl]
@@ -37,7 +40,7 @@
 (>defn context-element-id
   "Returns the ID of the context (state of interest for the current operation) from an env, if set."
   [env]
-  [::sc/env => (? ::sc/id)]
+  [(s/keys :req [::sc/context-element-id]) => (? ::sc/id)]
   (::sc/context-element-id env))
 
 (>defn send-error-event!
@@ -51,4 +54,20 @@
                                                :session-id         (session-id env)})
                      :error error
                      :type  :platform}))
+  nil)
+
+(s/def ::assignment-pairs (s/* (s/tuple (s/or :k keyword? :path vector?) any?)))
+
+(>defn assign!
+  "Side effect against the data model in `env`, with the given path-value pairs."
+  [{::sc/keys [data-model] :as env} & {:as path-value-pairs}]
+  [::sc/env ::assignment-pairs => nil?]
+  (sp/transact! data-model env {:txn (ops/set-map-txn path-value-pairs)})
+  nil)
+
+(>defn delete!
+  "Side effect against the data model in `env`, with the given keys/paths"
+  [{::sc/keys [data-model] :as env} & ks]
+  [::sc/env ::assignment-pairs => nil?]
+  (sp/transact! data-model env {:txn [(ops/delete ks)]})
   nil)

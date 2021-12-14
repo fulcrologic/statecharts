@@ -52,8 +52,7 @@
                     :opt-un [:org.w3.scxml.event/sendid
                              :org.w3.scxml.event/origin
                              :org.w3.scxml.event/origintype
-                             :org.w3.scxml.event/invokeid]
-                    :req [::sc/event-name]))
+                             :org.w3.scxml.event/invokeid]))
 (s/def ::sc/event-or-name (s/or
                             :n ::sc/event-name
                             :e ::sc/event))

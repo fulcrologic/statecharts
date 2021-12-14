@@ -27,8 +27,10 @@
     (fn [acc path value]
       (cond
         (and context-id (keyword? path)) (assoc-in acc [context-id path] value)
-        (keyword? path) (log/warn "Unknown context " context-id)
-        (and (vector? path) (= count 2)) (assoc-in acc path value)
+        (keyword? path) (do
+                          (log/warn "Unknown context " context-id)
+                          acc)
+        (and (vector? path) (= (count path) 2)) (assoc-in acc path value)
         :else (do
                 (log/warn "Cannot assign value. Illegal path expression" path)
                 acc)))
@@ -61,7 +63,7 @@
               (catch #?(:clj Throwable :cljs :default) e
                 (log/error e "Unable to load data from" src)))
        :cljs (log/error "src not supported.")))
-  (current-data [provider {::sc/keys [machine vwmem] :as env}]
+  (current-data [_ {::sc/keys [machine vwmem] :as env}]
     (let [all-data (some-> vwmem deref ::data-model)]
       (loop [state-id (env/context-element-id env)
              result   {}]
