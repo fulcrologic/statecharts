@@ -223,7 +223,7 @@
   [machine element-or-id]
   [::sc/machine (? ::sc/element-or-id) => (? ::sc/initial-element)]
   (->>
-    (child-states machine element-or-id)
+    (log/spy :info "children of "(child-states machine element-or-id))
     (map #(element machine %))
     (filter :initial?)
     first))
@@ -302,21 +302,6 @@
   [machine nodes]
   [::sc/machine (s/every ::sc/element-or-id) => (s/every ::sc/element-or-id :kind vector?)]
   (into [] (reverse (in-document-order machine nodes))))
-
-#?(:clj
-   (defmacro with-working-memory [binding & body]
-     (let [[sym expr] binding]
-       `(let [~sym (merge {::sc/enabled-transitions #{}
-                           ::sc/states-to-invoke    #{}
-                           ::sc/internal-queue      (com.fulcrologic.statecharts.util/queue)}
-                     ~expr)
-              next-mem# (do
-                          ~@body)]
-          (dissoc next-mem# ::sc/enabled-transitions ::sc/states-to-invoke ::sc/internal-queue)))))
-
-#?(:clj
-   (s/fdef with-working-memory
-     :args (s/cat :binding (s/tuple symbol? any?) :body (s/* any?))))
 
 (>defn get-proper-ancestors
   "Returns the node ids from `machine` that are proper ancestors of `element-or-id` (an id or actual element-or-id). If `stopping-element-or-id-or-id`

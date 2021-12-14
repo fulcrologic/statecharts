@@ -3,7 +3,7 @@
 
    Uses an imperative style (internally) to match the pseudocode in the standard for easier translation,
    verification, and avoidance of subtle differences in implementation."
-  #?(:cljs (:require-macros [com.fulcrologic.statecharts.algorithms.v20150901 :refer [in-context]]))
+  #?(:cljs (:require-macros [com.fulcrologic.statecharts.algorithms.v20150901 :refer [in-context ]]))
   (:require
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
@@ -108,7 +108,7 @@
 
 (>defn get-effective-target-states
   [{::sc/keys [machine vwmem] :as env} t]
-  [::sc/machine ::sc/element-or-id => (s/every ::sc/element-or-id :kind set?)]
+  [::sc/env ::sc/element-or-id => (s/every ::sc/element-or-id :kind set?)]
   (let [{::sc/keys [history-value] :as working-memory} @vwmem]
     (reduce
       (fn [targets s]
@@ -146,7 +146,8 @@
         states-for-default-entry (volatile! #{})
         default-history-content  (volatile! {})
         transitions              (mapv #(or (sm/element machine %)
-                                          (elements/transition {:target %})) (::sc/enabled-transitions @vwmem))]
+                                          (elements/transition {:target %}))
+                                   (::sc/enabled-transitions @vwmem))]
     (doseq [{:keys [target] :as t} transitions]
       (log/trace "Entry set target(s): " target)
       (let [ancestor (sm/element-id machine (get-transition-domain env t))]
@@ -182,7 +183,7 @@
    of the element itself."
   (fn [env element] (:node-type element)))
 
-(defmethod execute-element-content! :default [{:keys [execution-model] :as env} {:keys [node-type expr] :as element}]
+(defmethod execute-element-content! :default [{::sc/keys [execution-model] :as env} {:keys [node-type expr] :as element}]
   (if (nil? expr)
     (log/warn "No implementation to run content of " element)
     (sp/run-expression! execution-model env expr)))
@@ -255,7 +256,7 @@
 
 (>defn compute-exit-set
   [{::sc/keys [machine vwmem] :as env} transitions]
-  [::sc/machine (s/every ::sc/element-or-id) => (s/every ::sc/id :kind set?)]
+  [::sc/env (s/every ::sc/element-or-id) => (s/every ::sc/id :kind set?)]
   (reduce
     (fn [acc t]
       (if (contains? (sm/element machine t) :target)
@@ -320,7 +321,7 @@
 (>defn select-transitions!
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [{::sc/keys [machine vwmem] :as env} event]
-  [::sc/env ::sc/event-or-name => ::sc/active-working-memory]
+  [::sc/env ::sc/event-or-name => ::sc/working-memory]
   (let [tns (remove-conflicting-transitions env
               (select-transitions* machine (::sc/configuration @vwmem)
                 (fn [t] (and
@@ -485,11 +486,13 @@
   [map? map? => ::sc/env]
   (assoc env
     ::sc/context-element-id :ROOT
-    ::sc/vwmem (volatile! (assoc
-                            base-wmem
-                            ::sc/enabled-transitions #{}
-                            ::sc/states-to-invoke #{}
-                            ::sc/macrostep-done? false))))
+    ::sc/vwmem (volatile! (merge
+                            {::sc/session-id         #?(:clj (UUID/randomUUID) :cljs (random-uuid))
+                             ::sc/configuration      #{}    ; currently active states
+                             ::sc/initialized-states #{}    ; states that have been entered (initialized data model) before
+                             ::sc/history-value      {}
+                             ::sc/running?           true}
+                            base-wmem))))
 
 
 
@@ -503,7 +506,7 @@
     (exit-interpreter! env)
     (do
       (select-transitions! env external-event)
-      (sp/transact! data-model env [(ops/assign :_event external-event)])
+      (sp/transact! data-model env {:txn [(ops/assign :_event external-event)]})
       (handle-external-invocations! env)
       (microstep! env)
       (before-event! env)))
@@ -516,28 +519,27 @@
   "Initializes the state machine and creates an initial working memory for a new machine env.
    Auto-assigns a unique UUID for session ID.
 
-   This function processes the initial transition."
-  [{:keys [machine vwmem] :as env}]
-  [::sc/env => nil?]
+   This function processes the initial transition and returns the updated working memory from `env`."
+  [{::sc/keys [machine vwmem] :as env}]
+  [::sc/env => ::sc/working-memory]
   (let [{:keys [binding name initial script]} machine
         early? (= binding :early)
-        t      (some->> machine (sm/initial-element machine) (sm/transition-element machine) (sm/element-id machine))
-        env    (runtime-env
-                 env
-                 {::sc/session-id          #?(:clj (UUID/randomUUID) :cljs (random-uuid))
-                  ::sc/configuration       #{}              ; currently active states
-                  ::sc/initialized-states  #{}              ; states that have been entered (initialized data model) before
-                  ::sc/enabled-transitions (if t #{t} #{})
-                  ::sc/history-value       {}
-                  ::sc/running?            true})]
+        t      (or initial
+                 (some->> machine
+                   (sm/initial-element machine)
+                   (sm/transition-element machine)
+                   (sm/element-id machine)))]
+    (vswap! vwmem assoc ::sc/enabled-transitions (if t #{t} #{}))
     (when early?
       (let [all-data-model-nodes (filter #(= :data-model (:node-type %)) (vals (::sc/elements-by-id machine)))]
         (doseq [n all-data-model-nodes]
-          (initialize-data-model! env (:parent n)))))
+          (in-context env n
+            (initialize-data-model! env (sm/get-parent machine n))))))
     (enter-states! env)
     (before-event! env)
     (when script
-      (execute! env script))))
+      (execute! env script))
+    @vwmem))
 
 
 (defn configuration-problems

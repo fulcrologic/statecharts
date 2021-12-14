@@ -12,8 +12,7 @@
   (start! [this session-id]
     (let [env (impl/runtime-env base-env
                 {::sc/session-id session-id})]
-      (impl/initialize! env)
-      (-> env ::sc/vwmem deref)))
+      (impl/initialize! env)))
   (process-event! [this wmem event]
     (let [env (impl/runtime-env base-env wmem)]
       (impl/process-event! env event))))
@@ -27,6 +26,8 @@
    ** :execution-model (REQUIRED) An ExecutionModel
    ** :event-queue     (REQUIRED) An event queue
 
+   Anything else you put in the options map becomes part of the runtime `env`.
+
    Returns a Processor. See protocols/Processor.
    "
   [machine-spec {:keys [data-model execution-model event-queue]
@@ -35,7 +36,9 @@
                   [::sc/data-model
                    ::sc/execution-model
                    ::sc/event-queue]) => ::sc/processor]
-  (->Processor {::sc/machine         machine-spec
-                ::sc/data-model      data-model
-                ::sc/execution-model execution-model
-                ::sc/event-queue     event-queue}))
+  (->Processor (merge
+                 (dissoc options :data-model :execution-model :event-queue)
+                 {::sc/machine         machine-spec
+                  ::sc/data-model      data-model
+                  ::sc/execution-model execution-model
+                  ::sc/event-queue     event-queue})))

@@ -31,8 +31,6 @@
                                          ::sc/initialized-states
                                          ::sc/history-value
                                          ::sc/running?]))
-(s/def ::sc/active-working-memory (s/merge ::sc/working-memory
-                                    (s/keys :req [::sc/enabled-transitions])))
 
 (s/def ::sc/machine #(and (map? %)
                        (= (:id %) :ROOT)

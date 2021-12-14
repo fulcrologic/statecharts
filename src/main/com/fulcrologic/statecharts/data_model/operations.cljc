@@ -18,7 +18,7 @@
   the data-key in the data model for at a given state. Data models *may* choose to search for data in surrounding
   scopes (states).
   "
-  [& path-value-pairs]
+  [& {:as path-value-pairs}]
   {:op   :assign
    :data (into {} (partition 2 path-value-pairs))})
 
