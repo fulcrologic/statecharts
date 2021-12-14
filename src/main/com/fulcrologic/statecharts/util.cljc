@@ -2,7 +2,8 @@
   (:require
     [com.fulcrologic.statecharts :as sc])
   #?(:clj
-     (:import (clojure.lang PersistentQueue))))
+     (:import (clojure.lang PersistentQueue)
+              (java.util Date))))
 
 (defn genid
   "Generate a unique ID with a base prefix. Like `gensym` but returns a keyword."
@@ -14,3 +15,6 @@
        :cljs #queue [])
     args))
 
+(defn now-ms []
+  #?(:clj  (inst-ms (Date.))
+     :cljs (inst-ms (js/Date.))))
