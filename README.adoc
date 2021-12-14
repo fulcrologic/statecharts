@@ -1,4 +1,32 @@
 = State Charts for Clojure(script)
+:author: Tony Kay
+:lang: en
+:encoding: UTF-8
+:doctype: book
+:source-highlighter: coderay
+:source-language: clojure
+:toc: left
+:toclevels: 3
+:sectlinks:
+:sectanchors:
+:leveloffset: 1
+:sectnums:
+:imagesdir: images
+:scriptsdir: js
+:imagesoutdir: generated/images
+
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+ifdef::env-github[]
+toc::[]
+endif::[]
+
 
 An implementation of state charts that use the SCXML
 structure and semantics (as far as they are defined), without the need for XML.
@@ -8,12 +36,10 @@ Clojure data structures used by this library, which
 means existing tooling can pretty easily be used to design or
 document your machine.
 
-== Status
+= Status
 
 image:https://img.shields.io/clojars/v/com.fulcrologic/statecharts.svg[link=https://clojars.org/com.fulcrologic/statecharts]
 image:https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/statecharts/tree/main"]
-
-Partially working. NOT API STABLE.
 
 ALPHA. The algorithm is written and (seems to be) working. Some aspects exist and are "called",
 but are currently stubs. If you want to play with it, I recommend using deps with a git SHA of the latest
@@ -25,64 +51,221 @@ commit.
 ** Transitions
 ** Transition guards
 ** Transition execution
-** Extensible executable elements (partially implemented)
+** Extensible executable elements
 ** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
-
-* In Progress
 ** History (deep and shallow). written, not tested
 ** Enter, exit (written, untested)
+
+* TODO
 ** Send/invoke (unimplemented)
 
 See Conformance.adoc at the root of this repository for notes on
 decisions that might affect exact conformance to the standard.
 
-== Basic Usage
+= Usage
+
+This library supports a lot of flexibility, and has many long-term goals:
+
+* Compatible with distributed systems. For example a cluster might run long-lived state machine sessions that
+  can be serviced by any node of the custer.
+* State machine definitions can be versioned.
+* Everything *can* be made to be serializable (including the code in the machine).
+
+Thus you can define (via protocols):
+
+* How to interpret the executable code of the state machine (e.g. on-exit, cond, etc.). You could, for example,
+  use strings for those, and Javascript or SCI to interpret them (making the machine completely serializable).
+* How the data model of the states work. You can, for example, hook the data model into Fulcro, Reagent, Datomic, Datascript, etc.
+* The implementation of the event queue. This allows you to generate state machines that know how
+  to send events to each other, can be distributed, etc.  It is necessary to make this part of the internals because
+  the state charts support sending events from within state code, which as we mentioned above, could be interpreted
+  by your own execution model and may not actually be Clojure(script).
+* The actual state chart processing semantics/algorithm. A version of the W3C 2015-09-01 recommendation for SCXML is provided
+  as a default.
+
+However, it would be a real hassle if you had to set up all of that stuff just to get what many people want:
+A statechart that can run in CLJC, using Clojure code, and a functional interface where you can manually
+send events to the machine. Thus, a reasonable default implementation is provided for all of the above, and
+it is simple to expand this to meet your needs.
+
+Here's a traffic light example from the `src/examples` directory in this repository:
 
 -----
-(ns app
+(ns traffic-light
   (:require
-    [com.fulcrologic.statecharts.elements :refer [state parallel
-                                                  history final initial
-                                                  on-enter on-exit invoke
-                                                  data-model
-                                                  transition]]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.state-machine :as sm]))
+    [com.fulcrologic.statecharts.state-machine :as sm :refer [machine]]
+    [com.fulcrologic.statecharts.elements :refer [state parallel transition]]
+    [com.fulcrologic.statecharts.events :refer [new-event]]
+    [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
+    [com.fulcrologic.statecharts.protocols :as sp]))
 
-(def machine (sm/machine {}
-                  (state {:id :A}
-                    (transition {:event  :trigger
-                                 :target :B}))
-                  (state {:id :B}
-                    (transition {:event  :trigger
-                                 :target :A}))))
+(defn nk
+  "Narrow the meaning of a keyword by turning the full original keyword into a namespace
+   and adding the given `new-name`.
 
-;; Create an initial (immutable) working memory
-(def wmem    (sm/initialize machine))
+   E.g.
 
-(defn c
-  "get current machine's active (states)"
-  [mem]
-  (::sc/configuration mem))
+   ```
+   (nk :a/b \"c\") => :a.b/c
+   ```
+  "
+  [k new-name]
+  (let [old-ns (namespace k)
+        nm     (name k)
+        new-ns (if old-ns
+                 (str old-ns "." nm)
+                 nm)]
+    (keyword new-ns new-name)))
 
-;; The initial working memory will have already put the machine into a valid configuration (set of states)
-(c wmem)
-;; #{:A}
+(defn traffic-signal [id initial]
+  (let [red     (nk id "red")
+        yellow  (nk id "yellow")
+        green   (nk id "green")
+        initial (nk id (name initial))]
+    (state {:id      id
+            :initial initial}
+      (state {:id red}
+        (transition {:event :swap-flow :target green}))
+      (state {:id yellow}
+        (transition {:event :swap-flow :target red}))
+      (state {:id green}
+        (transition {:event :warn-traffic :target yellow})))))
 
-;; `process-event` returns a new working memory
-(c (sm/process-event machine wmem :trigger))
+(defn ped-signal [id initial]
+  (let [red            (nk id "red")
+        flashing-white (nk id "flashing-white")
+        white          (nk id "white")
+        initial        (nk id (name initial))]
+    (state {:id      id
+            :initial initial}
+      (state {:id red}
+        (transition {:event :swap-flow :target white}))
+      (state {:id flashing-white}
+        (transition {:event :swap-flow :target red}))
+      (state {:id white}
+        (transition {:event :warn-pedestrians :target flashing-white})))))
 
-;; #{:B}
-(c (as-> wmem $
-     (sm/process-event machine $ :trigger)
-     (sm/process-event machine $ :trigger)))
-;; #{:A}
+(def traffic-lights
+  (machine {}
+    (parallel {}
+      (traffic-signal :east-west :green)
+      (traffic-signal :north-south :red)
+
+      (ped-signal :cross-ew :red)
+      (ped-signal :cross-ns :white))))
+
+(defn show-states [wmem]
+  (println (sort (filter #{:north-south/red
+                           :north-south/yellow
+                           :north-south/green
+                           :east-west/red
+                           :east-west/yellow
+                           :east-west/green
+                           :cross-ns/red
+                           :cross-ns/white
+                           :cross-ns/flashing-white
+                           :cross-ew/red
+                           :cross-ew/white
+                           :cross-ew/flashing-white} (::sc/configuration wmem)))))
+
+(comment
+  (def processor (new-simple-machine traffic-lights {}))
+  (def s0 (sp/start! processor 1))
+  (show-states s0)
+  (def s1 (sp/process-event! processor s0 (new-event :warn-pedestrians)))
+  (show-states s1)
+  (def s2 (sp/process-event! processor s1 (new-event :warn-traffic)))
+  (show-states s2)
+  (def s3 (sp/process-event! processor s2 (new-event :swap-flow)))
+  (show-states s3)
+  (def s4 (sp/process-event! processor s3 (new-event :warn-pedestrians)))
+  (show-states s4)
+  (def s5 (sp/process-event! processor s4 (new-event :warn-traffic)))
+  (show-states s5)
+  (def s6 (sp/process-event! processor s5 (new-event :swap-flow)))
+  (show-states s6))
+-----
+
+If you run the items in the comment block, you'll see:
+
+[source]
+-----
+(:cross-ew/red :cross-ns/white :east-west/green :north-south/red)
+(:cross-ew/red :cross-ns/flashing-white :east-west/green :north-south/red)
+(:cross-ew/red :cross-ns/flashing-white :east-west/yellow :north-south/red)
+(:cross-ew/white :cross-ns/red :east-west/red :north-south/green)
+(:cross-ew/flashing-white :cross-ns/red :east-west/red :north-south/green)
+(:cross-ew/flashing-white :cross-ns/red :east-west/red :north-south/yellow)
+(:cross-ew/red :cross-ns/white :east-west/green :north-south/red)
 -----
 
 See the SCXML spec for how to structure elements. The structure and naming are kept close to that spec for easy
 cross-referencing with its documentation.
 
-== Relationship to SCXML
+= Guide
+
+First some very important notes:
+
+. Every node in a state chart has a UNIQUE ID. These IDs are autogenerated if you do not supply them.
+. Most of the "executable content" elements described in the SCXML standard (e.g. `<if>`) are simply
+collapsed into the `script` node.
+
+== Terminology
+
+Configuration:: When used in the context of a state chart, the configuration is the list of all active states. A
+state is active if it or ANY of its children are active. Thus, a parallel machine with hierarchical states may
+have a rather large set of IDs in its current configuration.
+
+Working Memory:: A map of data that contains the current configuration of the state machine, and other information
+ necessary to know its current full state (which states have had their data model initialized, possible data model
+ tracking, etc.).
+
+DataModel:: An implementation of the data model protocol defines how the data model of your chart works. The simple
+implementation places the data in Working Memory, and treats lookups in a scoped fashion.
+
+ExecutionModel:: An implementation of this protocol is handed the expressions that are included on the state chart, and
+chooses how to run them. A default implementation requires that they be Clojure `(fn [env data])`, and simply calls them
+with the contextual data for their location.
+
+EventQueue:: Obviously a place to put events. In the case of this implementation the event queue is responsible for
+delivery of events to "self", other statechart sessions (instances of other machines), remote services (e.g. send an email),
+and for delayed delivery. The default implementation is a "manually polled" queue. This queue does not support most of
+these features, and the delayed event delivery is manual (e.g. you have to poll it, or ask it when the next one should
+happen and start a timer/thread). Creating a system that runs the loop and does the timed delivery is typically
+how you would use these in a more serious/production environment.
+
+Processor:: An implementation of the statechart algorithm. This library comes with an implementation that follows
+(as closely as possible) the SCXML recommended standard from 2015. You may provide your own.
+
+Session:: The combination of the content of the DataModel and Working Memory. I.e. all of the data you'd need in order
+to resume working from where you last left off. Sessions typically have a unique ID, which could be used to store
+sessions into durable storage when they are "idle", and are used for cross-session events.
+
+== Data Models
+
+The SCXML specification allows the implementation quite a bit of latitude in the interpretation of the chart's
+data model. You could define scopes that nest, one global map of data that is visible everywhere, or hook your
+data model to an external database.
+
+See the docstrings in the `protocols` namespace.
+
+== Execution
+
+== Working Memory and Identity
+
+The working memory of the state machine is plain EDN and contains no code.
+It is serializable by nippy, transit, etc. Therefore, you can easily save
+an active state machine by value into any data store. The value
+is intended to be as small as possible so that storage can be efficient.
+
+Every active state machine is assigned a ID on creation (which you
+can override via `initialize`). This is intended as part of the story to
+allow you to coordinate external event sources with working with
+instances of machines that are archived in durable storage while idle.
+
+
+= Relationship to SCXML
 
 This library's internal implementation follows (as closely as possible) the official
 https://www.w3.org/TR/2015/REC-scxml-20150901/#AlgorithmforSCXMLInterpretation[State Chart XML Algorithm]. In fact,
@@ -169,48 +352,6 @@ Other related libraries and implementations:
 * https://github.com/fulcrologic/fulcro/blob/develop/src/main/com/fulcrologic/fulcro/ui_state_machines.cljc[Fulcro UI State Machines]
 : A finite state machine namespace (part of Fulcro) that is tightly coupled to Fulcro's needs (full stack operation in the context of
 Fulcro UI and I/O).
-
-== Execution
-
-WORK IN PROGRESS.
-
-The SCXML standard defines various elements and subsections that describe how the
-data model should work. I plan to simplify this somewhat from XML since machines
-in this library are defined via code already, and need not be translated from strings.
-
-I can imagine someone (perhaps me in the future) providing a `sci`-based system that
-can read SCXML with embedded CLJ(s) expressions and run them. That is not my priority for
-the project.
-
-Version 1 is likely to have a simplified execution model and data model that is sufficient
-for my current needs.
-
-Something like:
-
-SCXML allows for expressions to be placed in the machine design, functions
-to be invoked, and parameters to be passed from the state machine's data model.
-
-The execution model adopted makes it possible for you to leverage these
-features when translating to/from such a document by way of a
-`dispatcher` that you can define on the machine itself.
-
-By setting the dispatcher you can use plain symbols in place of functions,
-and when they need to be invoked the dispatcher will be called with
-`(dispatcher sym data-model param-map)`. You can use a multimethod,
-a plain old function, or whatever function-like thing you want to implement
-the actual execution.
-
-== Working Memory and Identity
-
-The working memory of the state machine is plain EDN and contains no code.
-It is serializable by nippy, transit, etc. Therefore, you can easily save
-an active state machine by value into any data store. The value
-is intended to be as small as possible so that storage can be efficient.
-
-Every active state machine is assigned a ID on creation (which you
-can override via `initialize`). This is intended as part of the story to
-allow you to coordinate external event sources with working with
-instances of machines that are archived in durable storage while idle.
 
 == Conformance
 
