@@ -121,6 +121,8 @@
     See ns docstring for description of `env`."))
 
 (defprotocol Processor
+  (get-base-env [this] "Returns the base env that the processor is using. Will include the data-model,
+   execution-model, event-queue, and `processor` itself.")
   (start! [this session-id]
     "Initialize the state machine processor for a new session. `session-id` should be a globally unique identifier
      for this particular instance of the machine.

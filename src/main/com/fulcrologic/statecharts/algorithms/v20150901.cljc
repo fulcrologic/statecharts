@@ -9,6 +9,7 @@
 
 (deftype Processor [base-env]
   sp/Processor
+  (get-base-env [_] base-env)
   (start! [this session-id]
     (let [env (impl/runtime-env base-env
                 {::sc/session-id session-id})]

@@ -41,21 +41,27 @@ document your machine.
 image:https://img.shields.io/clojars/v/com.fulcrologic/statecharts.svg[link=https://clojars.org/com.fulcrologic/statecharts]
 image:https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/statecharts/tree/main"]
 
-ALPHA. NOT completely API stable.
+ALPHA.
 
-The algorithm is written and (seems to be) working. Some aspects exist and are "called",
-but are currently stubs. If you want to play with it, I recommend using deps with a git SHA of the latest
-commit.
+The state chart definition (machine and elements) are API stable, as is the underlying base algorithm (though
+it may have bugs).
+
+At the moment "manual polling" of events is all that is provided, but that should be
+API stable as well.  Interfacing with the "world" via Send and Invoke are still being designed. Any partially
+working version of those is NOT API stable.
+
+If you want to play with it, I recommend using deps with a git SHA of the latest commit.
 
 * Implemented
 ** DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.
 *** Late and early data model binding.
 ** Compound, parallel, atomic, initial, and final states
-*** Enter, exit
-*** History (deep and shallow).
+*** on-entry, on-exit
+*** History (deep and shallow). Multiple nodes allowed, with default transitions (for when there is no history).
 ** Transitions
+*** Eventless transitions
 *** Guards
-*** Execute code when taking a transition
+*** Executable content when taking a transition
 ** Executable content elements:
 *** Script, raise, log, assign, and done-data.
 *** Executable content elements are extensible (you can make your own kind)
@@ -65,7 +71,7 @@ commit.
 ** Invoke external processes.
 ** Send events to arbitrary sessions/services.
 ** Additional Executable content:
-*** donedata, and possibly the other simple flow control elements. Rely on `script` for now.
+*** The other (e.g. if/else) SCXML flow control elements. Rely on `script` for now.
 
 See Conformance.adoc at the root of this repository for notes on
 decisions that might affect exact conformance to the standard.
@@ -159,9 +165,17 @@ ExecutionModel:: An implementation of this protocol is handed the expressions th
 chooses how to run them. A default implementation requires that they be Clojure `(fn [env data])`, and simply calls them
 with the contextual data for their location.
 
-EventQueue:: Obviously a place to put events. In the case of this implementation the event queue is responsible for
-delivery of events to "self", other statechart sessions (instances of other machines), remote services (e.g. send an email),
-and for delayed delivery. The default implementation is a "manually polled" queue. This queue does not support most of
+External Event:: An event that came from the external API, either by you calling `process-event` or some other
+actor code doing so (invocations, sends from external machines, etc.).
+
+Internal Event:: An event that came from the session that will process it. These come from the
+machine implementation itself (e.g. done evens) and from you using the `raise` element in an
+executable content position.
+
+EventQueue:: A FIFO queue for external event delivery. The event queue is responsible for holding onto pending
+External Events to "self", possibly other statechart sessions (instances of other machines),
+remote services (e.g. send an email), and for delayed delivery. The default implementation is a "manually polled" queue
+that does *not* support most of
 these features, and the delayed event delivery is manual (e.g. you have to poll it, or ask it when the next one should
 happen and start a timer/thread). Creating a system that runs the loop and does the timed delivery is typically
 how you would use these in a more serious/production environment.
@@ -207,6 +221,20 @@ on the result of the first transition's condition expression:
   (transition {:cond positive-balance? :target :X})
   (transition {:target :Y}))
 -----
+
+== Event Processing
+
+In a fully-fleshed system your event queue would have a corresponding runtime story, where `process-event` was
+automatically called on the correct machine/session/invocation/service when an event is available. As such,
+and event queue might be distributed and durable (e.g. using Kafka or the like), or might simply be something
+that runs in-core (a core.async `go-loop`).
+
+The "simple" model that is provided with this library is an in-memory queue, with *no* automatic processing
+at all. If you want to support events that come from outside of the machine via the queue, then you have
+to create a loop that polls the queue and calls `process-event!`.  If you do this, then event the
+delayed event delivery will work, as long as your code watches for the delayed events to appear on the queue.
+
+NOTE: A core async queue is implemented as well...just have not had time to test/refine it.
 
 == Execution
 
