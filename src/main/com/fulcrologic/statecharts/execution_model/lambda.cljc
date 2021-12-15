@@ -16,7 +16,7 @@
       (let [data       (sp/current-data data-model env)
             session-id (env/session-id env)
             result     (try
-                         (log/debug "Trying to run function in" session-id)
+                         (log/trace "Trying to run function in" session-id)
                          (expr env data)
                          (catch #?(:clj Throwable :cljs :default) e
                            (sp/send! event-queue {:event             (evts/new-event {:name :error.execution
@@ -27,7 +27,7 @@
                            nil))
             update?    (vector? result)]
         (when update?
-          (log/debug "replacing data model with" result)
+          (log/trace "replacing data model with" result)
           (sp/transact! data-model env {:txn result}))
         result)
       (log/warn "Execution model didn't understand" expr))))

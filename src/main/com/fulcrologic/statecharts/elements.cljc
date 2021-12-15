@@ -11,6 +11,7 @@
    executable content. In cases where you want to transform an SCXML document to this library you should note that we
    treat those XML nodes as content that can be translated ON DOCUMENT READ into the code form used by this library.
    "
+  #?(:cljs (:require-macros [com.fulcrologic.statecharts.elements]))
   (:refer-clojure :exclude [send])
   (:require
     com.fulcrologic.statecharts.specs
@@ -109,14 +110,20 @@
    "
   [{:keys [id type deep?] :as attrs} default-transition]
   [map? ::sc/transition-element => ::sc/element]
-  (merge {:id (genid "history")}
-    attrs
-    {:node-type :history
-     :deep?     (= type :deep)
-     :type      (if (or (true? deep?) (= type :deep)) :deep :shallow)
-     :children  [(if (map? default-transition)
-                   default-transition
-                   (transition {:target default-transition}))]}))
+  (let [{:keys [cond event target]
+         :as   default-transition} (if (map? default-transition)
+                                     default-transition
+                                     (transition {:target default-transition}))
+        h (merge {:id (genid "history")}
+            attrs
+            {:node-type :history
+             :deep?     (= type :deep)
+             :type      (if (or (true? deep?) (= type :deep)) :deep :shallow)
+             :children  [default-transition]})]
+    (assert (nil? cond) "Default history transitions MUST NOT have a :cond")
+    (assert (nil? event) "Default history transitions MUST NOT have an :event")
+    (assert target "Default history transitions MUST have a :target")
+    h))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Executable Content
@@ -181,6 +188,24 @@
   [{:keys [id src expr] :as attrs}]
   [map? => ::sc/element]
   (new-element :script attrs))
+
+(defmacro sfn
+  "A macro that emits a `script` element, but looks more like a normal CLJC lambda:
+
+  ```
+  (sfn [env data] ...)
+  ```
+
+  is shorthand for
+
+  ```
+  (script {:expr (fn [env data] ...)})
+  ```
+
+  "
+  [[env-sym data-sym] & body]
+  `(script {:expr (fn [~env-sym ~data-sym]
+                    ~@body)}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; External Communication

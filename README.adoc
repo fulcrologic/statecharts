@@ -41,23 +41,30 @@ document your machine.
 image:https://img.shields.io/clojars/v/com.fulcrologic/statecharts.svg[link=https://clojars.org/com.fulcrologic/statecharts]
 image:https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/statecharts/tree/main"]
 
-ALPHA. The algorithm is written and (seems to be) working. Some aspects exist and are "called",
+ALPHA. NOT completely API stable.
+
+The algorithm is written and (seems to be) working. Some aspects exist and are "called",
 but are currently stubs. If you want to play with it, I recommend using deps with a git SHA of the latest
 commit.
 
 * Implemented
 ** DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.
 ** Compound, parallel, atomic, initial, and final states
+*** Enter, exit
+*** History (deep and shallow).
 ** Transitions
-** Transition guards
-** Transition execution
-** Extensible executable elements
+*** Guards
+*** Execute code when taking a transition
+** Executable content elements:
+*** Script
+*** Executable content elements are extensible (you can make your own kind)
 ** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
-** History (deep and shallow). written, not tested
-** Enter, exit (written, untested)
 
 * TODO
-** Send/invoke (unimplemented)
+** Invoke external processes
+** Send events to arbitrary services
+** Additional Executable content:
+*** Raise, log, assign, donedata, and possibly the other simple flow control elements. Rely on `script` for now.
 
 See Conformance.adoc at the root of this repository for notes on
 decisions that might affect exact conformance to the standard.
@@ -88,103 +95,12 @@ A statechart that can run in CLJC, using Clojure code, and a functional interfac
 send events to the machine. Thus, a reasonable default implementation is provided for all of the above, and
 it is simple to expand this to meet your needs.
 
-Here's a traffic light example from the `src/examples` directory in this repository:
+Here's a traffic light example from the `src/examples` directory in this repository that
+leverages parallel and compound states to simulate traffic lights with pedestrian signals:
 
+[source]
 -----
-(ns traffic-light
-  (:require
-    [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.state-machine :as sm :refer [machine]]
-    [com.fulcrologic.statecharts.elements :refer [state parallel transition]]
-    [com.fulcrologic.statecharts.events :refer [new-event]]
-    [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
-    [com.fulcrologic.statecharts.protocols :as sp]))
-
-(defn nk
-  "Narrow the meaning of a keyword by turning the full original keyword into a namespace
-   and adding the given `new-name`.
-
-   E.g.
-
-   ```
-   (nk :a/b \"c\") => :a.b/c
-   ```
-  "
-  [k new-name]
-  (let [old-ns (namespace k)
-        nm     (name k)
-        new-ns (if old-ns
-                 (str old-ns "." nm)
-                 nm)]
-    (keyword new-ns new-name)))
-
-(defn traffic-signal [id initial]
-  (let [red     (nk id "red")
-        yellow  (nk id "yellow")
-        green   (nk id "green")
-        initial (nk id (name initial))]
-    (state {:id      id
-            :initial initial}
-      (state {:id red}
-        (transition {:event :swap-flow :target green}))
-      (state {:id yellow}
-        (transition {:event :swap-flow :target red}))
-      (state {:id green}
-        (transition {:event :warn-traffic :target yellow})))))
-
-(defn ped-signal [id initial]
-  (let [red            (nk id "red")
-        flashing-white (nk id "flashing-white")
-        white          (nk id "white")
-        initial        (nk id (name initial))]
-    (state {:id      id
-            :initial initial}
-      (state {:id red}
-        (transition {:event :swap-flow :target white}))
-      (state {:id flashing-white}
-        (transition {:event :swap-flow :target red}))
-      (state {:id white}
-        (transition {:event :warn-pedestrians :target flashing-white})))))
-
-(def traffic-lights
-  (machine {}
-    (parallel {}
-      (traffic-signal :east-west :green)
-      (traffic-signal :north-south :red)
-
-      (ped-signal :cross-ew :red)
-      (ped-signal :cross-ns :white))))
-
-(defn show-states [wmem]
-  (println (sort (filter #{:north-south/red
-                           :north-south/yellow
-                           :north-south/green
-                           :east-west/red
-                           :east-west/yellow
-                           :east-west/green
-                           :cross-ns/red
-                           :cross-ns/white
-                           :cross-ns/flashing-white
-                           :cross-ew/red
-                           :cross-ew/white
-                           :cross-ew/flashing-white} (::sc/configuration wmem)))))
-
-(comment
-  (def processor (new-simple-machine traffic-lights {}))
-  (def s0 (sp/start! processor 1))
-  (show-states s0)
-  (def s1 (sp/process-event! processor s0 (new-event :warn-pedestrians)))
-  (show-states s1)
-  (def s2 (sp/process-event! processor s1 (new-event :warn-traffic)))
-  (show-states s2)
-  (def s3 (sp/process-event! processor s2 (new-event :swap-flow)))
-  (show-states s3)
-  (def s4 (sp/process-event! processor s3 (new-event :warn-pedestrians)))
-  (show-states s4)
-  (def s5 (sp/process-event! processor s4 (new-event :warn-traffic)))
-  (show-states s5)
-  (def s6 (sp/process-event! processor s5 (new-event :swap-flow)))
-  (show-states s6))
+include::src/examples/traffic_light.cljc[]
 -----
 
 If you run the items in the comment block, you'll see:
@@ -200,6 +116,13 @@ If you run the items in the comment block, you'll see:
 (:cross-ew/red :cross-ns/white :east-west/green :north-south/red)
 -----
 
+History support includes both shallow and deep. Here's a shallow example:
+
+[source]
+-----
+include::src/examples/history_sample.cljc[]
+-----
+
 See the SCXML spec for how to structure elements. The structure and naming are kept close to that spec for easy
 cross-referencing with its documentation.
 
@@ -212,6 +135,13 @@ First some very important notes:
 collapsed into the `script` node.
 
 == Terminology
+
+Atomic State:: A state that does not have substates.
+
+Compound State:: A state that has child *states*, where at most *one* child is active at any given time.
+
+Parallel State:: A state that has more than one compound substate, all of which is active at the same time, and
+thus have a child state that is active.
 
 Configuration:: When used in the context of a state chart, the configuration is the list of all active states. A
 state is active if it or ANY of its children are active. Thus, a parallel machine with hierarchical states may
@@ -242,6 +172,12 @@ Session:: The combination of the content of the DataModel and Working Memory. I.
 to resume working from where you last left off. Sessions typically have a unique ID, which could be used to store
 sessions into durable storage when they are "idle", and are used for cross-session events.
 
+Conditional Element::
+In statecharts there is a node type (represented as a diamond) that represents a state in which the machine
+never "rests", but instead immediately transitions to another node based on predicate expressions. In this
+library (and SCXML) this is modelled with a state that has more than one transition, NONE of which have
+and `:event` qualifier (meaning they are exited as soon as they are entered, assuming there is a valid transition).
+
 == Data Models
 
 The SCXML specification allows the implementation quite a bit of latitude in the interpretation of the chart's
@@ -250,7 +186,51 @@ data model to an external database.
 
 See the docstrings in the `protocols` namespace.
 
+== Transitions
+
+A state can have any number of transition elements. These are tested *in order* of appearance, and the
+first transition that matches the current circumstance is taken. Transitions are *enabled* when:
+
+* Their `cond` (if present) evaluates to true AND
+* Their `event` (if present) matches the current event's name (See event name matching)
+* OR neither are present.
+
+An "eventless" transition without a `:cond` is always enabled. Condition states can be modelled using such
+transitions. For example, this
+is a conditional state that when entered will immediately transition to either state :X or :Y, depending
+on the result of the first transition's condition expression:
+
+[source]
+-----
+(state {:id :Z}
+  (transition {:cond positive-balance? :target :X})
+  (transition {:target :Y}))
+-----
+
 == Execution
+
+Most people will probably just use the CLJCExecutionModel, which lets you write executable content
+in CLJC as lambdas:
+
+[source]
+-----
+;; Use `data` to compute when this transition is "enabled"
+(transition {:event :a :cond (fn [env data] (your-predicate data))}
+  ;; Run some arbitrary code on this transition
+  (script {:expr (fn [env data] ...)}))
+-----
+
+There is a macro version of the `script` element called `sfn` that can be used as a shorthand for
+script elements:
+
+[source]
+-----
+;; Use `data` to compute when this transition is "enabled"
+(transition {:event :a :cond (fn [env data] (your-predicate data))}
+  ;; Run some arbitrary code on this transition
+  (sfn [env data] ...)))
+-----
+
 
 == Working Memory and Identity
 

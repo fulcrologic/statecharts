@@ -182,7 +182,7 @@
   "Initialize the data models in volatile working memory `wmem` for the given states, if necessary."
   [{::sc/keys [machine data-model execution-model] :as env} state]
   [::sc/env ::sc/element-or-id => nil?]
-  (log/debug "**** Initializing data model for" state)
+  (log/trace "Initializing data model for" state)
   (let [dm-eles (sm/get-children machine state :data-model)
         {:keys [src expr]} (sm/element machine (first dm-eles))]
     (when (> (count dm-eles) 1)
@@ -238,12 +238,12 @@
           (initialize-data-model! env s)
           (vswap! vwmem update ::sc/initialized-states (fnil conj #{}) state-id))
         (doseq [entry (sm/entry-handlers machine s)]
-          (execute! env entry))
+          (execute-element-content! env entry))
         (when-let [t (and (contains? states-for-default-entry s)
                        (some->> s (sm/initial-element machine) (sm/transition-element machine)))]
           (execute! env t))
         (when-let [content (get default-history-content (sm/element-id machine s))]
-          (execute! env content))
+          (execute-element-content! env content))
         (when (sm/final-state? machine s)
           (if (= :ROOT (sm/get-parent machine s))
             (vswap! vwmem assoc ::sc/running? false)
@@ -274,16 +274,14 @@
 (>defn compute-exit-set
   [{::sc/keys [machine vwmem] :as env} transitions]
   [::sc/env (s/every ::sc/element-or-id) => (s/every ::sc/id :kind set?)]
-  (reduce
-    (fn [acc t]
-      (if (contains? (sm/element machine t) :target)
+  (let [states-to-exit (volatile! #{})]
+    (doseq [t (map #(sm/element machine %) transitions)]
+      (when (contains? t :target)
         (let [domain (get-transition-domain env t)]
-          (into acc
-            (filter #(sm/descendant? machine % domain))
-            (::sc/configuration @vwmem)))
-        acc))
-    #{}
-    transitions))
+          (doseq [s (::sc/configuration @vwmem)]
+            (when (sm/descendant? machine s domain)
+              (vswap! states-to-exit conj s))))))
+    @states-to-exit))
 
 (>defn remove-conflicting-transitions
   "Updates working-mem so that enabled-transitions no longer includes any conflicting ones."
@@ -368,7 +366,7 @@
   [::sc/env (s/every ::sc/element-or-id) => nil?]
   (try
     (doseq [n nodes]
-      (execute! env n))
+      (execute-element-content! env n))
     (catch #?(:clj Throwable :cljs :default) e
       ;; TASK: send internal event
       (log/error e "Unexpected execution error")))
@@ -389,37 +387,27 @@
   "Does all of the processing for exiting states. Returns new working memory."
   [{::sc/keys [machine vwmem] :as env}]
   [::sc/env => nil?]
-  (try
-    (let [{::sc/keys [enabled-transitions
-                      configuration
-                      history-value]} @vwmem
-          states-to-exit   (sm/in-exit-order machine (compute-exit-set env enabled-transitions))
-          states-to-invoke (set/difference (::sc/states-to-invoke @vwmem) (set states-to-exit))
-          history-nodes    (into {}
-                             (keep (fn [s]
-                                     (let [eles (sm/history-elements machine (sm/get-parent machine s))]
-                                       (when (seq eles)
-                                         [(sm/element-id machine s) eles]))))
-                             states-to-exit)
-          history-value    (reduce-kv
-                             (fn [acc s {:keys [id deep?] :as hn}]
-                               (let [f (if deep?
-                                         (fn [s0] (and (sm/atomic-state? machine s0) (sm/descendant? machine s0 s)))
-                                         (fn [s0] (= s (sm/get-parent machine s0))))]
-                                 (assoc acc id (into #{} (filter f configuration)))))
-                             history-value
-                             history-nodes)]
-      (vswap! vwmem assoc
-        ::sc/states-to-invoke states-to-invoke
-        ::sc/history-value history-value)
-      (doseq [s states-to-exit]
-        (in-state-context env s
-          (let [to-exit (sm/exit-handlers machine s)]
-            (run-many! env to-exit)
-            (cancel-active-invocations! env s)
-            (vswap! vwmem update ::sc/configuration disj s)))))
-    (catch #?(:clj Throwable :cljs :default) t
-      (log/error t "Unexpected error in enter states")))
+  (let [{::sc/keys [enabled-transitions
+                    states-to-invoke
+                    configuration]} @vwmem
+        states-to-exit   (sm/in-exit-order machine (compute-exit-set env enabled-transitions))
+        states-to-invoke (set/difference states-to-invoke (set states-to-exit))]
+    (vswap! vwmem assoc ::sc/states-to-invoke states-to-invoke)
+    (doseq [s states-to-exit]
+      (doseq [{:keys [id type] :as h} (sm/history-elements machine s)]
+        (let [f (if (= :deep type)
+                  (fn [s0] (and
+                             (sm/atomic-state? machine s0)
+                             (sm/descendant? machine s0 s)))
+                  (fn [s0]
+                    (= s (sm/element-id machine (sm/get-parent machine s0)))))]
+          (vswap! vwmem assoc-in [::sc/history-value id] (into #{} (filter f configuration))))))
+    (doseq [s states-to-exit]
+      (in-state-context env s
+        (let [to-exit (sm/exit-handlers machine s)]
+          (run-many! env to-exit)
+          (cancel-active-invocations! env s)
+          (vswap! vwmem update ::sc/configuration disj s)))))
   nil)
 
 (>defn microstep!
@@ -494,7 +482,9 @@
 
 (defn cancel? [event] (= :EXIT (:node-type event)))
 
-(defn finalize! [{::sc/keys [machine] :as env} invocation event]
+(defn finalize!
+  "Run the finalize executable content for an event from an external invocation."
+  [{::sc/keys [machine] :as env} invocation event]
   (let [parent (or
                  (sm/nearest-ancestor-state machine invocation)
                  machine)]

@@ -1,29 +1,17 @@
 (ns traffic-light
   (:require
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.state-machine :as sm :refer [machine]]
+    [com.fulcrologic.statecharts.state-machine :refer [machine]]
     [com.fulcrologic.statecharts.elements :refer [state parallel transition]]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
-    [com.fulcrologic.statecharts.protocols :as sp]))
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [com.fulcrologic.statecharts.util :refer [extend-key]]))
 
-(defn nk
-  "Narrow the meaning of a keyword by turning the full original keyword into a namespace
-   and adding the given `new-name`.
-
-   E.g.
-
-   ```
-   (nk :a/b \"c\") => :a.b/c
-   ```
-  "
-  [k new-name]
-  (let [old-ns (namespace k)
-        nm     (name k)
-        new-ns (if old-ns
-                 (str old-ns "." nm)
-                 nm)]
-    (keyword new-ns new-name)))
+(def nk
+  "(nk :a \"b\") => :a/b
+   (nk :a/b \"c\") => :a.b/c"
+  extend-key)
 
 (defn traffic-signal [id initial]
   (let [red     (nk id "red")
@@ -37,7 +25,8 @@
       (state {:id yellow}
         (transition {:event :swap-flow :target red}))
       (state {:id green}
-        (transition {:event :warn-traffic :target yellow})))))
+        (transition {:event  :warn-traffic
+                     :target yellow})))))
 
 (defn ped-signal [id initial]
   (let [red            (nk id "red")
