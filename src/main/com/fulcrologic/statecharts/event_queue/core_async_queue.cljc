@@ -1,31 +1,31 @@
 (ns com.fulcrologic.statecharts.event-queue.core-async-queue
-  "ALPHA. NOT API STABLE."
+  "A queue that uses core.async to give you single-session service with an external event queue. Send
+   the queue the `evts/cancel-event` to exit your machine (without reaching the final state)."
   (:require
     [clojure.core.async :as async]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.events :as evts]
-    [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
-
 
 (deftype CoreAsyncQueue [Q delayed-events cancelled-events]
   sp/EventQueue
   (send! [_ {:keys [event delay]}]
     (async/go
-      (if delay
+      (if (number? delay)
         (let [nm (evts/event-name event)]
           (swap! delayed-events update nm (fnil inc 0))
-          (async/<! (async/timeout delay))
+          (async/<! (async/timeout (long delay)))
           (when-not (contains? @cancelled-events nm)
             (async/>! Q event))
-          (when (zero? (swap! delayed-events update nm dec))
+          (swap! delayed-events update nm dec)
+          (when (zero? (get @delayed-events nm))
             (swap! cancelled-events disj nm)))
         (async/>! Q event))))
   (cancel! [_ _ send-id]
     (let [nm send-id]
       (when (pos? (get @delayed-events nm))
-        (swap! @cancelled-events conj nm))))
+        (swap! cancelled-events conj nm))))
   (receive-events! [_ _ handler]
     (async/go
       (let [event (async/<! Q)]
@@ -48,7 +48,7 @@
   (->CoreAsyncQueue (async/chan 1000) (atom {}) (atom #{})))
 
 (defn run-event-loop!
-  "Initializes a new session using `sp/start!` on the processor with `session-id`.
+  "Initializes a new session using `sp/start!` on the processor and assigns it `session-id`.
    Then runs a continuous loop polling the event-queue for new events and processing them.
 
    `wmem-atom` is an atom that will be updated with the latest working memory of the state
@@ -57,10 +57,9 @@
    interfacing with the data a machine might need to see or manipulate.
 
    Returns a channel that will stay open until the session ends."
-  [processor wmem-atom session-id extra-env]
-  (let [s0  (sp/start! processor session-id)
-        {::sc/keys [event-queue] :as base-env} (sp/get-base-env processor)
-        env (merge extra-env base-env)]
+  [processor wmem-atom session-id]
+  (let [s0 (sp/start! processor session-id)
+        {::sc/keys [event-queue] :as base-env} (sp/get-base-env processor)]
     (reset! wmem-atom s0)
     (log/trace "Event loop started")
     (async/go-loop []

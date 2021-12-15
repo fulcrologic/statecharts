@@ -218,6 +218,9 @@
     (log/info "Assign" location " = " v)
     (env/assign! env location v)))
 
+(defmethod execute-element-content! :send [env {:keys [id event delay] :as element}]
+  (env/send! env element))
+
 (>defn execute!
   "Run the executable content (immediate children) of s."
   [{::sc/keys [machine] :as env} s]
@@ -477,7 +480,7 @@
 
 (>defn exit-interpreter!
   [{::sc/keys [machine vwmem] :as env}]
-  [::sc/env => ::sc/working-memory]
+  [::sc/env => nil?]
   (let [states-to-exit (sm/in-exit-order machine (::sc/configuration @vwmem))]
     (doseq [state states-to-exit]
       (run-exit-handlers! env state)

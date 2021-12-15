@@ -1,17 +1,49 @@
-(ns traffic-light
+(ns traffic-light-async
+  "A demo that uses the core.async queue to demonstrate a running machine that can just be
+   sent events and mutates in place (and handles timers in CLJC) via core.async."
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.state-machine :refer [machine]]
-    [com.fulcrologic.statecharts.elements :refer [state parallel transition raise on-entry assign data-model]]
+    [com.fulcrologic.statecharts.elements :refer [state parallel transition raise on-entry assign data-model
+                                                  Send]]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.util :refer [extend-key]]))
+    [com.fulcrologic.statecharts.event-queue.core-async-queue :as aq]
+    [com.fulcrologic.statecharts.simple :as simple]
+    [com.fulcrologic.statecharts.event-queue.core-async-queue :as aq]
+    [com.fulcrologic.statecharts.util :refer [extend-key]]
+    [com.fulcrologic.statecharts.events :as evts]))
 
 (def nk
   "(nk :a \"b\") => :a/b
    (nk :a/b \"c\") => :a.b/c"
   extend-key)
+
+(def flow-time "How long to wait before flashing ped warning" 2000)
+(def flashing-white-time "How long do we warn peds?" 500)
+(def yellow-time "How long do we warn cars" 200)
+
+(defn timer []
+  (state {:id :timer-control}
+    (state {:id :timing-flow}
+      (transition {:event  :warn-pedestrians
+                   :target :timing-ped-warning})
+      (on-entry {}
+        (Send {:event (evts/new-event :warn-pedestrians)
+               :delay flow-time})))
+    (state {:id :timing-ped-warning}
+      (transition {:event  :warn-traffic
+                   :target :timing-yellow})
+      (on-entry {}
+        (Send {:event (evts/new-event :warn-traffic)
+               :delay flashing-white-time})))
+    (state {:id :timing-yellow}
+      (transition {:event  :swap-flow
+                   :target :timing-flow})
+      (on-entry {}
+        (Send {:event (evts/new-event :swap-flow)
+               :delay yellow-time})))))
 
 (defn traffic-signal [id initial]
   (let [red     (nk id "red")
@@ -45,6 +77,8 @@
 (def traffic-lights
   (machine {}
     (parallel {}
+      (timer)
+
       (traffic-signal :east-west :green)
       (traffic-signal :north-south :red)
 
@@ -65,18 +99,15 @@
                            :cross-ew/white
                            :cross-ew/flashing-white} (::sc/configuration wmem)))))
 
-(def processor (new-simple-machine traffic-lights {}))
-(def s0 (sp/start! processor 1))
-(show-states s0)
-(def s1 (sp/process-event! processor s0 (new-event :warn-pedestrians)))
-(show-states s1)
-(def s2 (sp/process-event! processor s1 (new-event :warn-traffic)))
-(show-states s2)
-(def s3 (sp/process-event! processor s2 (new-event :swap-flow)))
-(show-states s3)
-(def s4 (sp/process-event! processor s3 (new-event :warn-pedestrians)))
-(show-states s4)
-(def s5 (sp/process-event! processor s4 (new-event :warn-traffic)))
-(show-states s5)
-(def s6 (sp/process-event! processor s5 (new-event :swap-flow)))
-(show-states s6)
+(comment
+
+  (def session-id 1)
+  (def queue (aq/new-async-queue))
+  (def processor (simple/new-simple-machine traffic-lights {:event-queue queue}))
+  (def wmem (let [a (atom {})] (add-watch a :printer (fn [_ _ _ n] (show-states n))) a))
+  (aq/run-event-loop! processor wmem session-id {})         ; should see the state changing with the timers
+
+  ;; Tell the state machine to exit abruptly
+  (sp/send! queue {:target session-id
+                   :event  evts/cancel-event}))
+

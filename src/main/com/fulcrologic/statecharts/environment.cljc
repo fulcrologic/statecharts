@@ -68,3 +68,35 @@
   [::sc/env ::assignment-pairs => nil?]
   (sp/transact! data-model env {:txn [(ops/delete ks)]})
   nil)
+
+(defn- !?
+  "Returns `value` if not nil, or runs `expr` and returns that as the value. Returns nil if both are nil."
+  [{::sc/keys [execution-model] :as env} value expr]
+  (cond
+    (not (nil? value)) value
+    (not (nil? expr)) (sp/run-expression! execution-model env expr)
+    :else nil))
+
+(defn send!
+  "Send an external event (from within the state machine) using `env`"
+  [{::sc/keys [event-queue
+               data-model] :as env}
+   {:keys [id
+           idlocation
+           delay
+           delayexpr
+           namelist
+           event
+           eventexpr
+           target
+           targetexpr
+           type
+           typeexpr] :as send-element}]
+  (sp/send! event-queue {:send-id           (if idlocation
+                                              (sp/get-at data-model env idlocation)
+                                              id)
+                         :source-session-id (session-id env)
+                         :event             (evts/new-event (!? env event eventexpr))
+                         :target            (!? env target targetexpr)
+                         :type              (!? env type typeexpr)
+                         :delay             (!? env delay delayexpr)}))

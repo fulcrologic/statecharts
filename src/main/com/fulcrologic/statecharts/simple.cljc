@@ -22,17 +22,24 @@
   sp/ExecutionModel
   (run-expression! [model env expr] (sp/run-expression! EX env expr))
   sp/Processor
+  (get-base-env [this] (sp/get-base-env P))
   (start! [this session-id] (sp/start! P session-id))
   (process-event! [this working-memory external-event]
     (sp/process-event! P working-memory external-event)))
 
-(defn new-simple-machine [machine-def extra-env]
+(defn new-simple-machine
+  "Creates a machine that defauts uses the standard processing with a working memory data model,
+   a manual event queue, and the lambda executor.
+
+   `extra-env` can contain anything extra you want in `env`, and can override any of the above by
+   key (e.g. :data-model)."
+  [machine-def extra-env]
   (let [dm (wmdm/new-model)
         q  (mpq/new-queue)
         ex (lambda/new-execution-model dm q)]
     (->SimpleMachine
-      (alg/new-processor machine-def (merge extra-env
-                                       {:data-model      dm
-                                        :execution-model ex
-                                        :event-queue     q}))
+      (alg/new-processor machine-def (merge {:data-model      dm
+                                             :execution-model ex
+                                             :event-queue     q}
+                                       extra-env))
       dm q ex)))

@@ -233,6 +233,26 @@
   [map? => ::sc/element]
   (new-element :send attrs))
 
+(def Send
+  "[attrs]
+
+   Same as `send`, but doesn't alias over clojure.core/send
+
+   Sends an event to the specified (external) target (which could be an external system, this machine,
+     or another machine).
+
+    * `:event` An expression that results in the event *name* to send.
+    * `:params` An expression that results in data to be included in the event.
+    * `:target` An expression that gives the target to send to.
+    * `:type` An expression generating a selector for which mechanism to use for sending.
+    * `:delay` A number of milliseconds to delay the send, or an expression for computing it.
+    * `:namelist` - List of location expressions (vector of vectors) to include from the data model.
+    * `:idlocation` a vector of keywords that specifies a location in the DataModel
+      to store a generated ID that uniquely identifies the event instance
+      being sent. If not supplied then `id` will be the id of the element itself.
+    "
+  send)
+
 (>defn cancel
   "Cancel a delayed send (see `send`'s idlocation parameter). `:sendid` can be an expression.
 

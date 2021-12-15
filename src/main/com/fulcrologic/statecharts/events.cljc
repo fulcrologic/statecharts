@@ -79,4 +79,7 @@
 (def cancel-event
   "An event that will cause the state machine to exit."
   {:id        :CANCEL
+   :data      {}
+   :name      :CANCEL
+   :type      :external
    :node-type :EXIT})

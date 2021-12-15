@@ -63,7 +63,7 @@ If you want to play with it, I recommend using deps with a git SHA of the latest
 *** Guards
 *** Executable content when taking a transition
 ** Executable content elements:
-*** Script, raise, log, assign, and done-data.
+*** Script, raise, send, log, assign, and done-data.
 *** Executable content elements are extensible (you can make your own kind)
 ** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
 
@@ -234,7 +234,20 @@ at all. If you want to support events that come from outside of the machine via 
 to create a loop that polls the queue and calls `process-event!`.  If you do this, then event the
 delayed event delivery will work, as long as your code watches for the delayed events to appear on the queue.
 
-NOTE: A core async queue is implemented as well...just have not had time to test/refine it.
+=== Autonomous Execution
+
+You can, of course, write your own "event loop". The library comes with a core.async event queue that works
+in conjunction with the simple model to provide an event loop that will automatically process events as they come
+in, and will allow the machine to send itself external events (usually done in order to get a delay). Note that the
+`raise` element does not use the external queue, but also does not provide delays.
+
+Below is an example of using the core.async queue to run a traffic light that
+automatically changes over time:
+
+[source]
+------
+include::src/examples/traffic_light_async.cljc[]
+------
 
 == Execution
 
