@@ -31,76 +31,25 @@ endif::[]
 An implementation of state charts that use the SCXML
 structure and semantics (as far as they are defined), without the need for XML.
 
-It is a simple exercise to convert an SCXML document to/from the
-Clojure data structures used by this library, which
-means existing tooling can pretty easily be used to design or
-document your machine.
-
-= Status
-
 image:https://img.shields.io/clojars/v/com.fulcrologic/statecharts.svg[link=https://clojars.org/com.fulcrologic/statecharts]
 image:https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/statecharts/tree/main"]
 
-ALPHA.
-
-The state chart definition (machine and elements) are API stable, as is the underlying base algorithm (though
-it may have bugs).
-
-At the moment "manual polling" of events is all that is provided, but that should be
-API stable as well.  Interfacing with the "world" via Send and Invoke are still being designed. Any partially
-working version of those is NOT API stable.
-
-If you want to play with it, I recommend using deps with a git SHA of the latest commit.
-
-* Implemented
-** DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.
-*** Late and early data model binding.
-** Compound, parallel, atomic, initial, and final states
-*** on-entry, on-exit
-*** History (deep and shallow). Multiple nodes allowed, with default transitions (for when there is no history).
-** Transitions
-*** Eventless transitions
-*** Guards
-*** Executable content when taking a transition
-** Executable content elements:
-*** Script, raise, send, log, assign, and done-data.
-*** Executable content elements are extensible (you can make your own kind)
-** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
-
-* TODO
-** Invoke external processes.
-** Send events to arbitrary sessions/services.
-** Additional Executable content:
-*** The other (e.g. if/else) SCXML flow control elements. Rely on `script` for now.
-
-See Conformance.adoc at the root of this repository for notes on
-decisions that might affect exact conformance to the standard.
-
 = Usage
 
-This library supports a lot of flexibility, and has many long-term goals:
+== Basics
 
-* Compatible with distributed systems. For example a cluster might run long-lived state machine sessions that
-  can be serviced by any node of the custer.
-* State machine definitions can be versioned.
-* Everything *can* be made to be serializable (including the code in the machine).
+A statechart is defined as a (nested) map. Some of this content's behavior is <<Goals, configurable>>.
+The simplest setup is to use Clojure for the executable code and a simple data model that scopes
+data to states.
 
-Thus you can define (via protocols):
+To make it easier to write the maps there are functions for each element type in the
+`com.fulcrologic.statecharts.elements` namespace, and it is recommended that you use these because some of
+them validate their parameters and children.
 
-* How to interpret the executable code of the state machine (e.g. on-exit, cond, etc.). You could, for example,
-  use strings for those, and Javascript or SCI to interpret them (making the machine completely serializable).
-* How the data model of the states work. You can, for example, hook the data model into Fulcro, Reagent, Datomic, Datascript, etc.
-* The implementation of the event queue. This allows you to generate state machines that know how
-  to send events to each other, can be distributed, etc.  It is necessary to make this part of the internals because
-  the state charts support sending events from within state code, which as we mentioned above, could be interpreted
-  by your own execution model and may not actually be Clojure(script).
-* The actual state chart processing semantics/algorithm. A version of the W3C 2015-09-01 recommendation for SCXML is provided
-  as a default.
+Once you have a machine definition you need to create a session, which is just a running instance of the
+machine.
 
-However, it would be a real hassle if you had to set up all of that stuff just to get what many people want:
-A statechart that can run in CLJC, using Clojure code, and a functional interface where you can manually
-send events to the machine. Thus, a reasonable default implementation is provided for all of the above, and
-it is simple to expand this to meet your needs.
+Once you have a session, you can send events to it, and look at the content of the session (or store it, etc).
 
 Here's a traffic light example from the `src/examples` directory in this repository that
 leverages parallel and compound states to simulate traffic lights with pedestrian signals:
@@ -130,8 +79,69 @@ History support includes both shallow and deep. Here's a shallow example:
 include::src/examples/history_sample.cljc[]
 -----
 
-See the SCXML spec for how to structure elements. The structure and naming are kept close to that spec for easy
+See the https://www.w3.org/TR/2015/REC-scxml-20150901/[SCXML spec] for how to structure elements. The structure and naming are kept close to that spec for easy
 cross-referencing with its documentation.
+
+
+= Status
+
+ALPHA.
+
+The state chart definition (machine and elements) are API stable, as is the underlying base algorithm (though
+it may have bugs).
+
+The API is 90+% stable, but may undergo minor changes to accomodate design of `invoke` and (expanded) `send` elements.
+
+
+* Implemented
+** DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.
+*** Late and early data model binding.
+** Compound, parallel, atomic, initial, and final states
+*** on-entry, on-exit
+*** History (deep and shallow). Multiple nodes allowed, with default transitions (for when there is no history).
+** Transitions
+*** Eventless transitions
+*** Guards
+*** Executable content when taking a transition
+** Executable content elements:
+*** Script, raise, send, log, assign, and done-data.
+*** Executable content elements are extensible (you can make your own kind)
+** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
+
+* Not yet implemented
+** Invoke external processes.
+** Send events to arbitrary other sessions/services (easy add-on by user)
+** Additional Executable content:
+*** The other (e.g. if/else) SCXML flow control elements. (may not ever bother, but this is extensible, so you can easily do so)
+
+See Conformance.adoc at the root of this repository for notes on
+decisions that might affect exact conformance to the standard.
+
+== Goals and Extensibility [[Goals]]
+
+This library supports a lot of flexibility, and has many long-term goals:
+
+* Compatible with distributed systems. For example a cluster might run long-lived state machine sessions that
+  can be serviced by any node of the custer.
+* State machine definitions can be versioned.
+* Everything *can* be made to be serializable (including the code in the machine).
+
+Thus you can define (via protocols):
+
+* How to interpret the executable code of the state machine (e.g. on-exit, cond, etc.). You could, for example,
+  use strings for those, and Javascript or SCI to interpret them (making the machine completely serializable).
+* How the data model of the states work. You can, for example, hook the data model into Fulcro, Reagent, Datomic, Datascript, etc.
+* The implementation of the event queue. This allows you to generate state machines that know how
+  to send events to each other, can be distributed, etc.  It is necessary to make this part of the internals because
+  the state charts support sending events from within state code, which as we mentioned above, could be interpreted
+  by your own execution model and may not actually be Clojure(script).
+* The actual state chart processing semantics/algorithm. A version of the W3C 2015-09-01 recommendation for SCXML is provided
+  as a default.
+
+However, it would be a real hassle if you had to set up all of that stuff just to get what many people want:
+A statechart that can run in CLJC, using Clojure code, and a functional interface where you can manually
+send events to the machine. Thus, a reasonable default implementation is provided for the above, and
+it is simple to expand this to meet your needs.
 
 = Guide
 
@@ -248,6 +258,8 @@ automatically changes over time:
 ------
 include::src/examples/traffic_light_async.cljc[]
 ------
+
+NOTE: The `send` element has a `Send` alias so you can avoid shadowing the Clojure function.
 
 == Execution
 
