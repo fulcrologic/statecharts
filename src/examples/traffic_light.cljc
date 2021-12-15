@@ -2,7 +2,7 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.state-machine :refer [machine]]
-    [com.fulcrologic.statecharts.elements :refer [state parallel transition]]
+    [com.fulcrologic.statecharts.elements :refer [state parallel transition raise on-entry assign data-model]]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
     [com.fulcrologic.statecharts.protocols :as sp]
@@ -44,7 +44,10 @@
 
 (def traffic-lights
   (machine {}
+    (data-model {:expr {:a 5}})
     (parallel {}
+      (on-entry {}
+        (assign {:location [:ROOT :b] :expr (fn [expr {:keys [a]}] (inc a))}))
       (traffic-signal :east-west :green)
       (traffic-signal :north-south :red)
 
@@ -65,19 +68,18 @@
                            :cross-ew/white
                            :cross-ew/flashing-white} (::sc/configuration wmem)))))
 
-(comment
-  (def processor (new-simple-machine traffic-lights {}))
-  (def s0 (sp/start! processor 1))
-  (show-states s0)
-  (def s1 (sp/process-event! processor s0 (new-event :warn-pedestrians)))
-  (show-states s1)
-  (def s2 (sp/process-event! processor s1 (new-event :warn-traffic)))
-  (show-states s2)
-  (def s3 (sp/process-event! processor s2 (new-event :swap-flow)))
-  (show-states s3)
-  (def s4 (sp/process-event! processor s3 (new-event :warn-pedestrians)))
-  (show-states s4)
-  (def s5 (sp/process-event! processor s4 (new-event :warn-traffic)))
-  (show-states s5)
-  (def s6 (sp/process-event! processor s5 (new-event :swap-flow)))
-  (show-states s6))
+(def processor (new-simple-machine traffic-lights {}))
+(def s0 (sp/start! processor 1))
+(show-states s0)
+(def s1 (sp/process-event! processor s0 (new-event :warn-pedestrians)))
+(show-states s1)
+(def s2 (sp/process-event! processor s1 (new-event :warn-traffic)))
+(show-states s2)
+(def s3 (sp/process-event! processor s2 (new-event :swap-flow)))
+(show-states s3)
+(def s4 (sp/process-event! processor s3 (new-event :warn-pedestrians)))
+(show-states s4)
+(def s5 (sp/process-event! processor s4 (new-event :warn-traffic)))
+(show-states s5)
+(def s6 (sp/process-event! processor s5 (new-event :swap-flow)))
+(show-states s6)

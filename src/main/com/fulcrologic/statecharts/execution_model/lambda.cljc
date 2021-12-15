@@ -16,8 +16,8 @@
       (let [data       (sp/current-data data-model env)
             session-id (env/session-id env)
             result     (try
-                         (log/trace "Trying to run function in" session-id)
-                         (expr env data)
+                         (log/trace "Trying to run function in session" session-id)
+                         (log/spy :trace "expr => " (expr env data))
                          (catch #?(:clj Throwable :cljs :default) e
                            (sp/send! event-queue {:event             (evts/new-event {:name :error.execution
                                                                                       :data {:error e}

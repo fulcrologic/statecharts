@@ -56,12 +56,9 @@
                      :type  :platform}))
   nil)
 
-(s/def ::assignment-pairs (s/* (s/tuple (s/or :k keyword? :path vector?) any?)))
-
-(>defn assign!
+(defn assign!
   "Side effect against the data model in `env`, with the given path-value pairs."
   [{::sc/keys [data-model] :as env} & {:as path-value-pairs}]
-  [::sc/env ::assignment-pairs => nil?]
   (sp/transact! data-model env {:txn (ops/set-map-txn path-value-pairs)})
   nil)
 

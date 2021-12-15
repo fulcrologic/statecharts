@@ -44,6 +44,6 @@
 
 (log/set-config! (merge
                    log/default-config
-                   {:min-level :debug
+                   {:min-level :trace
                     :output-fn output-fn #_log/default-output-fn}))
 

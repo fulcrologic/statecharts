@@ -1,8 +1,8 @@
 (ns history-sample
   (:require
     [com.fulcrologic.statecharts.state-machine :refer [machine]]
-    [com.fulcrologic.statecharts.elements :refer [state parallel transition on-entry
-                                                  on-exit script history]]
+    [com.fulcrologic.statecharts.elements :refer [state parallel transition on-entry final done-data
+                                                  data-model log on-exit script history]]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
     [com.fulcrologic.statecharts.protocols :as sp]

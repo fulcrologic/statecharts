@@ -49,6 +49,7 @@ commit.
 
 * Implemented
 ** DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.
+*** Late and early data model binding.
 ** Compound, parallel, atomic, initial, and final states
 *** Enter, exit
 *** History (deep and shallow).
@@ -56,15 +57,15 @@ commit.
 *** Guards
 *** Execute code when taking a transition
 ** Executable content elements:
-*** Script
+*** Script, raise, log, assign, and done-data.
 *** Executable content elements are extensible (you can make your own kind)
 ** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
 
 * TODO
-** Invoke external processes
-** Send events to arbitrary services
+** Invoke external processes.
+** Send events to arbitrary sessions/services.
 ** Additional Executable content:
-*** Raise, log, assign, donedata, and possibly the other simple flow control elements. Rely on `script` for now.
+*** donedata, and possibly the other simple flow control elements. Rely on `script` for now.
 
 See Conformance.adoc at the root of this repository for notes on
 decisions that might affect exact conformance to the standard.

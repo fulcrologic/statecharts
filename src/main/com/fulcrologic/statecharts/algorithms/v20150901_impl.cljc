@@ -108,8 +108,8 @@
       (if (sm/history-element? machine state)
         (if-let [previously-active-states (get (::sc/history-value @vwmem) id)]
           (add-elements! previously-active-states parent)
-          (let [{:keys [content target]} (sm/transition-element machine state)]
-            (when content (vswap! default-history-content assoc parent content))
+          (let [{:keys [children target]} (sm/transition-element machine state)]
+            (when (seq children) (vswap! default-history-content assoc parent children))
             (add-elements! target parent)))
         ; not a history element
         (do
@@ -155,7 +155,7 @@
         (= :internal (:type t))
         (sm/compound-state? machine tsource)
         (every? (fn [s] (sm/descendant? machine s tsource)) tstates)) tsource
-      :else (:id (sm/find-least-common-compound-ancestor machine (into [tsource] tstates))))))
+      :else (:id (sm/find-least-common-compound-ancestor machine (into (if tsource [tsource] []) tstates))))))
 
 (>defn compute-entry-set!
   "Returns [states-to-enter states-for-default-entry default-history-content]."
@@ -207,6 +207,17 @@
     (log/warn "No implementation to run content of " element)
     (sp/run-expression! execution-model env expr)))
 
+(defmethod execute-element-content! :log [{::sc/keys [execution-model] :as env} {:keys [node-type expr] :as element}]
+  (log/debug (sp/run-expression! execution-model env expr)))
+
+(defmethod execute-element-content! :raise [{::sc/keys [vwmem] :as env} {:keys [id event] :as element}]
+  (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event)))
+
+(defmethod execute-element-content! :assign [{::sc/keys [execution-model data-model] :as env} {:keys [location expr] :as element}]
+  (let [v (sp/run-expression! execution-model env expr)]
+    (log/info "Assign" location " = " v)
+    (env/assign! env location v)))
+
 (>defn execute!
   "Run the executable content (immediate children) of s."
   [{::sc/keys [machine] :as env} s]
@@ -220,6 +231,15 @@
         (catch #?(:clj Throwable :cljs :default) t
           (log/error t "Unexpected exception in content")))))
   nil)
+
+(>defn compute-done-data! [{::sc/keys [machine vwmem data-model execution-model] :as env} final-state]
+  [::sc/env ::sc/element-or-id => any?]
+  (let [done-element (some->> (sm/get-children machine final-state :done-data)
+                       first
+                       (sm/element machine))]
+    (if done-element
+      (log/spy :trace "computed done data" (execute-element-content! env done-element))
+      {})))
 
 (>defn enter-states!
   "Enters states, triggers actions, tracks long-running invocations, and
@@ -238,18 +258,18 @@
           (initialize-data-model! env s)
           (vswap! vwmem update ::sc/initialized-states (fnil conj #{}) state-id))
         (doseq [entry (sm/entry-handlers machine s)]
-          (execute-element-content! env entry))
+          (execute! env entry))
         (when-let [t (and (contains? states-for-default-entry s)
                        (some->> s (sm/initial-element machine) (sm/transition-element machine)))]
           (execute! env t))
         (when-let [content (get default-history-content (sm/element-id machine s))]
           (execute-element-content! env content))
-        (when (sm/final-state? machine s)
+        (when (log/spy :trace (sm/final-state? machine s))
           (if (= :ROOT (sm/get-parent machine s))
             (vswap! vwmem assoc ::sc/running? false)
             (let [parent      (sm/get-parent machine s)
                   grandparent (sm/get-parent machine parent)
-                  done-data   {}]                           ;; TASK: done-data
+                  done-data   (compute-done-data! env s)]
               (vswap! vwmem update ::sc/internal-queue conj
                 (new-event {:sendid (sm/element-id machine s)
                             :type   :internal
@@ -431,7 +451,9 @@
           (if (empty? internal-queue)
             (vreset! macrostep-done? true)
             (let [internal-event (first internal-queue)]
+              (log/spy :trace internal-event)
               (vswap! vwmem update ::sc/internal-queue pop)
+              (env/assign! env [:ROOT :_event] internal-event)
               (select-transitions! env internal-event))))
         (when (seq (::sc/enabled-transitions @vwmem))
           (microstep! env)))))
@@ -489,7 +511,7 @@
                  (sm/nearest-ancestor-state machine invocation)
                  machine)]
     (in-state-context env parent
-      (env/assign! env :_event event)
+      (env/assign! env [:ROOT :_event] event)
       (when-let [finalize (sm/get-children machine invocation :finalize)]
         (execute! (assoc env :_event event) finalize))
       (env/delete! env :_event))))
@@ -530,12 +552,13 @@
    is called by an overall processing system instead of directly."
   [{::sc/keys [data-model vwmem] :as env} external-event]
   [::sc/env ::sc/event-or-name => ::sc/working-memory]
+  (log/spy :trace external-event)
   (with-processing-context env
     (if (cancel? external-event)
       (exit-interpreter! env)
       (do
         (select-transitions! env external-event)
-        (sp/transact! data-model env {:txn [(ops/assign :_event external-event)]})
+        (env/assign! env [:ROOT :_event] external-event)
         (handle-external-invocations! env external-event)
         (microstep! env)
         (before-event! env))))
@@ -549,7 +572,7 @@
   [{::sc/keys [machine vwmem] :as env}]
   [::sc/env => ::sc/working-memory]
   (let [{:keys [binding script]} machine
-        early? (= binding :early)
+        early? (not= binding :late)
         t      (some->> machine
                  (sm/initial-element machine)
                  (sm/transition-element machine)

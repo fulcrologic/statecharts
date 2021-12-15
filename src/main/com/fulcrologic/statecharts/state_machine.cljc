@@ -78,6 +78,7 @@
 
   Attributes:
 
+  ::sc/document-order - :breadth-first or :depth-first (default). See Conformance.adoc.
   :initial - ID(s) of initial state(s) of the machine. Default is the top-most `initial` element,
              or the first element in document order.
   :name - Optional name

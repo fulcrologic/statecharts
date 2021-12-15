@@ -3,6 +3,10 @@ and suggested implementation.
 
 It diverges in the following places:
 
+* All machine element names have been hyphenated for easier reading (e.g. `donedata` -> `done-data`)
+** Some element arguments support a clojure-like notation (e.g. `autoforward` -> `auto-forward?`); However,
+ for ease of translation from the SCXML spec these elements *SHOULD* still honor the non-modified
+ name (i.e. `autoforward`).
 * The specification is vague about "Document Order". The default in this
   library is "depth first" document order (since that is element physical order
   in reading order), but you can choose "breadth first"
@@ -14,3 +18,11 @@ It diverges in the following places:
 * The specification requires certain XML-style things (such as supporting the explicit type
   "http://www.w3.org/TR/scxml/#SCXMLEventProcessor" for `<send>`). Things like URLs
   may be replaced by an equivalently-functional thing.
+* `done-data` element uses an `expr` attribute instead of children.
+* The specification says the `_event` should be placed in the data model
+at various execution points, but is a bit unclear if it should be
+contextual. This implementation:
+** Always places the `:_event` at the location path `[:ROOT :_event]`,
+which is meant to tell the data model to store the event in the top-level
+context (on the root element, the machine).
+** The data model keeps this value until the next event is processed.

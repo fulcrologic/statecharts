@@ -3,7 +3,7 @@
    that need that. Thus, the expressions used in these data structures *MAY* use CLJC functions/code, or may represent
    such elements a strings or other (quoted) EDN. The ExecutionModel is responsible for this part of the interpretation.
 
-   The overall data model is represented as a map. The DataModel implementation MAY choose scoping and resolution
+   The overall data model is represented as a map. The DataModel implementation MAY choose scope and resolution
    rules. Location expressions are interpreted by the DataModel, but it is recommended they be keywords or vectors
    of keywords.
 
@@ -20,11 +20,9 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [genid]]))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Core Constructs
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defn- new-element
+(defn new-element
+  "Create a new element with the given `type` and `attrs`. Will auto-assign an ID if it is not supplied. Use
+   this as a helper when creating new element types (e.g. executable content) to ensure consistency in operation."
   ([type {:keys [id] :as attrs}]
    (new-element type attrs nil))
   ([type {:keys [id] :as attrs} children]
@@ -32,6 +30,10 @@
      attrs
      (cond-> {:node-type type}
        (seq children) (assoc :children (vec children))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Core Constructs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (>defn state
   "Create a state. ID will be generated if not supplied. The `initial` element is an alias for this
@@ -138,7 +140,7 @@
   (new-element :raise attrs nil))
 
 (>defn log
-  "Log a message.
+  "Log a message. (Currently uses Timbre, with debug level)
 
   https://www.w3.org/TR/scxml/#log"
   [{:keys [id label expr] :as attrs}]
@@ -172,6 +174,8 @@
 
 (>defn done-data
   "Data (calculated by expr) to return to caller when a final state is entered. See `data-model`.
+
+  NOTE: Differs from spec (uses expr instead of child elements)
 
   https://www.w3.org/TR/scxml/#donedata"
   [{:keys [id expr] :as attrs}]
