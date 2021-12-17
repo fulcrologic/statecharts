@@ -19,7 +19,33 @@
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn >defn- => ?]]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.util :refer [genid]]))
+    [com.fulcrologic.statecharts.util :refer [genid]])
+  #?(:clj (:import (clojure.lang IFn))))
+
+(defonce state-registry (atom {}))
+(defonce transition-registry (atom {}))
+
+#?(:clj
+   (deftype Transition [id]
+     IFn
+     (invoke [this] id)
+     (invoke [this k]
+       (get-in transition-registry [id k])))
+   :cljs
+   (deftype Transition [id]
+     IFn
+     (-invoke [this] id)
+     (-invoke [id k] (get-in transition-registry [id k]))))
+
+#?(:clj
+   (defmacro deftransition [sym attrs]
+     (let [id (keyword (name (ns-name *ns*)) (name sym))]
+       `(do
+          (swap! transition-registry assoc ~id ~(assoc attrs :id ~id))
+          (def sym (->Transition ~id))))))
+
+(comment
+  (macroexpand-1 '(deftransition T {:event :event/thing})))
 
 (defn new-element
   "Create a new element with the given `type` and `attrs`. Will auto-assign an ID if it is not supplied. Use
