@@ -235,6 +235,13 @@
       (state? machine element-or-id)
       (empty? (child-states machine element-or-id)))))
 
+(>defn initial?
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => boolean?]
+  (let [{:keys [initial initial?]} (element machine element-or-id)]
+    (boolean
+      (or initial? initial))))
+
 (>defn condition-node?
   "Returns true if the given element is ALL of:
 

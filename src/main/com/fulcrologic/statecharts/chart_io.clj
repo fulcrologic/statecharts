@@ -159,6 +159,7 @@
 
 (defn uml-priority [chart a b]
   (cond
+    (sm/initial? chart a) -1
     (and
       (sm/atomic-state? chart a)
       (sm/atomic-state? chart b)) 0
