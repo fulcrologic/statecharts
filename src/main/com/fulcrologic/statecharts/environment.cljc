@@ -8,7 +8,8 @@
     [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.util :refer [queue]]
-    [com.fulcrologic.statecharts.protocols :as sp]))
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [taoensso.timbre :as log]))
 
 (>defn new-env
   ([machine DM Q Ex addl]
@@ -100,3 +101,8 @@
                          :target            (!? env target targetexpr)
                          :type              (!? env type typeexpr)
                          :delay             (!? env delay delayexpr)}))
+
+(defn cancel-event!
+  "Attempt to cancel a (delayed) event."
+  [{::sc/keys [event-queue] :as env} event-id]
+  (sp/cancel! event-queue (session-id env) event-id))

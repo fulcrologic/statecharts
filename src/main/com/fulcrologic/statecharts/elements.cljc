@@ -14,6 +14,7 @@
   #?(:cljs (:require-macros [com.fulcrologic.statecharts.elements]))
   (:refer-clojure :exclude [send])
   (:require
+    [clojure.string :as str]
     com.fulcrologic.statecharts.specs
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn >defn- => ?]]
@@ -29,7 +30,7 @@
    (merge {:id (or id (genid (name type)))}
      attrs
      (cond-> {:node-type type}
-       (seq children) (assoc :children (vec children))))))
+       (seq children) (assoc :children (vec (remove nil? children)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Core Constructs
@@ -100,6 +101,47 @@
   [{:keys [id] :as attrs} & children]
   [map? (s/* ::sc/element) => ::sc/element]
   (new-element :on-exit attrs children))
+
+(defn- expr-label [stmts] (str/join "\n" (map pr-str stmts)))
+
+(defmacro exit-fn
+  "A macro that emits a `on-exit` element, but looks more like a normal CLJC lambda:
+
+  ```
+  (sfn [env data] ...)
+  ```
+
+  is shorthand for
+
+  ```
+  (script {:expr (fn [env data] ...)})
+  ```
+
+  "
+  [[env-sym data-sym] & body]
+  `(on-exit {:diagram/label ~(expr-label body)
+             :expr          (fn [~env-sym ~data-sym]
+                              ~@body)}))
+
+(defmacro entry-fn
+  "A macro that emits a `on-entry` element, but looks more like a normal CLJC lambda:
+
+  ```
+  (entry-fn [env data] ...)
+  ```
+
+  is shorthand for
+
+  ```
+  (on-entry {:expr (fn [env data] ...)})
+  ```
+
+  "
+  [[env-sym data-sym] & body]
+  `(on-entry {:diagram/label ~(expr-label body)
+              :expr          (fn [~env-sym ~data-sym]
+                               ~@body)}))
+
 
 (>defn history
   "Create a history node.
@@ -193,7 +235,7 @@
   [map? => ::sc/element]
   (new-element :script attrs))
 
-(defmacro sfn
+(defmacro script-fn
   "A macro that emits a `script` element, but looks more like a normal CLJC lambda:
 
   ```
@@ -208,8 +250,9 @@
 
   "
   [[env-sym data-sym] & body]
-  `(script {:expr (fn [~env-sym ~data-sym]
-                    ~@body)}))
+  `(script {:diagram/label ~(expr-label body)
+            :expr          (fn [~env-sym ~data-sym]
+                             ~@body)}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; External Communication

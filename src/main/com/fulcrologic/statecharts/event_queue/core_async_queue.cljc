@@ -17,6 +17,7 @@
           (swap! delayed-events update nm (fnil inc 0))
           (async/<! (async/timeout (long delay)))
           (when-not (contains? @cancelled-events nm)
+            (log/trace "Sending delayed event" event)
             (async/>! Q event))
           (swap! delayed-events update nm dec)
           (when (zero? (get @delayed-events nm))
@@ -25,10 +26,12 @@
   (cancel! [_ _ send-id]
     (let [nm send-id]
       (when (pos? (get @delayed-events nm))
+        (log/trace "Cancelling event" nm)
         (swap! cancelled-events conj nm))))
   (receive-events! [_ _ handler]
     (async/go
       (let [event (async/<! Q)]
+        (log/trace "Calling handler on received event" event)
         (try
           (handler event)
           (catch #?(:clj Throwable :cljs :default) e

@@ -26,11 +26,21 @@
   (reduce-kv
     (fn [acc path value]
       (cond
-        (and context-id (keyword? path)) (assoc-in acc [context-id path] value)
-        (keyword? path) (do
-                          (log/warn "Unknown context " context-id)
-                          acc)
-        (and (vector? path) (= (count path) 2)) (assoc-in acc path value)
+        (and context-id (keyword? path))
+        (do
+          (log/trace "Assigning" value "to" [context-id path])
+          (assoc-in acc [context-id path] value))
+
+        (keyword? path)
+        (do
+          (log/error "Internal error: Unknown context for assignment to" path)
+          acc)
+
+        (and (vector? path) (= (count path) 2))
+        (do
+          (log/trace "Assigning" value "to" path)
+          (assoc-in acc path value))
+
         :else (do
                 (log/warn "Cannot assign value. Illegal path expression" path)
                 acc)))

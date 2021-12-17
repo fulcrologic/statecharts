@@ -39,14 +39,19 @@
                                  {:event            event
                                   ::sc/send-id      send-id
                                   ::sc/trigger-time trigger-time}))]
+            (log/trace "Queued delayed event" event)
             (swap! delayed-events assoc target evts))
-          (swap! Qs update target (fnil conj (queue)) event)))))
+          (do
+            (log/trace "Queued event" event)
+            (swap! Qs update target (fnil conj (queue)) event))))))
   (cancel! [event-queue session-id send-id]
     (if (and session-id send-id)
-      (swap! delayed-events update session-id (fn [evts]
-                                                (filterv
-                                                  #(not= send-id (::sc/send-id %))
-                                                  evts)))
+      (do
+        (log/trace "Cancelling events with id" send-id)
+        (swap! delayed-events update session-id (fn [evts]
+                                                  (filterv
+                                                    #(not= send-id (::sc/send-id %))
+                                                    evts))))
       (log/warn "Cannot cancel events with a nil session/send ID")))
   (receive-events! [event-queue {:keys [session-id] :as options} handler]
     (if-not session-id
@@ -62,6 +67,7 @@
                    (get old-delayed session-id))]
         (doseq [evt evts]
           (try
+            (log/trace "Running handler on event" evt)
             (handler evt)
             (catch #?(:clj  Throwable
                       :cljs :default) t

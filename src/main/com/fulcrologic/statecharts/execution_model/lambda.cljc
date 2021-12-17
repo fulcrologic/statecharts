@@ -19,6 +19,7 @@
                          (log/trace "Trying to run function in session" session-id)
                          (log/spy :trace "expr => " (expr env data))
                          (catch #?(:clj Throwable :cljs :default) e
+                           (log/trace e "Expression threw an execption. Sending internal event.")
                            (sp/send! event-queue {:event             (evts/new-event {:name :error.execution
                                                                                       :data {:error e}
                                                                                       :type :platform})
@@ -27,10 +28,14 @@
                            nil))
             update?    (vector? result)]
         (when update?
-          (log/trace "replacing data model with" result)
+          (log/trace "trying vector result as a data model transaction" result)
           (sp/transact! data-model env {:txn result}))
         result)
-      (log/warn "Execution model didn't understand" expr))))
+      (let [update? (vector? expr)]
+        (when update?
+          (log/trace "trying vector result as a data model transaction" expr)
+          (sp/transact! data-model env {:txn expr}))
+        expr))))
 
 (defn new-execution-model
   "Create a new execution model that expects state machine expressions to be `(fn [env expr])`. Such expressions

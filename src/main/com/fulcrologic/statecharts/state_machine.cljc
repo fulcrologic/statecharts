@@ -235,6 +235,22 @@
       (state? machine element-or-id)
       (empty? (child-states machine element-or-id)))))
 
+(>defn condition-node?
+  "Returns true if the given element is ALL of:
+
+  * An atomic state
+  * Has more than one transition
+  * NONE of the transitions require an event
+  "
+  [machine element-or-id]
+  [::sc/machine (? ::sc/element-or-id) => boolean?]
+  (let [tids (transitions machine element-or-id)]
+    (boolean
+      (and
+        (atomic-state? machine element-or-id)
+        (> (count tids) 1)
+        (every? #(nil? (:event (element machine %))) tids)))))
+
 (>defn parallel-state? [machine element-or-id]
   [::sc/machine (? ::sc/element-or-id) => boolean?]
   (boolean
