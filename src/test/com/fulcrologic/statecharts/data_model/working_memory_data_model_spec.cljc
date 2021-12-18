@@ -25,9 +25,9 @@
                   ::sc/vwmem           vwmem}
         context  (fn [c] (assoc mock-env ::sc/context-element-id c))]
 
-    (component "transact!"
-      (sp/transact! DM (context :A/a) {:txn [(ops/assign :x 1)]})
-      (sp/transact! DM (context :A) {:txn [(ops/assign :y 9)]})
+    (component "update!"
+      (sp/update! DM (context :A/a) {:ops [(ops/assign :x 1)]})
+      (sp/update! DM (context :A) {:ops [(ops/assign :y 9)]})
 
       (assertions
         "Places values into the correct context in working memory"
@@ -36,11 +36,11 @@
 
       (vswap! vwmem dissoc ::wmdm/data-model)
 
-      (sp/transact! DM (context :ROOT) {:txn [(ops/assign :x 1)]})
-      (sp/transact! DM (context :ROOT) {:txn [(ops/assign :y 2)]})
-      (sp/transact! DM (context :A/a) {:txn [(ops/assign :y 42)]})
-      (sp/transact! DM (context :A/a) {:txn [(ops/assign [:ROOT :z] 3)]})
-      (sp/transact! DM (context :A) {:txn [(ops/assign :z 9)]})
+      (sp/update! DM (context :ROOT) {:ops [(ops/assign :x 1)]})
+      (sp/update! DM (context :ROOT) {:ops [(ops/assign :y 2)]})
+      (sp/update! DM (context :A/a) {:ops [(ops/assign :y 42)]})
+      (sp/update! DM (context :A/a) {:ops [(ops/assign [:ROOT :z] 3)]})
+      (sp/update! DM (context :A) {:ops [(ops/assign :z 9)]})
 
       (assertions
         "Multiple assigns to context"
@@ -61,8 +61,8 @@
         (sp/get-at DM (context :A) :y) => 2
         (sp/get-at DM (context :ROOT) :y) => 2))
 
-    (component "transacting delete"
-      (sp/transact! DM (context :ROOT) {:txn [(ops/delete [:ROOT :z])]})
+    (component "run a delete"
+      (sp/update! DM (context :ROOT) {:ops [(ops/delete [:ROOT :z])]})
 
       (assertions
         "removes the value"

@@ -23,7 +23,20 @@
   Implementations of a Processor MAY place (or allow you to place) other namespaced keys in `env` as well.
   ")
 
+(defprotocol TransactionSupport
+  "A protocol to add transaction support to a data model."
+  (begin! [provider env] "Begin a 'transaction' where calls to `update!` on a data model are batched together in
+    a transaction.")
+  (commit! [provider env]
+    "Commit all calls to `update!` that have happened since `begin!`.")
+  (rollback! [provider env]
+    "Skip the calls to `update!` that have happened since `begin!`."))
+
 (defprotocol DataModel
+  "A data model for a state machine.
+
+   The implementation of a DataModel MAY also implement TransactionSupport to add ACID guarantees
+   (e.g. if the data model is backed by durable storage) around groups of calls to `update!`."
   (load-data [provider env src]
     "OPTIONAL. Attempt to load data from the given `src` (as declared on a datamodel element in the machine.) into
      the data model.
@@ -40,11 +53,10 @@
    See ns docstring for description of `env`.
 
    Returns the value or nil.")
-  (transact! [provider env {:keys [txn]}]
-    "Run a transaction that updates/removes data from the data model in the context of `env`.  The DataModel
-     MAY implement this with some level of ACID guarantees (e.g. if the data model is backed by durable storage).
+  (update! [provider env {:keys [ops]}]
+    "Run a sequence of operations that updates/removes data from the data model in the context of `env`.
 
-     `txn` is a vector of data model changes.
+     `opts` is a vector of data model changes.
 
      A DataModel implementation MUST support at least the following operations (where `path` can be a keyword or
      a vector of keywords, and value is any safely-serializable value):

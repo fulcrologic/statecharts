@@ -14,7 +14,7 @@
   (load-data [provider env src] (sp/load-data DM env src))
   (current-data [provider env] (sp/current-data DM env))
   (get-at [provider env path] (sp/get-at DM env path))
-  (transact! [provider env args] (sp/transact! DM env args))
+  (update! [provider env args] (sp/update! DM env args))
   sp/EventQueue
   (send! [event-queue req] (sp/send! Q req))
   (cancel! [event-queue session-id send-id] (sp/cancel! Q session-id send-id))

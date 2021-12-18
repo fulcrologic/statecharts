@@ -190,11 +190,11 @@
     (in-state-context env state
       (cond
         src (sp/load-data data-model env src)
-        (fn? expr) (let [txn (sp/run-expression! execution-model env expr)]
-                     (if (vector? txn)
-                       (sp/transact! data-model env {:txn txn})))
-        (map? expr) (sp/transact! data-model env {:txn (ops/set-map-txn expr)})
-        :else (sp/transact! data-model env {:txn (ops/set-map-txn {})})))
+        (fn? expr) (let [ops (sp/run-expression! execution-model env expr)]
+                     (if (vector? ops)
+                       (sp/update! data-model env {:ops ops})))
+        (map? expr) (sp/update! data-model env {:ops (ops/set-map-ops expr)})
+        :else (sp/update! data-model env {:ops (ops/set-map-ops {})})))
     nil))
 
 (defmulti execute-element-content!

@@ -86,10 +86,10 @@
     (when (or (keyword? path) (vector? path))
       (let [all-data (sp/current-data provider env)]
         (get all-data (if (keyword? path) path (last path))))))
-  (transact! [provider {::sc/keys [machine vwmem] :as env} {:keys [txn]}]
+  (update! [provider {::sc/keys [machine vwmem] :as env} {:keys [ops]}]
     (let [all-data (some-> vwmem deref ::data-model)
           state-id (env/context-element-id env)
-          new-data (reduce (fn [acc op] (run-op acc state-id op)) all-data txn)]
+          new-data (reduce (fn [acc op] (run-op acc state-id op)) all-data ops)]
       (vswap! vwmem assoc ::data-model new-data))))
 
 (defn new-model []

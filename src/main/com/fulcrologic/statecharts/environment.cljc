@@ -60,14 +60,14 @@
 (defn assign!
   "Side effect against the data model in `env`, with the given path-value pairs."
   [{::sc/keys [data-model] :as env} & {:as path-value-pairs}]
-  (sp/transact! data-model env {:txn (ops/set-map-txn path-value-pairs)})
+  (sp/update! data-model env {:ops (ops/set-map-ops path-value-pairs)})
   nil)
 
 (>defn delete!
   "Side effect against the data model in `env`, with the given keys/paths"
   [{::sc/keys [data-model] :as env} & ks]
   [::sc/env ::assignment-pairs => nil?]
-  (sp/transact! data-model env {:txn [(ops/delete ks)]})
+  (sp/update! data-model env {:ops [(ops/delete ks)]})
   nil)
 
 (defn- !?

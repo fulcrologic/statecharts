@@ -4,7 +4,7 @@
     [taoensso.timbre :as log]))
 
 (defn assign
-  "A transaction element that indicates the desire to overwrite the given paths in the data model. E.g.
+  "A operation element that indicates the desire to overwrite the given paths in the data model. E.g.
 
   ```
   (assign
@@ -25,7 +25,7 @@
    :data path-value-pairs})
 
 (defn delete
-  "A transaction element that indicates the desire to remove certain values from the data model.
+  "An operation element that indicates the desire to remove certain values from the data model.
 
    ```
    (delete :x [:a :b])
@@ -38,8 +38,8 @@
   {:op    :delete
    :paths (vec paths)})
 
-(defn set-map-txn
-  "Returns a transaction that, when transacted, will set all of the k-v pairs from `m` into the
+(defn set-map-ops
+  "Returns an operation that will set all of the k-v pairs from `m` into the
    data model."
   [m]
   [{:op   :assign
