@@ -1,6 +1,14 @@
 (ns com.fulcrologic.statecharts.event-queue.core-async-queue
-  "A queue that uses core.async to give you single-session service with an external event queue. Send
-   the queue the `evts/cancel-event` to exit your machine (without reaching the final state)."
+  "A queue that uses core.async to enable support for delayed events and also provides a `run-event-loop!` mechanism
+   for automatically processing events as they arrive (optional). You may, of course, send the queue the
+   `evts/cancel-event` to exit your machine (without reaching the final state) to cause the `run-event-loop!` to
+   exit.
+
+   This queue can support any number of running statecharts via their session-ids. `send!` will reject any request that
+   is missing a target that defines the target session-id. Just use the same instance as the event queue for every
+   chart.
+
+   "
   (:require
     [clojure.core.async :as async]
     [com.fulcrologic.statecharts :as sc]
@@ -23,12 +31,12 @@
           (when (zero? (get @delayed-events nm))
             (swap! cancelled-events disj nm)))
         (async/>! Q event))))
-  (cancel! [_ _ send-id]
+  (cancel! [_ session-id send-id]
     (let [nm send-id]
       (when (pos? (get @delayed-events nm))
         (log/trace "Cancelling event" nm)
         (swap! cancelled-events conj nm))))
-  (receive-events! [_ _ handler]
+  (receive-events! [_ {:keys [session-id]} handler]
     (async/go
       (let [event (async/<! Q)]
         (log/trace "Calling handler on received event" event)

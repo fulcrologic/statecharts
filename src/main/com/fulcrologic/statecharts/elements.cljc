@@ -269,10 +269,15 @@
   * `:target` An expression that gives the target to send to.
   * `:type` An expression generating a selector for which mechanism to use for sending.
   * `:delay` A number of milliseconds to delay the send, or an expression for computing it.
-  * `:namelist` - List of location expressions (vector of vectors) to include from the data model.
+  * `:content` - An expression (for the ExecutionModel) whose result is sent as the data of the event.
+  * `:namelist` - A map from simple names to location expressions. The value at each location expression will be sent
+                  as the simple name. E.g. {:x [:ROOT :value]} will send {:x value-from-root-value}.
   * `:idlocation` a vector of keywords that specifies a location in the DataModel
     to store a generated ID that uniquely identifies the event instance
     being sent. If not supplied then `id` will be the id of the element itself.
+
+  If BOTH namelist and content are supplied, then they will be MERGED as the event data with `content` overwriting
+  any conflicting keys from `namelist`.
   "
   [attrs]
   [map? => ::sc/element]
@@ -324,9 +329,14 @@
   and ignores any events received by it after that point.
 
   * `:id` The id of the element. See below for special considerations.
-  * `:params` An expression in the execution model's notation that can calculate the data to send to the invocation.
-  * `:finalize` An expression to run when the invocation returns, and may update the data model.
-  * `:type` The type of external service (expression allowed)
+  * `:params` A map from parameter name to expression in the execution model's notation. E.g. `{:x (fn [env data] 42)}`
+  * `:namelist` A map from parameter name to location path. E.g. `{:x [:ROOT :k]}`
+  * `:src` A literal URI to be passed to the external service.
+  * `:srcexpr` An expression in the execution model's notation to calculate a URI to be passed to the external service.
+  * `:finalize` An expression to run when the invocation returns. Receives an event, and may update the data model.
+  * `:type` A static value for the type of external service. Defaults to statechart, which is equivalent to the URI
+            'http://www.w3.org/TR/scxml/'. Implementations may choose platform-specific interpretations of this argument.
+  * `:typeexpr` An expression version of `:type`. Use your ExecutionModel to run the expression to get the type.
   * `:autoforward` Enable forwarding of (external) events to the invoked process.
   * `:idlocation` a vector of keywords that specifies a location in the DataModel
     to store a generated ID that uniquely identifies the event instance
@@ -337,7 +347,7 @@
    NOTES:
 
    * The `id` *can* be supplied, but if not supplied a new ID per invocation (according to spec) must be generated
-     at each execution.
+     at each execution and stored in `idlocation`.
 
   https://www.w3.org/TR/scxml/#invoke"
   [attrs]

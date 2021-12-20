@@ -368,19 +368,15 @@
                           (condition-match env t)))))]
     (vswap! vwmem assoc ::sc/enabled-transitions tns)))
 
-(>defn invoke! [env invocation]
-  [::sc/env ::sc/element-or-id => nil?]
-  ;; TASK: Implement this
-  (log/warn "Invoke not implemented" invocation)
-  nil)
-
 (>defn run-invocations! [{::sc/keys [machine vwmem] :as env}]
   [::sc/env => nil?]
   (let [{::sc/keys [states-to-invoke]} @vwmem]
-    (doseq [state-to-invoke states-to-invoke]
+    (doseq [state-to-invoke (sm/in-entry-order machine states-to-invoke)]
       (in-state-context env state-to-invoke
-        (doseq [i (sm/invocations machine state-to-invoke)]
-          (invoke! env i)))))
+        (doseq [i (sm/in-document-order machine (sm/invocations machine state-to-invoke))]
+          (env/start-invocation! env i))))
+    ;; Clear states to invoke
+    (swap! vwmem assoc ::sc/states-to-invoke #{}))
   nil)
 
 (>defn run-many!
@@ -395,15 +391,11 @@
       (log/error e "Unexpected execution error")))
   nil)
 
-(defn cancel-invoke! [i]
-  ;; TASK: invocation impl
-  (log/warn "Cancel not implemented" i))
-
 (>defn cancel-active-invocations!
   [{::sc/keys [machine] :as env} state]
   [::sc/env ::sc/element-or-id => nil?]
   (doseq [i (sm/invocations machine state)]
-    (cancel-invoke! i))
+    (env/stop-invocation! env i))
   nil)
 
 (>defn exit-states!
@@ -519,18 +511,18 @@
         (execute! (assoc env :_event event) finalize))
       (env/delete! env :_event))))
 
-(defn forward! [env invocation event]
-  (log/warn "Event forwarding not implemented"))
-
-(>defn handle-external-invocations! [{::sc/keys [machine vwmem event-queue] :as env}
+(>defn handle-external-invocations! [{::sc/keys [machine vwmem data-model event-queue] :as env}
                                      {:keys [invokeid] :as external-event}]
   [::sc/env ::sc/event => nil?]
   (doseq [s (::sc/configuration @vwmem)]
-    (doseq [{:keys [id autoforward] :as inv} (map (partial sm/element machine) (sm/invocations machine s))]
+    (doseq [{:keys [id idlocation id-location auto-forward? autoforward] :as inv} (map (partial sm/element machine) (sm/invocations machine s))
+            :let [id (if-let [loc (or idlocation id-location)]
+                       (sp/get-at data-model env loc)
+                       id)]]
       (when (= invokeid id)
         (finalize! env inv external-event))
-      (when (true? autoforward)
-        (forward! env inv external-event))))
+      (when (or (true? autoforward) (true? auto-forward?))
+        (env/forward-event! env inv external-event))))
   nil)
 
 (>defn runtime-env
@@ -546,8 +538,6 @@
                              ::sc/history-value      {}
                              ::sc/running?           true}
                             base-wmem))))
-
-
 
 (>defn process-event!
   "Process the given `external-event` given a state `machine` with the `working-memory` as its current status/state.

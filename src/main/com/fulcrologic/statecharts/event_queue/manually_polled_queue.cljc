@@ -15,6 +15,7 @@
   The `process-next-event!` of this implementation processes all available events in a loop and then returns."
   (:require
     [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.util :refer [queue now-ms]]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
@@ -22,6 +23,7 @@
 (defrecord ManuallyPolledQueue [Qs delayed-events]
   sp/EventQueue
   (send! [event-queue {:keys [event
+                              data
                               send-id
                               source-session-id
                               target
@@ -29,9 +31,12 @@
     (if-not (and
               source-session-id
               target
-              (map? event))
+              event)
       (log/error "Cannot enqueue an event. The source-session-id, target, and event are required.")
-      (let [event (assoc event ::sc/source-session-id source-session-id)]
+      (let [event (evts/new-event (cond-> {:name                  event
+                                           ::sc/source-session-id source-session-id
+                                           :type                  :external}
+                                    data (assoc :data data)))]
         (if (and delay (number? delay) (pos? delay))
           (let [trigger-time (+ (now-ms) delay)
                 evts         (sort-by ::sc/trigger-time
@@ -53,25 +58,26 @@
                                                     #(not= send-id (::sc/send-id %))
                                                     evts))))
       (log/warn "Cannot cancel events with a nil session/send ID")))
-  (receive-events! [event-queue {:keys [session-id] :as options} handler]
-    (if-not session-id
-      (log/warn "Cannot receive events without the session-id")
-      (let [now  (now-ms)
-            [old-delayed _] (swap-vals! delayed-events update session-id
-                              (fn [evts] (remove #(< (::sc/trigger-time %) now) evts)))
-            [oldQs _] (swap-vals! Qs assoc session-id (queue))
-            evts (into (get oldQs session-id [])
-                   (comp
-                     (filter #(< (::sc/trigger-time %) now))
-                     (map :event))
-                   (get old-delayed session-id))]
-        (doseq [evt evts]
-          (try
-            (log/trace "Running handler on event" evt)
-            (handler evt)
-            (catch #?(:clj  Throwable
-                      :cljs :default) t
-              (log/error t "Handler threw an exception"))))))))
+  (receive-events! [event-queue {:keys [target session-id] :as options} handler]
+    (let [session-id (or session-id target)]
+      (if-not session-id
+        (log/warn "Cannot receive events without the session-id")
+        (let [now  (now-ms)
+              [old-delayed _] (swap-vals! delayed-events update session-id
+                                (fn [evts] (remove #(< (::sc/trigger-time %) now) evts)))
+              [oldQs _] (swap-vals! Qs assoc session-id (queue))
+              evts (into (get oldQs session-id [])
+                     (comp
+                       (filter #(< (::sc/trigger-time %) now))
+                       (map :event))
+                     (get old-delayed session-id))]
+          (doseq [evt evts]
+            (try
+              (log/trace "Running handler on event" evt)
+              (handler evt)
+              (catch #?(:clj  Throwable
+                        :cljs :default) t
+                (log/error t "Handler threw an exception")))))))))
 
 (defn new-queue []
   (->ManuallyPolledQueue (atom {}) (atom {})))

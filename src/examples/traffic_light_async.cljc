@@ -105,7 +105,7 @@
   (def queue (aq/new-async-queue))
   (def processor (simple/new-simple-machine traffic-lights {:event-queue queue}))
   (def wmem (let [a (atom {})] (add-watch a :printer (fn [_ _ _ n] (show-states n))) a))
-  (aq/run-event-loop! processor wmem session-id {})         ; should see the state changing with the timers
+  (aq/run-event-loop! processor wmem session-id)            ; should see the state changing with the timers
 
   ;; Tell the state machine to exit abruptly
   (sp/send! queue {:target session-id
