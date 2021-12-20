@@ -64,9 +64,12 @@ The remaining API is 90+% stable, but may undergo minor changes to accommodate d
 *** Executable content elements are extensible (you can make your own kind)
 ** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
 
-* Not yet implemented
-** Invoke external processes.
-** Send events to arbitrary other sessions/services (easy add-on by user)
+* Partially Implemented
+** Invoke (services and other machines). This is modelled with an example, but still has some bugs.
+** Send events to arbitrary other sessions/services. The provided event queues do not know how to do this,
+but the protocol makes it simple to implement.
+
+* Not implemented
 ** Additional Executable content:
 *** The other (e.g. if/else) SCXML flow control elements. (may not ever bother, but this is extensible, so you can easily do so)
 
