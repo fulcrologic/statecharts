@@ -86,7 +86,9 @@
     (when (or (keyword? path) (vector? path))
       (let [all-data (sp/current-data provider env)]
         (get all-data (if (keyword? path) path (last path))))))
-  (update! [provider {::sc/keys [machine vwmem] :as env} {:keys [ops]}]
+  (update! [provider {::sc/keys [machine vwmem] :as env} {:keys [ops] :as args}]
+    (when-not (map? args)
+      (log/error "You forgot to wrap your operations in a map!" args))
     (let [all-data (some-> vwmem deref ::data-model)
           state-id (env/context-element-id env)
           new-data (reduce (fn [acc op] (run-op acc state-id op)) all-data ops)]

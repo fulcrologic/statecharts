@@ -19,11 +19,10 @@
                          (log/trace "Trying to run function in session" session-id)
                          (log/spy :trace "expr => " (expr env data))
                          (catch #?(:clj Throwable :cljs :default) e
-                           (log/trace e "Expression threw an execption. Sending internal event.")
-                           (sp/send! event-queue {:event             (evts/new-event {:name :error.execution
-                                                                                      :data {:error e}
-                                                                                      :type :platform})
-                                                  :send-id           :error.execution
+                           (log/trace e "Expression threw an exception.")
+                           ;; Switch to internal event queue
+                           (sp/send! event-queue {:event             :error.execution
+                                                  :data              {:error e}
                                                   :source-session-id session-id})
                            nil))
             update?    (vector? result)]

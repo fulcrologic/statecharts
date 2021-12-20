@@ -536,61 +536,66 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
 <ul class="sectlevel1">
-<li><a href="#_usage">1. Usage</a>
+<li><a href="#_getting_started">1. Getting Started</a></li>
+<li><a href="#_going_deeper">2. Going Deeper</a>
 <ul class="sectlevel2">
-<li><a href="#_basics">1.1. Basics</a></li>
-</ul>
-</li>
-<li><a href="#_status">2. Status</a>
-<ul class="sectlevel2">
-<li><a href="#Goals">2.1. Goals and Extensibility</a></li>
-</ul>
-</li>
-<li><a href="#_guide">3. Guide</a>
-<ul class="sectlevel2">
-<li><a href="#_terminology">3.1. Terminology</a></li>
-<li><a href="#_data_models">3.2. Data Models</a></li>
-<li><a href="#_transitions">3.3. Transitions</a></li>
-<li><a href="#_event_processing">3.4. Event Processing</a>
+<li><a href="#_terminology">2.1. Terminology</a></li>
+<li><a href="#_states">2.2. States</a>
 <ul class="sectlevel3">
-<li><a href="#_autonomous_execution">3.4.1. Autonomous Execution</a></li>
+<li><a href="#_compound_states">2.2.1. Compound States</a></li>
+<li><a href="#_parallel_states">2.2.2. Parallel States</a></li>
 </ul>
 </li>
-<li><a href="#_execution">3.5. Execution</a></li>
-<li><a href="#_working_memory_and_identity">3.6. Working Memory and Identity</a></li>
+<li><a href="#_transitions">2.3. Transitions</a></li>
+<li><a href="#_condition_states">2.4. "Condition" States</a></li>
+<li><a href="#_event_processing">2.5. Event Processing</a>
+<ul class="sectlevel3">
+<li><a href="#_event_name_matching">2.5.1. Event Name Matching</a></li>
+<li><a href="#_send_targets">2.5.2. Send Targets</a></li>
+<li><a href="#_send_types">2.5.3. Send Types</a></li>
+<li><a href="#_manual_polling_queue">2.5.4. Manual Polling Queue</a></li>
+<li><a href="#_autonomous_state_charts">2.5.5. Autonomous State Charts</a></li>
 </ul>
 </li>
-<li><a href="#_relationship_to_scxml">4. Relationship to SCXML</a>
+<li><a href="#_data_models">2.6. Data Models</a></li>
+<li><a href="#_execution_models">2.7. Execution Models</a></li>
+<li><a href="#_working_memory_and_identity">2.8. Working Memory and Identity</a></li>
+<li><a href="#_invocations">2.9. Invocations</a></li>
+</ul>
+</li>
+<li><a href="#_relationship_to_scxml">3. Relationship to SCXML</a>
 <ul class="sectlevel2">
-<li><a href="#_related_work">4.1. Related Work</a></li>
-<li><a href="#_conformance">4.2. Conformance</a></li>
+<li><a href="#_related_work">3.1. Related Work</a></li>
+<li><a href="#_conformance">3.2. Conformance</a></li>
 </ul>
 </li>
 </ul>
 </div>
 </div>
 <div id="content">
-<div id="preamble">
-<div class="sectionbody">
-<div class="paragraph">
-<p>An implementation of state charts that use the SCXML
-structure and semantics (as far as they are defined), without the need for XML.</p>
-</div>
-<div class="paragraph">
-<p><span class="image"><a class="image" href="https://clojars.org/com.fulcrologic/statecharts"><img src="https://img.shields.io/clojars/v/com.fulcrologic/statecharts.svg" alt="statecharts"></a></span>
-<span class="image"><a class="image" href="https://circleci.com/gh/fulcrologic/statecharts/tree/main"><img src="https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg" alt="CircleCI"></a></span></p>
-</div>
-</div>
-</div>
 <div class="sect1">
-<h2 id="_usage"><a class="anchor" href="#_usage"></a><a class="link" href="#_usage">1. Usage</a></h2>
+<h2 id="_getting_started"><a class="anchor" href="#_getting_started"></a><a class="link" href="#_getting_started">1. Getting Started</a></h2>
 <div class="sectionbody">
-<div class="sect2">
-<h3 id="_basics"><a class="anchor" href="#_basics"></a><a class="link" href="#_basics">1.1. Basics</a></h3>
 <div class="paragraph">
 <p>A statechart is defined as a (nested) map. Some of this content&#8217;s behavior is <a href="#Goals">configurable</a>.
 The simplest setup is to use Clojure for the executable code and a simple data model that scopes
 data to states.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The SCXML standard is used for the semantics and processing, and MUCH of the overall structure. We keep
+the idea that each node in the chart has a unique ID, but take some license with executable content.
+Most of the "executable content" elements described in the SCXML standard have differences since we are not
+using XML. Sometimes we assume you can get by with an expression on the parent element, or just a single child
+script node.
+</td>
+</tr>
+</table>
 </div>
 <div class="paragraph">
 <p>To make it easier to write the maps there are functions for each element type in the
@@ -774,184 +779,34 @@ cross-referencing with its documentation.</p>
 </div>
 </div>
 </div>
-</div>
 <div class="sect1">
-<h2 id="_status"><a class="anchor" href="#_status"></a><a class="link" href="#_status">2. Status</a></h2>
+<h2 id="_going_deeper"><a class="anchor" href="#_going_deeper"></a><a class="link" href="#_going_deeper">2. Going Deeper</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>ALPHA.</p>
+<p>You can use the <a href="http://www.w3.org/TR/2015/REC-scxml-20150901/">SCXML guide</a> which has examples as a pretty
+good reference for documentation. The document structure in XML is nearly identical to the data structure
+of this library:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="xml"><span class="tag">&lt;scxml&gt;</span>
+  <span class="tag">&lt;state</span> <span class="attribute-name">id</span>=<span class="string"><span class="delimiter">&quot;</span><span class="content">A</span><span class="delimiter">&quot;</span></span><span class="tag">/&gt;</span>
+  ...
+  <span class="tag">&lt;/scxml&gt;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(machine {} <span class="comment">; `machine` is an alias for scxml, which also exists in this library</span>
+  (state {<span class="symbol">:id</span> <span class="symbol">:A</span>})
+  <span class="keyword">..</span><span class="keyword">.</span>)</code></pre>
+</div>
 </div>
 <div class="paragraph">
-<p>The state chart definition (machine and elements) are API stable, as is the underlying base algorithm (though
-it may have bugs).</p>
-</div>
-<div class="paragraph">
-<p>The API is 90+% stable, but may undergo minor changes to accomodate design of <code>invoke</code> and (expanded) <code>send</code> elements.</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Implemented</p>
-<div class="ulist">
-<ul>
-<li>
-<p>DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.</p>
-<div class="ulist">
-<ul>
-<li>
-<p>Late and early data model binding.</p>
-</li>
-</ul>
-</div>
-</li>
-<li>
-<p>Compound, parallel, atomic, initial, and final states</p>
-<div class="ulist">
-<ul>
-<li>
-<p>on-entry, on-exit</p>
-</li>
-<li>
-<p>History (deep and shallow). Multiple nodes allowed, with default transitions (for when there is no history).</p>
-</li>
-</ul>
-</div>
-</li>
-<li>
-<p>Transitions</p>
-<div class="ulist">
-<ul>
-<li>
-<p>Eventless transitions</p>
-</li>
-<li>
-<p>Guards</p>
-</li>
-<li>
-<p>Executable content when taking a transition</p>
-</li>
-</ul>
-</div>
-</li>
-<li>
-<p>Executable content elements:</p>
-<div class="ulist">
-<ul>
-<li>
-<p>Script, raise, send, log, assign, and done-data.</p>
-</li>
-<li>
-<p>Executable content elements are extensible (you can make your own kind)</p>
-</li>
-</ul>
-</div>
-</li>
-<li>
-<p>Simple dev-mode SCXML &#8594; CLJC conversion utility (see src/dev).</p>
-</li>
-</ul>
-</div>
-</li>
-<li>
-<p>Not yet implemented</p>
-<div class="ulist">
-<ul>
-<li>
-<p>Invoke external processes.</p>
-</li>
-<li>
-<p>Send events to arbitrary other sessions/services (easy add-on by user)</p>
-</li>
-<li>
-<p>Additional Executable content:</p>
-<div class="ulist">
-<ul>
-<li>
-<p>The other (e.g. if/else) SCXML flow control elements. (may not ever bother, but this is extensible, so you can easily do so)</p>
-</li>
-</ul>
-</div>
-</li>
-</ul>
-</div>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>See Conformance.adoc at the root of this repository for notes on
-decisions that might affect exact conformance to the standard.</p>
+<p>See the docstrings on the <code>machine</code> and various elements for details of differences.</p>
 </div>
 <div class="sect2">
-<h3 id="Goals"><a class="anchor" href="#Goals"></a><a class="link" href="#Goals">2.1. Goals and Extensibility</a></h3>
-<div class="paragraph">
-<p>This library supports a lot of flexibility, and has many long-term goals:</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>Compatible with distributed systems. For example a cluster might run long-lived state machine sessions that
-can be serviced by any node of the custer.</p>
-</li>
-<li>
-<p>State machine definitions can be versioned.</p>
-</li>
-<li>
-<p>Everything <strong>can</strong> be made to be serializable (including the code in the machine).</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>Thus you can define (via protocols):</p>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p>How to interpret the executable code of the state machine (e.g. on-exit, cond, etc.). You could, for example,
-use strings for those, and Javascript or SCI to interpret them (making the machine completely serializable).</p>
-</li>
-<li>
-<p>How the data model of the states work. You can, for example, hook the data model into Fulcro, Reagent, Datomic, Datascript, etc.</p>
-</li>
-<li>
-<p>The implementation of the event queue. This allows you to generate state machines that know how
-to send events to each other, can be distributed, etc.  It is necessary to make this part of the internals because
-the state charts support sending events from within state code, which as we mentioned above, could be interpreted
-by your own execution model and may not actually be Clojure(script).</p>
-</li>
-<li>
-<p>The actual state chart processing semantics/algorithm. A version of the W3C 2015-09-01 recommendation for SCXML is provided
-as a default.</p>
-</li>
-</ul>
-</div>
-<div class="paragraph">
-<p>However, it would be a real hassle if you had to set up all of that stuff just to get what many people want:
-A statechart that can run in CLJC, using Clojure code, and a functional interface where you can manually
-send events to the machine. Thus, a reasonable default implementation is provided for the above, and
-it is simple to expand this to meet your needs.</p>
-</div>
-</div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_guide"><a class="anchor" href="#_guide"></a><a class="link" href="#_guide">3. Guide</a></h2>
-<div class="sectionbody">
-<div class="paragraph">
-<p>First some very important notes:</p>
-</div>
-<div class="olist arabic">
-<ol class="arabic">
-<li>
-<p>Every node in a state chart has a UNIQUE ID. These IDs are autogenerated if you do not supply them.</p>
-</li>
-<li>
-<p>Most of the "executable content" elements described in the SCXML standard (e.g. <code>&lt;if&gt;</code>) are simply
-collapsed into the <code>script</code> node.</p>
-</li>
-</ol>
-</div>
-<div class="sect2">
-<h3 id="_terminology"><a class="anchor" href="#_terminology"></a><a class="link" href="#_terminology">3.1. Terminology</a></h3>
+<h3 id="_terminology"><a class="anchor" href="#_terminology"></a><a class="link" href="#_terminology">2.1. Terminology</a></h3>
 <div class="dlist">
 <dl>
 <dt class="hdlist1">Atomic State</dt>
@@ -1033,18 +888,27 @@ and <code>:event</code> qualifier (meaning they are exited as soon as they are e
 </div>
 </div>
 <div class="sect2">
-<h3 id="_data_models"><a class="anchor" href="#_data_models"></a><a class="link" href="#_data_models">3.2. Data Models</a></h3>
+<h3 id="_states"><a class="anchor" href="#_states"></a><a class="link" href="#_states">2.2. States</a></h3>
 <div class="paragraph">
-<p>The SCXML specification allows the implementation quite a bit of latitude in the interpretation of the chart&#8217;s
-data model. You could define scopes that nest, one global map of data that is visible everywhere, or hook your
-data model to an external database.</p>
+<p>States may be atomic, compound (hierarchical), or parallel. The first two are generated with the <code>state</code> element, and
+the latter with <code>parallel</code>.</p>
 </div>
-<div class="paragraph">
-<p>See the docstrings in the <code>protocols</code> namespace.</p>
+<div class="sect3">
+<h4 id="_compound_states"><a class="anchor" href="#_compound_states"></a><a class="link" href="#_compound_states">2.2.1. Compound States</a></h4>
+
+</div>
+<div class="sect3">
+<h4 id="_parallel_states"><a class="anchor" href="#_parallel_states"></a><a class="link" href="#_parallel_states">2.2.2. Parallel States</a></h4>
+
 </div>
 </div>
 <div class="sect2">
-<h3 id="_transitions"><a class="anchor" href="#_transitions"></a><a class="link" href="#_transitions">3.3. Transitions</a></h3>
+<h3 id="_transitions"><a class="anchor" href="#_transitions"></a><a class="link" href="#_transitions">2.3. Transitions</a></h3>
+<div class="paragraph">
+<p>Transitions are the consumers of events. Their "source" is their parent. Transitions can be <strong>eventless</strong>, and
+they can also have no <strong>target</strong> (indicating they do not change the active states, and are only for executing
+their content).</p>
+</div>
 <div class="paragraph">
 <p>A state can have any number of transition elements. These are tested <strong>in order</strong> of appearance, and the
 first transition that matches the current circumstance is taken. Transitions are <strong>enabled</strong> when:</p>
@@ -1062,10 +926,18 @@ first transition that matches the current circumstance is taken. Transitions are
 </li>
 </ul>
 </div>
+</div>
+<div class="sect2">
+<h3 id="_condition_states"><a class="anchor" href="#_condition_states"></a><a class="link" href="#_condition_states">2.4. "Condition" States</a></h3>
 <div class="paragraph">
-<p>An "eventless" transition without a <code>:cond</code> is always enabled. Condition states can be modelled using such
-transitions. For example, this
-is a conditional state that when entered will immediately transition to either state :X or :Y, depending
+<p>Condition states from classic state charts
+(shown as a diamond in UML state chart notation) can be modelled using eventless transitions.</p>
+</div>
+<div class="paragraph">
+<p>An "eventless" transition without a <code>:cond</code> is always enabled.</p>
+</div>
+<div class="paragraph">
+<p>Below is a conditional state that when entered will immediately transition to either state :X or :Y, depending
 on the result of the first transition&#8217;s condition expression:</p>
 </div>
 <div class="listingblock">
@@ -1077,21 +949,159 @@ on the result of the first transition&#8217;s condition expression:</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_event_processing"><a class="anchor" href="#_event_processing"></a><a class="link" href="#_event_processing">3.4. Event Processing</a></h3>
+<h3 id="_event_processing"><a class="anchor" href="#_event_processing"></a><a class="link" href="#_event_processing">2.5. Event Processing</a></h3>
 <div class="paragraph">
 <p>In a fully-fleshed system your event queue would have a corresponding runtime story, where <code>process-event</code> was
 automatically called on the correct machine/session/invocation/service when an event is available. As such,
 and event queue might be distributed and durable (e.g. using Kafka or the like), or might simply be something
 that runs in-core (a core.async <code>go-loop</code>).</p>
 </div>
+<div class="sect3">
+<h4 id="_event_name_matching"><a class="anchor" href="#_event_name_matching"></a><a class="link" href="#_event_name_matching">2.5.1. Event Name Matching</a></h4>
 <div class="paragraph">
-<p>The "simple" model that is provided with this library is an in-memory queue, with <strong>no</strong> automatic processing
+<p>The SCXML standard describes a name matching algorithm for event names that allows for wildcard pattern matching.
+Event names are dot-separated, and are prefix-matched. In this library keywords are used for event names, but
+other than that the interpretation is as specified in the standard. For example,
+the event name <code>:a.b.c</code> is matched by <code>:a.b.c.*</code>, <code>:a.b.c</code>, <code>:a.b.*</code>, <code>:a.b</code>, etc. That is to say that
+a transition with <code>:event :a.b</code> would be enabled by event <code>:a.b.c</code>.</p>
+</div>
+<div class="paragraph">
+<p>The wildcard is always implied, but can be specified on a transition for clarity. Transitions are enabled and
+matched "in order", so you can model narrowed and catch-all behavior:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> A}
+  (transition {<span class="symbol">:event</span> <span class="symbol">:error.communication</span>} <span class="keyword">..</span><span class="keyword">.</span>)
+  (transition {<span class="symbol">:event</span> <span class="symbol">:error</span>} <span class="keyword">..</span><span class="keyword">.</span>))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>where the first transition will be enabled only if the error is a communication one, and all errors will enable
+the second.</p>
+</div>
+<div class="paragraph">
+<p>See the SCXML standard for the rules on transition preemption regarding conflicting transitions that
+match at the same time.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_send_targets"><a class="anchor" href="#_send_targets"></a><a class="link" href="#_send_targets">2.5.2. Send Targets</a></h4>
+<div class="paragraph">
+<p>The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that
+these are often URLs. The default implementation of the event queue in this library only supports
+targeting other statecharts (see Send Types below), and when using the default send type, the target is
+expected to simply be a <code>session-id</code>, where <code>session-id</code>  is a unique identifier, such as a GUUID.</p>
+</div>
+<div class="paragraph">
+<p>Other implementations of the EventQueue protocol may choose to define further refinements.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_send_types"><a class="anchor" href="#_send_types"></a><a class="link" href="#_send_types">2.5.3. Send Types</a></h4>
+<div class="paragraph">
+<p>The SCXML standard (section 6.2.5) defines types as a URI as well. The internal implementations in this library
+do not enforce this, but this library <strong>does</strong> recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
+as a desire to talk to another statechart session (and is the only/default predefined value).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_manual_polling_queue"><a class="anchor" href="#_manual_polling_queue"></a><a class="link" href="#_manual_polling_queue">2.5.4. Manual Polling Queue</a></h4>
+<div class="paragraph">
+<p>There is a manually polled queue implementation in this library, with <strong>no</strong> automatic processing
 at all. If you want to support events that come from outside of the machine via the queue, then you have
 to create a loop that polls the queue and calls <code>process-event!</code>.  If you do this, then event the
 delayed event delivery will work, as long as your code watches for the delayed events to appear on the queue.</p>
 </div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">traffic-light</span>
+  (<span class="symbol">:require</span>
+    [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
+    [com.fulcrologic.statecharts.state-machine <span class="symbol">:refer</span> [machine]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition raise on-entry assign data-model]]
+    [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
+    [com.fulcrologic.statecharts.simple <span class="symbol">:refer</span> [new-simple-machine]]
+    [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
+    [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]))
+
+(<span class="keyword">def</span> <span class="function">nk</span>
+  <span class="string"><span class="delimiter">&quot;</span><span class="content">(nk :a </span><span class="content">\&quot;</span><span class="content">b</span><span class="content">\&quot;</span><span class="content">) =&gt; :a/b
+   (nk :a/b </span><span class="content">\&quot;</span><span class="content">c</span><span class="content">\&quot;</span><span class="content">) =&gt; :a.b/c</span><span class="delimiter">&quot;</span></span>
+  extend-key)
+
+(<span class="keyword">defn</span> <span class="function">traffic-signal</span> [id initial]
+  (<span class="keyword">let</span> [red     (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">red</span><span class="delimiter">&quot;</span></span>)
+        yellow  (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">yellow</span><span class="delimiter">&quot;</span></span>)
+        green   (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">green</span><span class="delimiter">&quot;</span></span>)
+        initial (nk id (<span class="keyword">name</span> initial))]
+    (state {<span class="symbol">:id</span>      id
+            <span class="symbol">:initial</span> initial}
+      (state {<span class="symbol">:id</span> red}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> green}))
+      (state {<span class="symbol">:id</span> yellow}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> red}))
+      (state {<span class="symbol">:id</span> green}
+        (transition {<span class="symbol">:event</span>  <span class="symbol">:warn-traffic</span>
+                     <span class="symbol">:target</span> yellow})))))
+
+(<span class="keyword">defn</span> <span class="function">ped-signal</span> [id initial]
+  (<span class="keyword">let</span> [red            (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">red</span><span class="delimiter">&quot;</span></span>)
+        flashing-white (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">flashing-white</span><span class="delimiter">&quot;</span></span>)
+        white          (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">white</span><span class="delimiter">&quot;</span></span>)
+        initial        (nk id (<span class="keyword">name</span> initial))]
+    (state {<span class="symbol">:id</span>      id
+            <span class="symbol">:initial</span> initial}
+      (state {<span class="symbol">:id</span> red}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> white}))
+      (state {<span class="symbol">:id</span> flashing-white}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> red}))
+      (state {<span class="symbol">:id</span> white}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:warn-pedestrians</span> <span class="symbol">:target</span> flashing-white})))))
+
+(<span class="keyword">def</span> <span class="function">traffic-lights</span>
+  (machine {}
+    (parallel {}
+      (traffic-signal <span class="symbol">:east-west</span> <span class="symbol">:green</span>)
+      (traffic-signal <span class="symbol">:north-south</span> <span class="symbol">:red</span>)
+
+      (ped-signal <span class="symbol">:cross-ew</span> <span class="symbol">:red</span>)
+      (ped-signal <span class="symbol">:cross-ns</span> <span class="symbol">:white</span>))))
+
+(<span class="keyword">defn</span> <span class="function">show-states</span> [wmem]
+  (<span class="keyword">println</span> (<span class="keyword">sort</span> (<span class="keyword">filter</span> #{<span class="symbol">:north-south/red</span>
+                           <span class="symbol">:north-south/yellow</span>
+                           <span class="symbol">:north-south/green</span>
+                           <span class="symbol">:east-west/red</span>
+                           <span class="symbol">:east-west/yellow</span>
+                           <span class="symbol">:east-west/green</span>
+                           <span class="symbol">:cross-ns/red</span>
+                           <span class="symbol">:cross-ns/white</span>
+                           <span class="symbol">:cross-ns/flashing-white</span>
+                           <span class="symbol">:cross-ew/red</span>
+                           <span class="symbol">:cross-ew/white</span>
+                           <span class="symbol">:cross-ew/flashing-white</span>} (<span class="symbol">::sc/configuration</span> wmem)))))
+
+(<span class="keyword">def</span> <span class="function">processor</span> (new-simple-machine traffic-lights {}))
+(<span class="keyword">def</span> <span class="function">s0</span> (sp/start! processor <span class="integer">1</span>))
+(show-states s0)
+(<span class="keyword">def</span> <span class="function">s1</span> (sp/process-event! processor s0 (new-event <span class="symbol">:warn-pedestrians</span>)))
+(show-states s1)
+(<span class="keyword">def</span> <span class="function">s2</span> (sp/process-event! processor s1 (new-event <span class="symbol">:warn-traffic</span>)))
+(show-states s2)
+(<span class="keyword">def</span> <span class="function">s3</span> (sp/process-event! processor s2 (new-event <span class="symbol">:swap-flow</span>)))
+(show-states s3)
+(<span class="keyword">def</span> <span class="function">s4</span> (sp/process-event! processor s3 (new-event <span class="symbol">:warn-pedestrians</span>)))
+(show-states s4)
+(<span class="keyword">def</span> <span class="function">s5</span> (sp/process-event! processor s4 (new-event <span class="symbol">:warn-traffic</span>)))
+(show-states s5)
+(<span class="keyword">def</span> <span class="function">s6</span> (sp/process-event! processor s5 (new-event <span class="symbol">:swap-flow</span>)))
+(show-states s6)</code></pre>
+</div>
+</div>
+</div>
 <div class="sect3">
-<h4 id="_autonomous_execution"><a class="anchor" href="#_autonomous_execution"></a><a class="link" href="#_autonomous_execution">3.4.1. Autonomous Execution</a></h4>
+<h4 id="_autonomous_state_charts"><a class="anchor" href="#_autonomous_state_charts"></a><a class="link" href="#_autonomous_state_charts">2.5.5. Autonomous State Charts</a></h4>
 <div class="paragraph">
 <p>You can, of course, write your own "event loop". The library comes with a core.async event queue that works
 in conjunction with the simple model to provide an event loop that will automatically process events as they come
@@ -1115,9 +1125,9 @@ automatically changes over time:</p>
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
     [com.fulcrologic.statecharts.simple <span class="symbol">:refer</span> [new-simple-machine]]
     [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
-    [com.fulcrologic.statecharts.event-queue.core-async-queue <span class="symbol">:as</span> aq]
+    [com.fulcrologic.statecharts.event-queue.manually-polled-queue <span class="symbol">:as</span> mpq]
+    [com.fulcrologic.statecharts.event-queue.core-async-event-loop <span class="symbol">:as</span> <span class="keyword">loop</span>]
     [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
-    [com.fulcrologic.statecharts.event-queue.core-async-queue <span class="symbol">:as</span> aq]
     [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]
     [com.fulcrologic.statecharts.events <span class="symbol">:as</span> evts]))
 
@@ -1136,19 +1146,19 @@ automatically changes over time:</p>
       (transition {<span class="symbol">:event</span>  <span class="symbol">:warn-pedestrians</span>
                    <span class="symbol">:target</span> <span class="symbol">:timing-ped-warning</span>})
       (on-entry {}
-        (Send {<span class="symbol">:event</span> (evts/new-event <span class="symbol">:warn-pedestrians</span>)
+        (Send {<span class="symbol">:event</span> <span class="symbol">:warn-pedestrians</span>
                <span class="symbol">:delay</span> flow-time})))
     (state {<span class="symbol">:id</span> <span class="symbol">:timing-ped-warning</span>}
       (transition {<span class="symbol">:event</span>  <span class="symbol">:warn-traffic</span>
                    <span class="symbol">:target</span> <span class="symbol">:timing-yellow</span>})
       (on-entry {}
-        (Send {<span class="symbol">:event</span> (evts/new-event <span class="symbol">:warn-traffic</span>)
+        (Send {<span class="symbol">:event</span> <span class="symbol">:warn-traffic</span>
                <span class="symbol">:delay</span> flashing-white-time})))
     (state {<span class="symbol">:id</span> <span class="symbol">:timing-yellow</span>}
       (transition {<span class="symbol">:event</span>  <span class="symbol">:swap-flow</span>
                    <span class="symbol">:target</span> <span class="symbol">:timing-flow</span>})
       (on-entry {}
-        (Send {<span class="symbol">:event</span> (evts/new-event <span class="symbol">:swap-flow</span>)
+        (Send {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span>
                <span class="symbol">:delay</span> yellow-time})))))
 
 (<span class="keyword">defn</span> <span class="function">traffic-signal</span> [id initial]
@@ -1208,10 +1218,10 @@ automatically changes over time:</p>
 (<span class="keyword">comment</span>
 
   (<span class="keyword">def</span> <span class="function">session-id</span> <span class="integer">1</span>)
-  (<span class="keyword">def</span> <span class="function">queue</span> (aq/new-async-queue))
-  (<span class="keyword">def</span> <span class="function">processor</span> (simple/new-simple-machine traffic-lights {<span class="symbol">:event-queue</span> queue}))
+  (<span class="keyword">def</span> <span class="function">queue</span> (mpq/new-queue))
+  (<span class="keyword">def</span> <span class="function">processor</span> (simple/new-simple-machine traffic-lights {<span class="symbol">::sc/event-queue</span> queue}))
   (<span class="keyword">def</span> <span class="function">wmem</span> (<span class="keyword">let</span> [a (<span class="keyword">atom</span> {})] (<span class="keyword">add-watch</span> a <span class="symbol">:printer</span> (<span class="keyword">fn</span> [_ _ _ n] (show-states n))) a))
-  (aq/run-event-loop! processor wmem session-id {})         <span class="comment">; should see the state changing with the timers</span>
+  (loop/run-event-loop! processor wmem session-id <span class="integer">100</span>)      <span class="comment">; should see the state changing with the timers</span>
 
   <span class="comment">;; Tell the state machine to exit abruptly</span>
   (sp/send! queue {<span class="symbol">:target</span> session-id
@@ -1225,7 +1235,7 @@ automatically changes over time:</p>
 <div class="title">Note</div>
 </td>
 <td class="content">
-The <code>send</code> element has a <code>Send</code> alias so you can avoid shadowing the Clojure function.
+The <code>send</code> element has a <code>Send</code> (capital S) alias so you can avoid shadowing the Clojure function.
 </td>
 </tr>
 </table>
@@ -1233,7 +1243,23 @@ The <code>send</code> element has a <code>Send</code> alias so you can avoid sha
 </div>
 </div>
 <div class="sect2">
-<h3 id="_execution"><a class="anchor" href="#_execution"></a><a class="link" href="#_execution">3.5. Execution</a></h3>
+<h3 id="_data_models"><a class="anchor" href="#_data_models"></a><a class="link" href="#_data_models">2.6. Data Models</a></h3>
+<div class="paragraph">
+<p>A data model is a component of the system that holds data for a given state chart&#8217;s session.
+The SCXML specification allows the implementation quite a bit of latitude in the interpretation of the chart&#8217;s
+data model. You could define scopes that nest, one global map of data that is visible everywhere, or hook your
+data model to an external database.</p>
+</div>
+<div class="paragraph">
+<p>See the docstrings in the <code>protocols</code> namespace.</p>
+</div>
+<div class="paragraph">
+<p>There is a predefined <code>WorkingMemoryDataModel</code> that stores scoped data for states within the session working memory,
+allowing the data, for example, to be persisted with the state of a running session when pausing it for later revival.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_execution_models"><a class="anchor" href="#_execution_models"></a><a class="link" href="#_execution_models">2.7. Execution Models</a></h3>
 <div class="paragraph">
 <p>Most people will probably just use the CLJCExecutionModel, which lets you write executable content
 in CLJC as lambdas:</p>
@@ -1260,7 +1286,7 @@ script elements:</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_working_memory_and_identity"><a class="anchor" href="#_working_memory_and_identity"></a><a class="link" href="#_working_memory_and_identity">3.6. Working Memory and Identity</a></h3>
+<h3 id="_working_memory_and_identity"><a class="anchor" href="#_working_memory_and_identity"></a><a class="link" href="#_working_memory_and_identity">2.8. Working Memory and Identity</a></h3>
 <div class="paragraph">
 <p>The working memory of the state machine is plain EDN and contains no code.
 It is serializable by nippy, transit, etc. Therefore, you can easily save
@@ -1274,10 +1300,62 @@ allow you to coordinate external event sources with working with
 instances of machines that are archived in durable storage while idle.</p>
 </div>
 </div>
+<div class="sect2">
+<h3 id="_invocations"><a class="anchor" href="#_invocations"></a><a class="link" href="#_invocations">2.9. Invocations</a></h3>
+<div class="paragraph">
+<p>An invocation is an "external" service/chart/process that can be started when your state machine enters a state,
+exchanges events <strong>while</strong> that state is active (you can forward events and receive them). The invocation can self-terminate
+while the state is still active, but it will also be cancelled if your chart leaves the enclosing state.</p>
+</div>
+<div class="paragraph">
+<p>For example, suppose you&#8217;ve installed a service that can provide events on some interval. That service send back
+<code>:timer</code> events that include <code>sequence-number</code> in the event data. Suppose you want to use that to trigger reminder
+emails every two days while the billing system is in a Grace Period state for that user
+(one statechart session per user).</p>
+</div>
+<div class="paragraph">
+<p>You might end up with something like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> <span class="symbol">:BillingGracePeriod</span>}
+  (transition {<span class="symbol">:event</span> <span class="symbol">:timer</span>}
+    (<span class="keyword">send</span> {<span class="symbol">:type</span> <span class="symbol">:email</span>
+           <span class="symbol">:event</span> <span class="symbol">:billing-reminder</span>
+           <span class="symbol">:namelist</span> {<span class="symbol">:to</span> [<span class="symbol">:ROOT</span> <span class="symbol">:user/email</span>]
+                      <span class="symbol">:reminder</span> [<span class="symbol">:ROOT</span> <span class="symbol">:reminders</span>]}}))
+  (invoke {<span class="symbol">:type</span> <span class="symbol">:interval-timer</span>
+           <span class="symbol">:finalize</span> (<span class="keyword">fn</span> [env {<span class="symbol">:keys</span> [sequence-number]}] [(ops/assign [<span class="symbol">:ROOT</span> <span class="symbol">:reminders</span>] sequence-number)])
+           <span class="symbol">:params</span> {<span class="symbol">:period</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">2 days</span><span class="delimiter">&quot;</span></span>}}))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>transition</code> element responds to the events received by the state chart, and <code>invoke</code> can send such events. So,
+the timer service here is sending <code>:timer</code> events, and then the <code>send</code> element is pulling data from the DataModel
+to construct the correct parameters to send to an email service that uses the event type (:billing-reminder) and
+the parameter data (generated in this case with <code>namelist</code>) to fill out some kind of email template.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The implementation of the invocation subsystem will define how these services are written and installed. It is
+still under construction at the time of this writing. Consult the source in case the docs are out of date).
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Exiting the <code>:BillingGracePeriod</code> state will cancel the timer so that no further <code>:timer</code> events are sent.</p>
+</div>
+</div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">4. Relationship to SCXML</a></h2>
+<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">3. Relationship to SCXML</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>This library&#8217;s internal implementation follows (as closely as possible) the official
@@ -1291,7 +1369,7 @@ the structure described there, but with some differences for convenient use in C
 </div>
 <div class="paragraph">
 <p>Specifically, executable content is <strong>still</strong> treated as <strong>data</strong>, but the XML nodes that
-are described in the standard do <strong>not</strong> exist in this library, because a conformant
+are described in the standard do <strong>not</strong> all exist in this library, because a conformant
 XML reader (which would need to be aware of the target execution model) can easily
 translate such nodes into the target data representation (even if that target
 representation is script strings).</p>
@@ -1346,7 +1424,7 @@ values in the data and excution model):</p>
 <code>script</code> tags to begin with.</p>
 </div>
 <div class="sect2">
-<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">4.1. Related Work</a></h3>
+<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">3.1. Related Work</a></h3>
 <div class="paragraph">
 <p>The primary alternative to this library is <a href="https://github.com/lucywang000/clj-statecharts">clj-statecharts</a>,
 which is a fine library modelled after xstate.</p>
@@ -1398,7 +1476,7 @@ Fulcro UI and I/O).</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">4.2. Conformance</a></h3>
+<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">3.2. Conformance</a></h3>
 <div class="paragraph">
 <p>This library was written using the reference implementation described in
 the <a href="https://www.w3.org/TR/scxml">SCXML standard</a>, but without the requirement
@@ -1422,7 +1500,7 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2021-12-15 15:58:16 -0800
+Last updated 2021-12-19 15:00:08 -0800
 </div>
 </div>
 </body>

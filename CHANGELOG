@@ -1,6 +1,7 @@
 1.0.0-alpha2
 
 * Renamed protocol DataModel/transact! to `update!`, and changed argument to take :ops instead of :txn key.
+* API for send changed slightly. :event is now just a name, and :data is for the extra data.
 
 1.0.0-alpha1
 

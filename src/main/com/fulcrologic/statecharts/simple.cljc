@@ -3,6 +3,7 @@
    implementation (version), a working memory data model,
    CLJC execution support, and an event queue that requires manual polling."
   (:require
+    [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
     [com.fulcrologic.statecharts.execution-model.lambda :as lambda]
@@ -33,10 +34,10 @@
 
    `extra-env` can contain anything extra you want in `env`, and can override any of the above by
    key (e.g. :data-model)."
-  [machine-def extra-env]
-  (let [dm (wmdm/new-model)
-        q  (mpq/new-queue)
-        ex (lambda/new-execution-model dm q)]
+  [machine-def {::sc/keys [data-model execution-model event-queue] :as extra-env}]
+  (let [dm (or data-model (wmdm/new-model))
+        q  (or event-queue (mpq/new-queue))
+        ex (or execution-model (lambda/new-execution-model dm q))]
     (->SimpleMachine
       (alg/new-processor machine-def (merge {:data-model      dm
                                              :execution-model ex

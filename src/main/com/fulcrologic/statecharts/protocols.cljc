@@ -90,10 +90,10 @@
 
      * :event - (REQUIRED) The name of the message to be sent
        may describe the supported data types an event may contain.
-     * :send-id - (REQUIRED) The id of the send element or an id customized by an expression on that element.
+     * :send-id - The id of the send element or an id customized by an expression on that element.
                   Need not be unique. Cancelling via this send-id cancels all undelivered events with that
                   send-id/source-session-id.
-     * :source-session-id - (REQUIRED) The globally unique session ID.
+     * :source-session-id - The globally unique session ID.
      * :data (OPTIONAL) The data to include (encode into) in the event. The state chart processor will extract this
                         data from the Data Model according to the `send` content elements or `namelist` parameter.
                         The event queue MAY use the `type` in order to decide how to encode this data for transport

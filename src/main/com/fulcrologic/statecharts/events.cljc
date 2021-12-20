@@ -77,9 +77,5 @@
     (::sc/event-name event-or-name)))
 
 (def cancel-event
-  "An event that will cause the state machine to exit."
-  {:id        :CANCEL
-   :data      {}
-   :name      :CANCEL
-   :type      :external
-   :node-type :EXIT})
+  "An event anme that will cause the state machine to exit."
+  ::cancel)

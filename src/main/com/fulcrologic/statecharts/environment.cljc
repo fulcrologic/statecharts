@@ -64,10 +64,9 @@
   (sp/update! data-model env {:ops (ops/set-map-ops path-value-pairs)})
   nil)
 
-(>defn delete!
+(defn delete!
   "Side effect against the data model in `env`, with the given keys/paths"
   [{::sc/keys [data-model] :as env} & ks]
-  [::sc/env ::assignment-pairs => nil?]
   (sp/update! data-model env {:ops [(ops/delete ks)]})
   nil)
 
@@ -154,18 +153,21 @@
                           (assoc acc k (sp/run-expression! execution-model env expr)))
                         {}
                         params)
-            invokeid  (or id (str parent-state-id "." #?(:clj  (java.util.UUID/randomUUID)
-                                                         :cljs (random-uuid))))
+            invokeid  (if idlocation
+                        (str parent-state-id "." #?(:clj  (java.util.UUID/randomUUID)
+                                                    :cljs (random-uuid)))
+                        id)
             params    (merge
                         (named-data env namelist)
                         param-map)]
-        (when idlocation
-          (sp/update! data-model env [(ops/assign idlocation invokeid)]))
+        (when (log/spy :info idlocation)
+          (sp/update! data-model env {:ops [(ops/assign idlocation invokeid)]}))
         (sp/start-invocation! processor env {:invokeid invokeid
                                              :type     type
                                              :params   params}))
       (do
         (log/error "Cannot start invocation. No processor for " invocation)
+        ;; Switch to internal event queue of working memory?
         (sp/send! event-queue {:event             :error.execution
                                :data              {:invocation-type type
                                                    :reason          "Not found"}
@@ -179,8 +181,10 @@
   (let [{:keys [type
                 processor
                 id idlocation]} (invocation-details env invocation)]
-    (when processor
-      (let [invokeid (if idlocation (sp/get-at data-model env idlocation) id)]
+    (when (log/spy :info processor)
+      (let [invokeid (if (log/spy :info idlocation)
+                       (log/spy :info (sp/get-at data-model env idlocation))
+                       (log/spy :info id))]
         (sp/stop-invocation! processor env {:invokeid invokeid
                                             :type     type})))))
 

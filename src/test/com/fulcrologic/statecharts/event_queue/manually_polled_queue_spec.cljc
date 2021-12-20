@@ -17,9 +17,9 @@
   (let [queue         (mpq/new-queue)
         my-session    1
         other-session 2
-        evt1          (new-event :A)
-        evt2          (new-event :B)
-        evt3          (new-event :C)
+        evt1          :A
+        evt2          :B
+        evt3          :C
         seen          (atom [])
         handler       (fn [evt] (swap! seen conj evt))]
 

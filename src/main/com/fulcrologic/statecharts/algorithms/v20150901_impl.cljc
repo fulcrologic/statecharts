@@ -376,7 +376,7 @@
         (doseq [i (sm/in-document-order machine (sm/invocations machine state-to-invoke))]
           (env/start-invocation! env i))))
     ;; Clear states to invoke
-    (swap! vwmem assoc ::sc/states-to-invoke #{}))
+    (vswap! vwmem assoc ::sc/states-to-invoke #{}))
   nil)
 
 (>defn run-many!
@@ -394,6 +394,7 @@
 (>defn cancel-active-invocations!
   [{::sc/keys [machine] :as env} state]
   [::sc/env ::sc/element-or-id => nil?]
+  (log/spy :trace "Stopping invocations for " state)
   (doseq [i (sm/invocations machine state)]
     (env/stop-invocation! env i))
   nil)
@@ -497,7 +498,7 @@
               (recur)))
           (exit-interpreter! machine))))))
 
-(defn cancel? [event] (= :EXIT (:node-type event)))
+(defn cancel? [event] (= :com.fulcrologic.statecharts.events/cancel (:name event)))
 
 (defn finalize!
   "Run the finalize executable content for an event from an external invocation."
@@ -508,7 +509,8 @@
     (in-state-context env parent
       (env/assign! env [:ROOT :_event] event)
       (when-let [finalize (sm/get-children machine invocation :finalize)]
-        (execute! (assoc env :_event event) finalize))
+        (doseq [f finalize]
+          (execute! (assoc env :_event event) f)))
       (env/delete! env :_event))))
 
 (>defn handle-external-invocations! [{::sc/keys [machine vwmem data-model event-queue] :as env}

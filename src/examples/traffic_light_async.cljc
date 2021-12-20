@@ -9,9 +9,9 @@
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.event-queue.core-async-queue :as aq]
+    [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
+    [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as loop]
     [com.fulcrologic.statecharts.simple :as simple]
-    [com.fulcrologic.statecharts.event-queue.core-async-queue :as aq]
     [com.fulcrologic.statecharts.util :refer [extend-key]]
     [com.fulcrologic.statecharts.events :as evts]))
 
@@ -30,19 +30,19 @@
       (transition {:event  :warn-pedestrians
                    :target :timing-ped-warning})
       (on-entry {}
-        (Send {:event (evts/new-event :warn-pedestrians)
+        (Send {:event :warn-pedestrians
                :delay flow-time})))
     (state {:id :timing-ped-warning}
       (transition {:event  :warn-traffic
                    :target :timing-yellow})
       (on-entry {}
-        (Send {:event (evts/new-event :warn-traffic)
+        (Send {:event :warn-traffic
                :delay flashing-white-time})))
     (state {:id :timing-yellow}
       (transition {:event  :swap-flow
                    :target :timing-flow})
       (on-entry {}
-        (Send {:event (evts/new-event :swap-flow)
+        (Send {:event :swap-flow
                :delay yellow-time})))))
 
 (defn traffic-signal [id initial]
@@ -102,10 +102,10 @@
 (comment
 
   (def session-id 1)
-  (def queue (aq/new-async-queue))
-  (def processor (simple/new-simple-machine traffic-lights {:event-queue queue}))
+  (def queue (mpq/new-queue))
+  (def processor (simple/new-simple-machine traffic-lights {::sc/event-queue queue}))
   (def wmem (let [a (atom {})] (add-watch a :printer (fn [_ _ _ n] (show-states n))) a))
-  (aq/run-event-loop! processor wmem session-id)            ; should see the state changing with the timers
+  (loop/run-event-loop! processor wmem session-id 100)      ; should see the state changing with the timers
 
   ;; Tell the state machine to exit abruptly
   (sp/send! queue {:target session-id

@@ -14,79 +14,62 @@
 
   The `process-next-event!` of this implementation processes all available events in a loop and then returns."
   (:require
+    [clojure.set :as set]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.util :refer [queue now-ms]]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
 
-(defrecord ManuallyPolledQueue [Qs delayed-events]
+(defrecord ManuallyPolledQueue [session-queues]
   sp/EventQueue
-  (send! [event-queue {:keys [event
-                              data
-                              send-id
-                              source-session-id
-                              target
-                              delay] :as send-request}]
-    (if-not (and
-              source-session-id
-              target
-              event)
-      (log/error "Cannot enqueue an event. The source-session-id, target, and event are required.")
-      (let [event (evts/new-event (cond-> {:name                  event
-                                           ::sc/source-session-id source-session-id
-                                           :type                  :external}
-                                    data (assoc :data data)))]
-        (if (and delay (number? delay) (pos? delay))
-          (let [trigger-time (+ (now-ms) delay)
-                evts         (sort-by ::sc/trigger-time
-                               (conj (get @delayed-events target [])
-                                 {:event            event
-                                  ::sc/send-id      send-id
-                                  ::sc/trigger-time trigger-time}))]
-            (log/trace "Queued delayed event" event)
-            (swap! delayed-events assoc target evts))
-          (do
-            (log/trace "Queued event" event)
-            (swap! Qs update target (fnil conj (queue)) event))))))
-  (cancel! [event-queue session-id send-id]
-    (if (and session-id send-id)
-      (do
-        (log/trace "Cancelling events with id" send-id)
-        (swap! delayed-events update session-id (fn [evts]
-                                                  (filterv
-                                                    #(not= send-id (::sc/send-id %))
-                                                    evts))))
-      (log/warn "Cannot cancel events with a nil session/send ID")))
-  (receive-events! [event-queue {:keys [target session-id] :as options} handler]
-    (let [session-id (or session-id target)]
-      (if-not session-id
-        (log/warn "Cannot receive events without the session-id")
-        (let [now  (now-ms)
-              [old-delayed _] (swap-vals! delayed-events update session-id
-                                (fn [evts] (remove #(< (::sc/trigger-time %) now) evts)))
-              [oldQs _] (swap-vals! Qs assoc session-id (queue))
-              evts (into (get oldQs session-id [])
-                     (comp
-                       (filter #(< (::sc/trigger-time %) now))
-                       (map :event))
-                     (get old-delayed session-id))]
-          (doseq [evt evts]
-            (try
-              (log/trace "Running handler on event" evt)
-              (handler evt)
-              (catch #?(:clj  Throwable
-                        :cljs :default) t
-                (log/error t "Handler threw an exception")))))))))
+  (send! [_ {:keys [event data target source-session-id send-id delay]}]
+    (let [target (or target source-session-id)
+          now    (now-ms)
+          tm     (if delay (+ now delay) (dec now))
+          event  (with-meta
+                   (evts/new-event {:name                  event
+                                    :data                  data
+                                    :type                  :external
+                                    ::sc/send-id           send-id
+                                    ::sc/source-session-id source-session-id})
+                   {::delivery-time tm})]
+      (swap! session-queues update target (fnil conj []) event)))
+  (cancel! [_ session-id send-id]
+    (swap! session-queues update session-id
+      (fn [q]
+        (vec
+          (remove
+            (fn [{event-send-id ::sc/send-id}] (= send-id event-send-id))
+            q)))))
+  (receive-events! [_ {:keys [session-id]} handler]
+    ;; Run the events whose delivery time is before "now" for session-id
+    (let [cutoff  (now-ms)
+          [old _] (swap-vals! session-queues
+                    (fn [qs]
+                      (let [to-defer (into []
+                                       (remove
+                                         (fn [evt] (<= (::delivery-time (meta evt)) cutoff))
+                                         (get qs session-id)))]
+                        (assoc qs session-id to-defer))))
+          to-send (filter
+                    (fn [evt] (<= (::delivery-time (meta evt)) cutoff))
+                    (get old session-id))]
+      (doseq [event to-send]
+        (try
+          (handler event)
+          (catch #?(:clj Throwable :cljs :default) e
+            (log/error e "Event handler threw an execption")))))))
 
 (defn new-queue []
-  (->ManuallyPolledQueue (atom {}) (atom {})))
+  (->ManuallyPolledQueue (atom {})))
 
 (defn next-event-time
   "Returns the time in ms since the epoch of the time of the next delayed event. Returns nil if there are currently
    none."
   [event-queue session-id]
   (-> event-queue
-    (get [:delayed-events session-id])
+    (get [:session-queues session-id])
     (first)
-    ::sc/trigger-time))
+    meta
+    ::delivery-time))
