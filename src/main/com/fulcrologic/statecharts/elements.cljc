@@ -14,6 +14,7 @@
   #?(:cljs (:require-macros [com.fulcrologic.statecharts.elements]))
   (:refer-clojure :exclude [send])
   (:require
+    [clojure.set :as set]
     [clojure.string :as str]
     [clojure.walk :as walk]
     com.fulcrologic.statecharts.specs
@@ -23,16 +24,36 @@
     [com.fulcrologic.statecharts.util :refer [genid]])
   #?(:clj (:import (clojure.lang IFn))))
 
+(def executable-content-types #{:raise :log :if :else-if :else :for-each :assign :script :send :cancel})
+(def legal-children
+  {:state      #{:on-entry :on-exit :transition :state :parallel :final :history :data-model :invoke}
+   :initial    #{:transition}
+   :final      #{:on-entry :on-exit :done-data}
+   :on-entry   executable-content-types
+   :on-exit    executable-content-types
+   :history    #{:transition}
+   :script     #{}
+   :parallel   #{:on-entry :on-exit :transition :state :parallel :history :data-model :invoke}
+   :transition executable-content-types})
+
 (defn new-element
   "Create a new element with the given `type` and `attrs`. Will auto-assign an ID if it is not supplied. Use
    this as a helper when creating new element types (e.g. executable content) to ensure consistency in operation."
   ([type {:keys [id] :as attrs}]
    (new-element type attrs nil))
   ([type {:keys [id] :as attrs} children]
-   (merge {:id (or id (genid (name type)))}
-     attrs
-     (cond-> {:node-type type}
-       (seq children) (assoc :children (vec (remove nil? children)))))))
+   (let [children-types (into #{}
+                          (map :node-type)
+                          children)
+         legal-types    (get legal-children type)]
+     (when-let [bad-types (and (set? legal-types)
+                            (seq (set/difference children-types legal-types)))]
+       (throw (ex-info (str "Illegal children of " type " with attributes " attrs
+                         ". That node cannot have children of type(s): " bad-types) {})))
+     (merge {:id (or id (genid (name type)))}
+       attrs
+       (cond-> {:node-type type}
+         (seq children) (assoc :children (vec (remove nil? children))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Core Constructs

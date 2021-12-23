@@ -12,7 +12,8 @@
     [com.fulcrologic.statecharts.elements :as elements]
     [com.fulcrologic.statecharts.util :refer [queue genid]]
     [clojure.spec.alpha :as s]
-    [taoensso.timbre :as log])
+    [taoensso.timbre :as log]
+    [clojure.set :as set])
   #?(:clj (:import (java.util UUID))))
 
 ;; I did try to translate all that imperative code to something more functional...got really tiring, and generated
@@ -86,30 +87,37 @@
   "
   [{:keys [initial name binding] :as attrs} & children]
   [map? (s/* ::sc/element) => ::sc/machine]
-  (let [node         (assoc attrs
-                       :id :ROOT
-                       :binding (or binding :early)
-                       :node-type :machine)
-        children     (assign-parents node children)
-        node         (assoc node :children (vec children))
-        ids-in-order (ids-in-document-order node)
-        node         (assoc node
-                       :children (mapv :id children)
-                       ::sc/elements-by-id (reduce
-                                             (fn [acc {:keys [id children] :as n}]
-                                               (let [n (cond-> n
-                                                         (seq children) (assoc :children
-                                                                          (mapv :id children)))]
-                                                 (cond
-                                                   (= :ROOT id) acc
-                                                   (and id (contains? acc id))
-                                                   (throw (ex-info (str "Duplicate element ID on machine: " id) {}))
-                                                   id (assoc acc id n)
-                                                   :else acc)))
-                                             {}
-                                             (tree-seq :children :children node))
-                       :id :ROOT
-                       ::sc/ids-in-document-order ids-in-order)]
+  (let [node             (assoc attrs
+                           :id :ROOT
+                           :binding (or binding :early)
+                           :node-type :machine)
+        children         (assign-parents node children)
+        node             (assoc node :children (vec children))
+        ids-in-order     (ids-in-document-order node)
+        node             (assoc node
+                           :children (mapv :id children)
+                           ::sc/elements-by-id (reduce
+                                                 (fn [acc {:keys [id children] :as n}]
+                                                   (let [n (cond-> n
+                                                             (seq children) (assoc :children
+                                                                              (mapv :id children)))]
+                                                     (cond
+                                                       (= :ROOT id) acc
+                                                       (and id (contains? acc id))
+                                                       (throw (ex-info (str "Duplicate element ID on machine: " id) {}))
+                                                       id (assoc acc id n)
+                                                       :else acc)))
+                                                 {}
+                                                 (tree-seq :children :children node))
+                           :id :ROOT
+                           ::sc/ids-in-document-order ids-in-order)
+        node-types       (into #{}
+                           (map :node-type)
+                           children)
+        legal-node-types #{:state :parallel :final :data-model :script}
+        bad-nodes        (set/difference node-types legal-node-types)]
+    (when (seq bad-nodes)
+      (throw (ex-info (str "Illegal top-level node. Root node cannot have: " bad-nodes " elements.") {})))
     node))
 
 (def scxml
