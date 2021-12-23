@@ -123,7 +123,17 @@
      delivered, processed, and safe to remove from the event queue. The format of `message` will depend on the
      `type` used in the `send`. For statechart session events, these should be in the format created by `events/new-event`.
 
-     `process-next-event!` function MAY block waiting for the next event, and the `options` map MAY allow you to
+     The `message` passed to the handler MUST have the format of the `events/new-event` constructor, but MAY include
+     any additional (preferably namespaced) keys to pass along additional information that the handler might
+     find useful. For example, a queue capable of a transactional nature (say, implemented with an SQL database)
+     might pass the database connection to the handler so it can participate in the transaction that was used to
+     pull the event from the queue as part of the algorithm to ensure exactly-once event delivery.
+
+     This function MAY allow broader filtering options. For example, the user of the queue might be trying to find
+     all undelivered events to a specific target of all types, or all targets of a specific type. See the
+     notes on how the options are used and interpreted in the specific event queue implementation you choose.
+
+     This function MAY block waiting for the next event, and the `options` map MAY allow you to
      pass additional parameters to affect this behavior. Your selected event queue implementation's
      documentation should be consulted for the correct way to run your event loop.
 
