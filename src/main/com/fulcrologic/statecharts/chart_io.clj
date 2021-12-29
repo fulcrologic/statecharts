@@ -23,6 +23,8 @@
                               (keyword (first targets))
                               (mapv keyword targets))))})
 
+(defn snake-case [n] (str/replace n #"[-.]" "_"))
+
 (defn- element->call
   ([elem]
    (element->call elem {}))
@@ -130,11 +132,11 @@
             uml-target      (if history? (sm/get-parent chart target) target)
             condition-label (and cond (or condition "???"))
             labeled?        (or event condition-label)]
-        (str (indent nesting-level) source-name " --> " (some-> uml-target name)
+        (str (indent nesting-level) (snake-case source-name) " --> " (some-> uml-target name snake-case)
           (clojure.core/cond deep? "[H*]" history? "[H]" :else "")
           (when labeled? " : ")
-          (when event (str (name event)))
-          (when condition-label (str " [" condition-label "]"))
+          (when event (-> event (name) snake-case))
+          (when condition-label (str " [" (snake-case condition-label) "]"))
           "\n")))
     target))
 
@@ -184,27 +186,27 @@
   (let [choice-nodes (into [] (filter (partial sm/condition-node? chart)) children)
         child-level  (inc nesting-level)]
     (str
-      (indent nesting-level) "state " (name id) " {\n"
+      (indent nesting-level) "state " (-> id (name) snake-case) " {\n"
       (executable-content chart element)
       ;; Have to pre-declare styles
       (str/join "\n"
         (map
           (fn [cid]
             (let [{:keys [id]} (sm/element chart cid)]
-              (str (indent child-level) "state " (some-> id name) " <<choice>>\n")))
+              (str (indent child-level) "state " (some-> id name snake-case) " <<choice>>\n")))
           choice-nodes))
       (str/join "" (render-children chart children child-level))
       (plantuml-transitions chart element child-level)
       (indent nesting-level) "}\n")))
 
 (defmethod write-element :parallel [chart {:keys [id children] :as element} nesting-level]
-  (str (indent nesting-level) "state " (name id) " {\n"
+  (str (indent nesting-level) "state " (some-> id (name) snake-case) " {\n"
     (str/join (str (indent (inc nesting-level)) "--\n")
       (render-children chart children (inc nesting-level)))
     (indent nesting-level) "}\n"))
 
 (defmethod write-element :atomic-state [chart {:keys [id node-type children] :as element} nesting-level]
-  (let [state-decl (str (indent nesting-level) "state " (some-> id name) "\n")]
+  (let [state-decl (str (indent nesting-level) "state " (some-> id name snake-case) "\n")]
     (str
       state-decl
       (executable-content chart element)
@@ -217,7 +219,7 @@
     "}\n"))
 
 (defmethod write-element :history [chart {:keys [node-type deep? children] :as element} nesting-level]
-  (let [p                  (->> element (sm/get-parent chart) name)
+  (let [p                  (->> element (sm/get-parent chart) name snake-case)
         label              (str p (if deep? "[H*]" "[H]"))
         default-transition (some->> element
                              (sm/transitions chart)
