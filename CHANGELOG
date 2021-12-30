@@ -1,3 +1,14 @@
+1.0.0-alpha3
+
+* Various documentation updates
+* MINOR API (breaking) change: delete op for data model now takes varargs instead of sequence.
+* Improved validation
+* Added is-in-state? (In) predicates to environment ns
+* Added Flat working memory data model (no scoping)
+* Fixed processing of send nodes so that `delay` `type` and `target` can be expressions
+  for the execution model. You can still use `delayexpr` and such to differentiate if
+  necessary.
+
 1.0.0-alpha2
 
 * Renamed protocol DataModel/transact! to `update!`, and changed argument to take :ops instead of :txn key.
