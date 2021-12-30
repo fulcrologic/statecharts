@@ -34,7 +34,7 @@
    See your data model implementation for the interpretation (and support) of the path vectors. ALL data models
    will support single keywords as \"the current context or scope\".
   "
-  [paths]
+  [& paths]
   {:op    :delete
    :paths (vec paths)})
 
