@@ -39,6 +39,19 @@
   [::sc/env => (? ::sc/session-id)]
   (some-> vwmem deref ::sc/session-id))
 
+(>defn is-in-state?
+  "Returns the session ID from an env."
+  [{::sc/keys [vwmem] :as env} state-id]
+  [::sc/env ::sc/id => boolean?]
+  (let [active-states (some-> vwmem deref ::sc/configuration)]
+    (contains? active-states state-id)))
+
+(def In
+  "[env state-id]
+
+   Alias for `is-in-state?`"
+  is-in-state?)
+
 (>defn context-element-id
   "Returns the ID of the context (state of interest for the current operation) from an env, if set."
   [env]
