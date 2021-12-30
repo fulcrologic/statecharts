@@ -87,6 +87,7 @@
   "Returns `value` if not nil, or runs `expr` and returns that as the value. Returns nil if both are nil."
   [{::sc/keys [execution-model] :as env} value expr]
   (cond
+    (fn? value) (sp/run-expression! execution-model env value)
     (not (nil? value)) value
     (not (nil? expr)) (sp/run-expression! execution-model env expr)
     :else nil))
