@@ -203,7 +203,7 @@
     (is has-delay?)
     true))
 
-(defn target-states
+(defn configuration-for-states
   "Returns a set of states that *should* represent a valid configuration of `machine` in the testing
    env AS LONG AS you list a valid set of leaf states. For example, if you have a top-level parallel state,
    then `states` MUST contain a valid atomic state for each sub-region.

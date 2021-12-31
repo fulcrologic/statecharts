@@ -453,7 +453,7 @@ Here is an example test (written with fulcro-spec):
     [com.fulcrologic.statecharts.elements :refer [state on-entry]
     [com.fulcrologic.statecharts.execution-model.lambda :refer [new-execution-model]]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.testing :as testing :refer [in? ran? will-send target-states]]
+    [com.fulcrologic.statecharts.testing :as testing :refer [in? ran? will-send configuration-for-states]]
     [fulcro-spec.core :refer [specification assertions component provided when-mocking! =>]]
     [clojure.set :as set]))
 
@@ -482,13 +482,51 @@ Here is an example test (written with fulcro-spec):
         (testing/in? env :state/next) => true))))
 -----
 
+== Mocking
+
 The mocking (set when creating the testing env) is a simple map (e.g. `{is-tuesday? true}`). The keys of the map
 must exactly match the expression in question (e.g. use `defn` to make them (as shown above), and then use those as the
 cond/expr so you can match on it). The values in the mocking map can be literal values OR functions. If they are functions
 then they will be passed the `env`, which will include the special key `:ncalls` that will have the count (inclusive) of
 the number of times that expression has run since the test env was created.
 
+== Event Sends/Cancels
+
 The sends and cancels will also be auto-recorded. See the docstrings in the testing namespace for more information.
+
+== Starting in a Specific Configuration
+
+Most of your tests will need the machine to be in some particular state as part of your setup. You *could* get there
+by triggering a sequence of events while having all of the mocks in perfect condition, but this creates a fragile
+test where changes to the structure of the chart break a bunch of tests. The testing helpers include
+`(testing/goto-configuration! env data-ops config)` that allows you to set up the data model and configuration.
+
+The `data-ops` is a vector of Data Model operations (e.g. ops/assign) to run on the data model. and `config` is
+a valid configuration (set of active states) for the chart.
+Unfortunately, the configuration of a statechart is non-trivial (it must include all active states in a complex
+hierarchy) and will change when you refactor the machine. So, another helper `testing/configuration-for-states` allows you
+to get a list of *all* of the states that would be active *given* the deepest desired leaf state(s).
+
+In a chart with no parallel states, there will only ever be one leaf, but when parallel states are active you must
+list a valid leaf from each region.
+
+Thus, a common test setup will look like this:
+
+[source]
+-----
+(defn config [] {:machine some-statechart})
+
+(specification "Starting in Some State"
+  (let [env (testing/new-testing-env (config) {})]
+
+    ;; assume a top-level parallel node, with two sub-regions. `configuration-for-states` will populate all of the necessary
+    ;; ancestor states
+    (testing/goto-configuration! env [] (configuration-for-states env #{:state.region1/leaf :state.region2/leaf}))
+    (testing/run-events! env :event/expired)
+
+    ;; assertions
+    ))
+-----
 
 = Relationship to SCXML
 

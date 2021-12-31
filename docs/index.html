@@ -563,10 +563,18 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_invocations">2.9. Invocations</a></li>
 </ul>
 </li>
-<li><a href="#_relationship_to_scxml">3. Relationship to SCXML</a>
+<li><a href="#_custom_executable_content">3. Custom Executable Content</a></li>
+<li><a href="#_testing">4. Testing</a>
 <ul class="sectlevel2">
-<li><a href="#_related_work">3.1. Related Work</a></li>
-<li><a href="#_conformance">3.2. Conformance</a></li>
+<li><a href="#_mocking">4.1. Mocking</a></li>
+<li><a href="#_event_sendscancels">4.2. Event Sends/Cancels</a></li>
+<li><a href="#_starting_in_a_specific_configuration">4.3. Starting in a Specific Configuration</a></li>
+</ul>
+</li>
+<li><a href="#_relationship_to_scxml">5. Relationship to SCXML</a>
+<ul class="sectlevel2">
+<li><a href="#_related_work">5.1. Related Work</a></li>
+<li><a href="#_conformance">5.2. Conformance</a></li>
 </ul>
 </li>
 </ul>
@@ -1254,8 +1262,13 @@ data model to an external database.</p>
 <p>See the docstrings in the <code>protocols</code> namespace.</p>
 </div>
 <div class="paragraph">
-<p>There is a predefined <code>WorkingMemoryDataModel</code> that stores scoped data for states within the session working memory,
-allowing the data, for example, to be persisted with the state of a running session when pausing it for later revival.</p>
+<p>There is a predefined <code>WorkingMemoryDataModel</code> in <code>data-model.working-memory-data-model</code> that stores scoped data for
+states within the session working memory, allowing the data, for example, to be persisted with the state of
+a running session when pausing it for later revival.</p>
+</div>
+<div class="paragraph">
+<p>There is also a <code>FlatWorkingMemoryDataModel</code> (same ns) that puts all data into a single scope (it can still be a
+nested data structure).</p>
 </div>
 </div>
 <div class="sect2">
@@ -1355,7 +1368,203 @@ still under construction at the time of this writing. Consult the source in case
 </div>
 </div>
 <div class="sect1">
-<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">3. Relationship to SCXML</a></h2>
+<h2 id="_custom_executable_content"><a class="anchor" href="#_custom_executable_content"></a><a class="link" href="#_custom_executable_content">3. Custom Executable Content</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The SCXML standard defines a number of elements it terms "Executable Content", meaning child nodes that
+do some action. For example, <code>send</code> is executable content of this <code>on-entry</code> node:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(state {}
+  (on-entry {}
+     (<span class="keyword">send</span> <span class="keyword">..</span><span class="keyword">.</span>)))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The standard allows for a compliant implementation to include extra executable content, but
+this library takes that one step further and allows <strong>you</strong> to define new executable content elements.</p>
+</div>
+<div class="paragraph">
+<p>Each node in the data graph of the statecharts in this library (which are just nested maps)
+has a <code>:node-type</code> entry (in the case of send, its value is <code>:send</code>). The implementation of v20150901
+allows you to extend the set of node types that "do things" as executable content. All you need to do
+is create a map that has a new (preferably namespaced) node type, and then create a defmethod that
+handles that type:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">my-node-types</span>
+  (<span class="symbol">:require</span>
+    [com.fulcrologic.statecharts.algorithms.v20150901-impl <span class="symbol">:as</span> impl]))
+
+(<span class="keyword">defn</span> <span class="function">my-exec</span> [opts]
+  (<span class="keyword">merge</span> opts {<span class="symbol">:node-type</span> <span class="symbol">::my-exec</span>}))
+
+(<span class="keyword">defmethod</span> <span class="function">impl/execute-element-content!</span> <span class="symbol">::my-exec</span> [env element] <span class="keyword">..</span><span class="keyword">.</span>)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and you can use your <code>(my-exec {&#8230;&#8203;})</code> anywhere executable content is allowed in the state chart. The
+helper function <code>impl/execute!</code> should be used to run any child nodes (if your node allows other
+executable children).</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">my-node-types</span>
+  (<span class="symbol">:require</span>
+    [com.fulcrologic.statecharts.algorithms.v20150901-impl <span class="symbol">:as</span> impl]))
+
+(<span class="keyword">defn</span> <span class="function">log-and-run</span> [&amp; children]
+  (<span class="keyword">merge</span> opts {<span class="symbol">:node-type</span> <span class="symbol">::log-and-run</span>
+               <span class="symbol">:children</span> (<span class="keyword">vec</span> children)}))
+
+(<span class="keyword">defmethod</span> <span class="function">impl/execute-element-content!</span> <span class="symbol">::log-and-run</span> [env element]
+  (log/debug <span class="string"><span class="delimiter">&quot;</span><span class="content">Running: </span><span class="delimiter">&quot;</span></span> element)
+  <span class="comment">;; The `execute!` method will run executable children of an element (which will call execute-element-content! on</span>
+  <span class="comment">;; each of them)</span>
+  (impl/execute! env element))
+
+<span class="comment">;; ...</span>
+
+(machine {}
+  (state {}
+    (log-and-run
+       (<span class="keyword">send</span> {})
+       (log {})
+       (raise {}))))</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_testing"><a class="anchor" href="#_testing"></a><a class="link" href="#_testing">4. Testing</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The main interface to this library is pure and functional, which makes the general job of testing easier in some cases,
+but the fact is that you often need to walk a state machine through several steps in order to get it <strong>into</strong> the
+starting configuration to test.</p>
+</div>
+<div class="paragraph">
+<p>The fact that nodes can execute (possibly side-effecting) code also means that when testing it is usually desirable to
+eliminate these side effects through some kind of stubbing mechanism.</p>
+</div>
+<div class="paragraph">
+<p>Fortunately the design of the library makes it trivial to plug in a mock execution model, mock event queue,
+and a test data model, which allows you to easily exercise a state machine in tests in ways that do not
+side effect in an uncontrolled fashion.</p>
+</div>
+<div class="paragraph">
+<p>The <code>com.fulcrologic.statecharts.testing</code> namespace includes mocks for all of the protocols, allows for
+a pluggable data model (defaults to flat working memory), and has pre-written helpers and predicates.</p>
+</div>
+<div class="paragraph">
+<p>The mock execution model allows you to easily set up specific results for expressions and conditions that
+would normally be run.</p>
+</div>
+<div class="paragraph">
+<p>Here is an example test (written with fulcro-spec):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">statecharts-spec</span>
+  (<span class="symbol">:require</span>
+    [app.my-machine <span class="symbol">:refer</span> [some-statechart]]
+    [com.fulcrologic.statecharts.algorithms.v20150901 <span class="symbol">:refer</span> [new-processor]]
+    [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
+    [com.fulcrologic.statecharts.state-machine <span class="symbol">:refer</span> [machine]]
+    [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state on-entry]
+    [com.fulcrologic.statecharts.execution-model.lambda <span class="symbol">:refer</span> [new-execution-model]]
+    [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
+    [com.fulcrologic.statecharts.testing <span class="symbol">:as</span> testing <span class="symbol">:refer</span> [in? ran? will-send configuration-for-states]]
+    [fulcro-spec.core <span class="symbol">:refer</span> [specification assertions component provided when-mocking! =&gt;]]
+    [clojure.set <span class="symbol">:as</span> <span class="keyword">set</span>]))
+
+(<span class="keyword">defn</span> <span class="function">is-tuesday?</span> [env data] <span class="keyword">..</span><span class="keyword">.</span>)
+(<span class="keyword">def</span> <span class="function">some-statechart</span>
+  (machine {}
+    (state {<span class="symbol">:id</span> <span class="symbol">:state/start</span>}
+      (transition {<span class="symbol">:cond</span> is-tuesday?
+                   <span class="symbol">:event</span> <span class="symbol">:event/trigger</span>
+                   <span class="symbol">:target</span> <span class="symbol">:state/next</span>}))
+    (state {<span class="symbol">:id</span> <span class="symbol">:state/next</span>})))
+
+(<span class="keyword">defn</span> <span class="function">config</span> [] {<span class="symbol">:machine</span> some-statechart})
+
+(specification <span class="string"><span class="delimiter">&quot;</span><span class="content">My Machine</span><span class="delimiter">&quot;</span></span>
+  (component <span class="string"><span class="delimiter">&quot;</span><span class="content">When it is tuesday</span><span class="delimiter">&quot;</span></span>
+    (<span class="keyword">let</span> [env (testing/new-testing-env (config) {is-tuesday? <span class="predefined-constant">true</span>})]
+
+      (testing/start! env session-id)
+      (testing/run-events! env <span class="symbol">:event/trigger</span>)
+
+      (assertions
+        <span class="string"><span class="delimiter">&quot;</span><span class="content">Checks to see that it is tuesday</span><span class="delimiter">&quot;</span></span>
+        (testing/ran? env is-tuesday?) =&gt; <span class="predefined-constant">true</span>
+        <span class="string"><span class="delimiter">&quot;</span><span class="content">Goes to the next state</span><span class="delimiter">&quot;</span></span>
+        (testing/in? env <span class="symbol">:state/next</span>) =&gt; <span class="predefined-constant">true</span>))))</code></pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_mocking"><a class="anchor" href="#_mocking"></a><a class="link" href="#_mocking">4.1. Mocking</a></h3>
+<div class="paragraph">
+<p>The mocking (set when creating the testing env) is a simple map (e.g. <code>{is-tuesday? true}</code>). The keys of the map
+must exactly match the expression in question (e.g. use <code>defn</code> to make them (as shown above), and then use those as the
+cond/expr so you can match on it). The values in the mocking map can be literal values OR functions. If they are functions
+then they will be passed the <code>env</code>, which will include the special key <code>:ncalls</code> that will have the count (inclusive) of
+the number of times that expression has run since the test env was created.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_event_sendscancels"><a class="anchor" href="#_event_sendscancels"></a><a class="link" href="#_event_sendscancels">4.2. Event Sends/Cancels</a></h3>
+<div class="paragraph">
+<p>The sends and cancels will also be auto-recorded. See the docstrings in the testing namespace for more information.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_starting_in_a_specific_configuration"><a class="anchor" href="#_starting_in_a_specific_configuration"></a><a class="link" href="#_starting_in_a_specific_configuration">4.3. Starting in a Specific Configuration</a></h3>
+<div class="paragraph">
+<p>Most of your tests will need the machine to be in some particular state as part of your setup. You <strong>could</strong> get there
+by triggering a sequence of events while having all of the mocks in perfect condition, but this creates a fragile
+test where changes to the structure of the chart break a bunch of tests. The testing helpers include
+<code>(testing/goto-configuration! env data-ops config)</code> that allows you to set up the data model and configuration.</p>
+</div>
+<div class="paragraph">
+<p>The <code>data-ops</code> is a vector of Data Model operations (e.g. ops/assign) to run on the data model. and <code>config</code> is
+a valid configuration (set of active states) for the chart.
+Unfortunately, the configuration of a statechart is non-trivial (it must include all active states in a complex
+hierarchy) and will change when you refactor the machine. So, another helper <code>testing/configuration-for-states</code> allows you
+to get a list of <strong>all</strong> of the states that would be active <strong>given</strong> the deepest desired leaf state(s).</p>
+</div>
+<div class="paragraph">
+<p>In a chart with no parallel states, there will only ever be one leaf, but when parallel states are active you must
+list a valid leaf from each region.</p>
+</div>
+<div class="paragraph">
+<p>Thus, a common test setup will look like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">defn</span> <span class="function">config</span> [] {<span class="symbol">:machine</span> some-statechart})
+
+(specification <span class="string"><span class="delimiter">&quot;</span><span class="content">Starting in Some State</span><span class="delimiter">&quot;</span></span>
+  (<span class="keyword">let</span> [env (testing/new-testing-env (config) {})]
+
+    <span class="comment">;; assume a top-level parallel node, with two sub-regions. `configuration-for-states` will populate all of the necessary</span>
+    <span class="comment">;; ancestor states</span>
+    (testing/goto-configuration! env [] (configuration-for-states env #{<span class="symbol">:state.region1/leaf</span> <span class="symbol">:state.region2/leaf</span>}))
+    (testing/run-events! env <span class="symbol">:event/expired</span>)
+
+    <span class="comment">;; assertions</span>
+    ))</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">5. Relationship to SCXML</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>This library&#8217;s internal implementation follows (as closely as possible) the official
@@ -1424,7 +1633,7 @@ values in the data and excution model):</p>
 <code>script</code> tags to begin with.</p>
 </div>
 <div class="sect2">
-<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">3.1. Related Work</a></h3>
+<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">5.1. Related Work</a></h3>
 <div class="paragraph">
 <p>The primary alternative to this library is <a href="https://github.com/lucywang000/clj-statecharts">clj-statecharts</a>,
 which is a fine library modelled after xstate.</p>
@@ -1476,7 +1685,7 @@ Fulcro UI and I/O).</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">3.2. Conformance</a></h3>
+<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">5.2. Conformance</a></h3>
 <div class="paragraph">
 <p>This library was written using the reference implementation described in
 the <a href="https://www.w3.org/TR/scxml">SCXML standard</a>, but without the requirement
@@ -1500,7 +1709,7 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2021-12-19 15:00:08 -0800
+Last updated 2021-12-31 10:24:19 -0800
 </div>
 </div>
 </body>
