@@ -197,15 +197,23 @@
         :else (sp/update! data-model env {:ops (ops/set-map-ops {})})))
     nil))
 
+(declare execute!)
+
 (defmulti execute-element-content!
   "Multimethod. Extensible mechanism for running the content of elements on the state machine. Dispatch by :node-type
    of the element itself."
   (fn [env element] (:node-type element)))
 
-(defmethod execute-element-content! :default [{::sc/keys [execution-model] :as env} {:keys [node-type expr] :as element}]
-  (if (nil? expr)
-    (log/warn "No implementation to run content of " element)
+(defmethod execute-element-content! :default [{::sc/keys [execution-model] :as env} {:keys [children expr] :as element}]
+  (if (and (nil? expr) (empty? children))
+    (log/warn "There was no custom implementation to run content of " element)
     (sp/run-expression! execution-model env expr)))
+
+(defmethod execute-element-content! :on-entry [{::sc/keys [execution-model] :as env} {:keys [children expr] :as element}]
+  (execute! env element))
+
+(defmethod execute-element-content! :on-exit [{::sc/keys [execution-model] :as env} {:keys [children expr] :as element}]
+  (execute! env element))
 
 (defmethod execute-element-content! :log [{::sc/keys [execution-model] :as env} {:keys [node-type expr] :as element}]
   (log/debug (sp/run-expression! execution-model env expr)))
@@ -221,6 +229,9 @@
 (defmethod execute-element-content! :send [env {:keys [id event delay] :as element}]
   (env/send! env element))
 
+(defmethod execute-element-content! :cancel [env {:keys [sendid send-id] :as element}]
+  (env/cancel-event! env (or sendid send-id)))
+
 (>defn execute!
   "Run the executable content (immediate children) of s."
   [{::sc/keys [machine] :as env} s]
@@ -232,6 +243,7 @@
         (let [ele (sm/element machine n)]
           (execute-element-content! env ele))
         (catch #?(:clj Throwable :cljs :default) t
+          ;; TODO: Proper error event for execution problem
           (log/error t "Unexpected exception in content")))))
   nil)
 
@@ -250,6 +262,7 @@
   [{::sc/keys [machine vwmem] :as env}]
   [::sc/env => nil?]
   (let [[states-to-enter
+         ;; TODO: Verify states-for-default-entry is kept around correct amount of time!
          states-for-default-entry
          default-history-content] (compute-entry-set! env)]
     (doseq [s (sm/in-entry-order machine states-to-enter)
@@ -589,26 +602,27 @@
 (defn configuration-problems
   "Returns a list of problems with the current machine's working-memory configuration (active states), if there are
    any."
-  [{::sc/keys [machine vwmem]}]
-  (let [configuration          (::sc/configuration @vwmem)
+  [machine working-memory]
+  (let [configuration          (::sc/configuration working-memory)
         top-states             (set (sm/child-states machine machine))
         active-top-states      (set/intersection top-states configuration)
         atomic-states          (filter #(sm/atomic-state? machine %) configuration)
         necessary-ancestors    (into #{} (mapcat (fn [s] (sm/get-proper-ancestors machine s)) atomic-states))
         compound-states        (filter #(sm/compound-state? machine %) configuration)
-        broken-compound-states (for [cs compound-states
-                                     :let [cs-children (sm/child-states machine cs)]
-                                     :when (not= 1 (count (set/intersection configuration cs-children)))]
-                                 cs)
-        active-parallel-states (filter #(sm/parallel-state? machine %) configuration)
+        broken-compound-states (set
+                                 (for [cs compound-states
+                                       :let [cs-children (set (sm/child-states machine cs))]
+                                       :when (not= 1 (count (set/intersection configuration cs-children)))]
+                                   cs))
+        active-parallel-states (set (filter #(sm/parallel-state? machine %) configuration))
         broken-parallel-states (for [cs active-parallel-states
-                                     :let [cs-children (sm/child-states machine cs)]
+                                     :let [cs-children (set (sm/child-states machine cs))]
                                      :when (not= cs-children (set/intersection configuration cs-children))]
                                  cs)]
     (cond-> []
       (not= 1 (count active-top-states)) (conj "The number of top-level active states != 1")
       (zero? (count atomic-states)) (conj "There are zero active atomic states")
-      (not= (set/intersection configuration necessary-ancestors) necessary-ancestors) (conj (str "Some active states are missing their necessary ancestors"
+      (not= (set/intersection configuration necessary-ancestors) necessary-ancestors) (conj (str "Some active states are missing their necessary ancestors "
                                                                                               necessary-ancestors " should all be in " configuration))
       (seq broken-compound-states) (conj (str "The compound states " broken-compound-states " should have exactly one child active (each) in " configuration))
       (seq broken-parallel-states) (conj (str "The parallel states " broken-parallel-states " should have all of their children in " configuration)))))

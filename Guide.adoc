@@ -277,8 +277,12 @@ data model to an external database.
 
 See the docstrings in the `protocols` namespace.
 
-There is a predefined `WorkingMemoryDataModel` that stores scoped data for states within the session working memory,
-allowing the data, for example, to be persisted with the state of a running session when pausing it for later revival.
+There is a predefined `WorkingMemoryDataModel` in `data-model.working-memory-data-model` that stores scoped data for
+states within the session working memory, allowing the data, for example, to be persisted with the state of
+a running session when pausing it for later revival.
+
+There is also a `FlatWorkingMemoryDataModel` (same ns) that puts all data into a single scope (it can still be a
+nested data structure).
 
 == Execution Models
 
@@ -352,6 +356,139 @@ NOTE: The implementation of the invocation subsystem will define how these servi
 still under construction at the time of this writing. Consult the source in case the docs are out of date).
 
 Exiting the `:BillingGracePeriod` state will cancel the timer so that no further `:timer` events are sent.
+
+= Custom Executable Content
+
+The SCXML standard defines a number of elements it terms "Executable Content", meaning child nodes that
+do some action. For example, `send` is executable content of this `on-entry` node:
+
+[source]
+-----
+(state {}
+  (on-entry {}
+     (send ...)))
+-----
+
+The standard allows for a compliant implementation to include extra executable content, but
+this library takes that one step further and allows *you* to define new executable content elements.
+
+Each node in the data graph of the statecharts in this library (which are just nested maps)
+has a `:node-type` entry (in the case of send, its value is `:send`). The implementation of v20150901
+allows you to extend the set of node types that "do things" as executable content. All you need to do
+is create a map that has a new (preferably namespaced) node type, and then create a defmethod that
+handles that type:
+
+[source]
+-----
+(ns my-node-types
+  (:require
+    [com.fulcrologic.statecharts.algorithms.v20150901-impl :as impl]))
+
+(defn my-exec [opts]
+  (merge opts {:node-type ::my-exec}))
+
+(defmethod impl/execute-element-content! ::my-exec [env element] ...)
+-----
+
+and you can use your `(my-exec {...})` anywhere executable content is allowed in the state chart. The
+helper function `impl/execute!` should be used to run any child nodes (if your node allows other
+executable children).
+
+[source]
+-----
+(ns my-node-types
+  (:require
+    [com.fulcrologic.statecharts.algorithms.v20150901-impl :as impl]))
+
+(defn log-and-run [& children]
+  (merge opts {:node-type ::log-and-run
+               :children (vec children)}))
+
+(defmethod impl/execute-element-content! ::log-and-run [env element]
+  (log/debug "Running: " element)
+  ;; The `execute!` method will run executable children of an element (which will call execute-element-content! on
+  ;; each of them)
+  (impl/execute! env element))
+
+;; ...
+
+(machine {}
+  (state {}
+    (log-and-run
+       (send {})
+       (log {})
+       (raise {}))))
+-----
+
+= Testing
+
+The main interface to this library is pure and functional, which makes the general job of testing easier in some cases,
+but the fact is that you often need to walk a state machine through several steps in order to get it *into* the
+starting configuration to test.
+
+The fact that nodes can execute (possibly side-effecting) code also means that when testing it is usually desirable to
+eliminate these side effects through some kind of stubbing mechanism.
+
+Fortunately the design of the library makes it trivial to plug in a mock execution model, mock event queue,
+and a test data model, which allows you to easily exercise a state machine in tests in ways that do not
+side effect in an uncontrolled fashion.
+
+The `com.fulcrologic.statecharts.testing` namespace includes mocks for all of the protocols, allows for
+a pluggable data model (defaults to flat working memory), and has pre-written helpers and predicates.
+
+The mock execution model allows you to easily set up specific results for expressions and conditions that
+would normally be run.
+
+Here is an example test (written with fulcro-spec):
+
+[source]
+-----
+(ns statecharts-spec
+  (:require
+    [app.my-machine :refer [some-statechart]]
+    [com.fulcrologic.statecharts.algorithms.v20150901 :refer [new-processor]]
+    [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.state-machine :refer [machine]]
+    [com.fulcrologic.statecharts.events :refer [new-event]]
+    [com.fulcrologic.statecharts.elements :refer [state on-entry]
+    [com.fulcrologic.statecharts.execution-model.lambda :refer [new-execution-model]]
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [com.fulcrologic.statecharts.testing :as testing :refer [in? ran? will-send target-states]]
+    [fulcro-spec.core :refer [specification assertions component provided when-mocking! =>]]
+    [clojure.set :as set]))
+
+(defn is-tuesday? [env data] ...)
+(def some-statechart
+  (machine {}
+    (state {:id :state/start}
+      (transition {:cond is-tuesday?
+                   :event :event/trigger
+                   :target :state/next}))
+    (state {:id :state/next})))
+
+(defn config [] {:machine some-statechart})
+
+(specification "My Machine"
+  (component "When it is tuesday"
+    (let [env (testing/new-testing-env (config) {is-tuesday? true})]
+
+      (testing/start! env session-id)
+      (testing/run-events! env :event/trigger)
+
+      (assertions
+        "Checks to see that it is tuesday"
+        (testing/ran? env is-tuesday?) => true
+        "Goes to the next state"
+        (testing/in? env :state/next) => true))))
+-----
+
+The mocking (set when creating the testing env) is a simple map (e.g. `{is-tuesday? true}`). The keys of the map
+must exactly match the expression in question (e.g. use `defn` to make them (as shown above), and then use those as the
+cond/expr so you can match on it). The values in the mocking map can be literal values OR functions. If they are functions
+then they will be passed the `env`, which will include the special key `:ncalls` that will have the count (inclusive) of
+the number of times that expression has run since the test env was created.
+
+The sends and cancels will also be auto-recorded. See the docstrings in the testing namespace for more information.
 
 = Relationship to SCXML
 
