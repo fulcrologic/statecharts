@@ -89,10 +89,10 @@
       (fn [send]
         (let [sent (select-keys send (keys req))]
           (= sent req)))
-      sends-seen))
+      @sends-seen))
   (cancelled? [_ session-id send-id]
-    (has-element? cancels-seen {:send-id    send-id
-                                :session-id session-id}))
+    (has-element? @cancels-seen {:send-id    send-id
+                                 :session-id session-id}))
   sp/EventQueue
   (send! [this send-request] (swap! sends-seen conj send-request))
   (cancel! [this session-id send-id] (swap! cancels-seen conj {:send-id    send-id
@@ -138,14 +138,15 @@
    The default data model is the flat working memory model, the default processor is the v20150901 version,
    and the validator checks things according to that same version.
    "
-  [{:keys [machine validator processor-factory data-model-factory]
+  [{:keys [machine validator processor-factory data-model-factory session-id]
     :or   {data-model-factory new-flat-model
            validator          configuration-problems
            processor-factory  new-processor}} mocks]
   (let [data-model (data-model-factory)
         mock-queue (new-mock-queue)
         exec-model (new-mock-execution data-model (or mocks {}))
-        base-env   {:working-memory          (atom {})
+        base-env   {:working-memory          (atom (cond-> {}
+                                                     session-id (assoc ::sc/session-id session-id)))
                     :machine                 machine
                     :configuration-validator validator
                     :data-model              data-model
@@ -193,12 +194,13 @@
 
 (defn will-send
   "Test assertions. Find `event-name` on the sends seen, and verify it will be sent after the
-   given delay-ms."
+   given delay-ms. Also ensures it only occurs ONCE."
   [{:keys [event-queue] :as testing-env} event delay-ms]
   (let [{:keys [sends-seen]} event-queue
         sends       (filter #(and (= (:event %) event) %) @sends-seen)
         event-seen? (boolean (seq sends))
-        has-delay?  (boolean (some #(= delay-ms (:delay %)) (log/spy :info (vec sends))))]
+        has-delay?  (boolean (some #(= delay-ms (:delay %)) (vec sends)))]
+    (is (= 1 (count sends)))
     (is event-seen?)
     (is has-delay?)
     true))

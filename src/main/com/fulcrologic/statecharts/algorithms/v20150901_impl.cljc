@@ -227,9 +227,11 @@
     (env/assign! env location v)))
 
 (defmethod execute-element-content! :send [env {:keys [id event delay] :as element}]
+  (log/trace "Send event" element)
   (env/send! env element))
 
 (defmethod execute-element-content! :cancel [env {:keys [sendid send-id] :as element}]
+  (log/trace "Cancel event" element)
   (env/cancel-event! env (or sendid send-id)))
 
 (>defn execute!
