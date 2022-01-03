@@ -165,13 +165,16 @@
            machine
            configuration-validator
            working-memory] :as test-env} data-ops configuration]
-  (when (seq data-ops)
-    (sp/update! data-model test-env {:ops data-ops}))
-  (swap! working-memory assoc ::sc/configuration configuration)
-  (when configuration-validator
-    (when-let [problems (seq (configuration-validator machine @working-memory))]
-      (throw (ex-info "Invalid configuration!" {:configuration configuration
-                                                :problems      problems})))))
+  (let [vwmem (volatile! @working-memory)]
+    (when (seq data-ops)
+      ;; WMDM expects there to be a volatile version of working memory in env
+      (sp/update! data-model (assoc test-env ::sc/vwmem vwmem) {:ops data-ops}))
+    (swap! working-memory merge @vwmem)
+    (swap! working-memory assoc ::sc/configuration configuration)
+    (when configuration-validator
+      (when-let [problems (seq (configuration-validator machine @working-memory))]
+        (throw (ex-info "Invalid configuration!" {:configuration configuration
+                                                  :problems      problems}))))))
 
 (defn start!
   "Start the machine in the testing env, and assign it the given session-id."
@@ -217,3 +220,9 @@
     (mapcat (fn [sid] (sm/get-proper-ancestors machine sid)))
     states))
 
+(defn data
+  "Returns the current data of the active data model. Ensures that working memory data models will
+   function properly."
+  [{:keys [data-model
+           working-memory] :as env}]
+  (sp/current-data data-model (assoc env ::sc/vwmem (volatile! @working-memory))))
