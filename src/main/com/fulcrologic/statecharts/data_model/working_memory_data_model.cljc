@@ -104,7 +104,10 @@
    `get-at` will NOT walk scopes, but supports simple keywords for the current context,
    and paths of the form `[state-id data-key]`. The special state-id `:ROOT` is reserved for those at the top-most level.
 
-   The operations implemented for this model can be extended by adding to the multimethod `run-op`."
+   The operations implemented for this model can be extended by adding to the multimethod `run-op`.
+
+   WARNING: This model is not recommended for many use-cases. The contextual paths turn out to be
+   rather difficult to reason about. The flat data model is recommended."
   []
   (->WorkingMemoryDataModel))
 

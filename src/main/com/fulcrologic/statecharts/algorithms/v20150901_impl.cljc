@@ -215,8 +215,8 @@
 (defmethod execute-element-content! :on-exit [{::sc/keys [execution-model] :as env} {:keys [children expr] :as element}]
   (execute! env element))
 
-(defmethod execute-element-content! :log [{::sc/keys [execution-model] :as env} {:keys [node-type expr] :as element}]
-  (log/debug (sp/run-expression! execution-model env expr)))
+(defmethod execute-element-content! :log [{::sc/keys [execution-model] :as env} {:keys [node-type label expr] :as element}]
+  (log/debug (or label "LOG") (sp/run-expression! execution-model env expr)))
 
 (defmethod execute-element-content! :raise [{::sc/keys [vwmem] :as env} {:keys [id event] :as element}]
   (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event)))
@@ -526,7 +526,7 @@
       (when-let [finalize (sm/get-children machine invocation :finalize)]
         (doseq [f finalize]
           (execute! (assoc env :_event event) f)))
-      (env/delete! env :_event))))
+      (env/delete! env [:ROOT :_event]))))
 
 (>defn handle-external-invocations! [{::sc/keys [machine vwmem data-model event-queue] :as env}
                                      {:keys [invokeid] :as external-event}]
@@ -573,6 +573,7 @@
           (handle-external-invocations! env event)
           (microstep! env)
           (before-event! env)))))
+  (env/assign! env [:ROOT :_event] nil)
   (some-> env ::sc/vwmem deref))
 
 (>defn initialize!

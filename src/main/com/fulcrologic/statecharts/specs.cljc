@@ -39,7 +39,7 @@
 (s/def ::sc/event-name keyword?)
 (s/def :org.w3.scxml.event/name ::sc/event-name)
 (s/def :org.w3.scxml.event/data map?)
-(s/def :org.w3.scxml.event/type #{:internal :external :platform})
+(s/def :org.w3.scxml.event/type (s/or :s string? :k keyword?))
 (s/def :org.w3.scxml.event/sendid ::sc/id)
 (s/def :org.w3.scxml.event/origin vector?)
 (s/def :org.w3.scxml.event/origintype keyword?)

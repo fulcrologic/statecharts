@@ -14,7 +14,8 @@
     [com.fulcrologic.statecharts.state-machine :refer [machine]]
     [com.fulcrologic.statecharts.util :refer [extend-key]]
     [taoensso.timbre :as log]
-    [com.fulcrologic.statecharts.data-model.operations :as ops]))
+    [com.fulcrologic.statecharts.data-model.operations :as ops]
+    [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]))
 
 (deftype Timer [active-invocations]
   sp/InvocationProcessor
@@ -60,7 +61,7 @@
       (transition {:event :swap :target :B}))
     (state {:id :B}
       (transition {:event :swap :target :A})
-      (transition {:event :interval-timer/timeout }
+      (transition {:event :interval-timer/timeout}
         (script-fn [_ data] (log/info "State got timer event" data)))
 
       (invoke {:idlocation [:B :invocation-id]
@@ -78,8 +79,11 @@
 
   (loop/run-event-loop! processor wmem session-id 100)
 
+  ;; Send this one multiple times
   (sp/send! queue {:target session-id
                    :event  :swap})
+
+  ;; Send this one to exit the top level machine
   (sp/send! queue {:target session-id
                    :event  evts/cancel-event})
   )

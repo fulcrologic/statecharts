@@ -35,7 +35,7 @@
    `extra-env` can contain anything extra you want in `env`, and can override any of the above by
    key (e.g. :data-model)."
   [machine-def {::sc/keys [data-model execution-model event-queue] :as extra-env}]
-  (let [dm (or data-model (wmdm/new-model))
+  (let [dm (or data-model (wmdm/new-flat-model))
         q  (or event-queue (mpq/new-queue))
         ex (or execution-model (lambda/new-execution-model dm q))]
     (->SimpleMachine

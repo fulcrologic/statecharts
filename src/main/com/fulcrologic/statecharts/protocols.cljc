@@ -116,14 +116,15 @@
   (cancel! [event-queue session-id send-id]
     "Cancel the (delayed) send(s) with the given `send-id` that were `sent!` by `session-id`.
      This is only possible for events that have a delay and have not yet been delivered.")
-  (receive-events! [event-queue {:keys [type target session-id] :as options} handler]
-    "Pull the next event(s) from the queue that matches the given `type`/`target` (if you do not specify `type`, then
-     a state chart is assumed) and process it with `handler`, a `(fn [message])` that MUST process the
-     event in a way that ensures the event is
-     delivered, processed, and safe to remove from the event queue. The format of `message` will depend on the
-     `type` used in the `send`. For statechart session events, these should be in the format created by `events/new-event`.
+  (receive-events! [event-queue options handler]
+    "Pull the next event(s) from the queue that matches the given `options` (see event queue implementation for supported
+     options), and process it with `handler`, a `(fn [env message])` that MUST process the
+     event in a way that ensures the event is delivered, processed, and safe to remove from the event queue.
 
-     The `message` passed to the handler MUST have the format of the `events/new-event` constructor, but MAY include
+     The `env` of the handler is defined by the queue implementation, and is not required.
+
+     The format of `message` will depend on the `type` used in the `send`. For statechart session events, these should
+     be in the format created by `events/new-event`, but MAY include
      any additional (preferably namespaced) keys to pass along additional information that the handler might
      find useful. For example, a queue capable of a transactional nature (say, implemented with an SQL database)
      might pass the database connection to the handler so it can participate in the transaction that was used to

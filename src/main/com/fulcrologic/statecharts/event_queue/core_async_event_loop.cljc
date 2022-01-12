@@ -37,7 +37,7 @@
     (async/go-loop []
       (async/<! (async/timeout resolution-ms))
       (sp/receive-events! event-queue {:session-id session-id}
-        (fn [event]
+        (fn [_ event]
           (reset! wmem-atom (sp/process-event! processor @wmem-atom event))))
       (if (::sc/running? @wmem-atom)
         (recur)

@@ -21,7 +21,7 @@
         evt2          :B
         evt3          :C
         seen          (atom [])
-        handler       (fn [evt] (swap! seen conj evt))]
+        handler       (fn [_ evt] (swap! seen conj evt))]
 
     (sp/send! queue {:target            my-session
                      :source-session-id my-session

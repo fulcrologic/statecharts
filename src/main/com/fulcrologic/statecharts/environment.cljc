@@ -13,16 +13,18 @@
     [taoensso.timbre :as log]))
 
 (>defn new-env
-  ([machine DM Q Ex addl]
-   [::sc/machine ::sc/data-model ::sc/event-queue ::sc/execution-model map? => ::sc/env]
-   (merge addl (new-env machine DM Q Ex)))
-  ([machine DM Q Ex]
-   [::sc/machine ::sc/data-model ::sc/event-queue ::sc/execution-model => ::sc/env]
-   (cond-> {::sc/machine         machine
-            ::sc/data-model      DM
-            ::sc/event-queue     Q
-            ::sc/execution-model Ex
-            ::sc/pending-events  (volatile! (queue))})))
+  ([machine DM Q Ex wmem addl]
+   [::sc/machine ::sc/data-model ::sc/event-queue ::sc/execution-model ::sc/working-memory map? => ::sc/env]
+   (merge addl (new-env machine DM Q Ex wmem)))
+  ([machine DM Q Ex wmem]
+   [::sc/machine ::sc/data-model ::sc/event-queue ::sc/execution-model ::sc/working-memory => ::sc/env]
+   (cond-> {::sc/machine            machine
+            ::sc/context-element-id :ROOT
+            ::sc/vwmem              (volatile! wmem)
+            ::sc/data-model         DM
+            ::sc/event-queue        Q
+            ::sc/execution-model    Ex
+            ::sc/pending-events     (volatile! (queue))})))
 
 (>defn send-internal-event!
   "Put an event on the pending queue. Only usable from within the implementation of a model (a function

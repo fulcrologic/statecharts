@@ -57,7 +57,7 @@
                     (get old session-id))]
       (doseq [event to-send]
         (try
-          (handler event)
+          (handler {} event)
           (catch #?(:clj Throwable :cljs :default) e
             (log/error e "Event handler threw an execption")))))))
 
