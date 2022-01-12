@@ -1,3 +1,16 @@
+1.0.0-alpha6
+
+Various refinements
+
+* Remove the event from data model after processing it.
+* Added warning to scoped data model. Not recommended after trying it in real world.
+* Changed default memory model in the simple wrapper to flat (POSSIBLE BREAKING CHANGE)
+* Refined the event queue protocol: handler now receives 2 arguments (BREAKING CHANGE)
+* Updated env generator to build a full runtime env, usable with protocols directly
+* Updated supplied event queue implementations to follow protocol change
+* Fixed spec for event type
+* Bug: process-event! advertised it would accept an event name, but failed when given one.
+
 1.0.0-alpha3
 
 * Various documentation updates
