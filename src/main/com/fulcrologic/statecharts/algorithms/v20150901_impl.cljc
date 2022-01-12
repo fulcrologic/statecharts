@@ -563,15 +563,16 @@
   [{::sc/keys [data-model vwmem] :as env} external-event]
   [::sc/env ::sc/event-or-name => ::sc/working-memory]
   (log/spy :trace external-event)
-  (with-processing-context env
-    (if (cancel? external-event)
-      (exit-interpreter! env)
-      (do
-        (select-transitions! env external-event)
-        (env/assign! env [:ROOT :_event] external-event)
-        (handle-external-invocations! env external-event)
-        (microstep! env)
-        (before-event! env))))
+  (let [event (new-event external-event)]
+    (with-processing-context env
+      (if (cancel? event)
+        (exit-interpreter! env)
+        (do
+          (select-transitions! env event)
+          (env/assign! env [:ROOT :_event] event)
+          (handle-external-invocations! env event)
+          (microstep! env)
+          (before-event! env)))))
   (some-> env ::sc/vwmem deref))
 
 (>defn initialize!
