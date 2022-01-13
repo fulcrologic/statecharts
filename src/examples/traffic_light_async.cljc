@@ -3,17 +3,13 @@
    sent events and mutates in place (and handles timers in CLJC) via core.async."
   (:require
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.state-machine :refer [machine]]
-    [com.fulcrologic.statecharts.elements :refer [state parallel transition raise on-entry assign data-model
-                                                  Send]]
-    [com.fulcrologic.statecharts.events :refer [new-event]]
-    [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
-    [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
+    [com.fulcrologic.statecharts.elements :refer [state parallel transition on-entry Send]]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as loop]
+    [com.fulcrologic.statecharts.events :as evts]
+    [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
-    [com.fulcrologic.statecharts.util :refer [extend-key]]
-    [com.fulcrologic.statecharts.events :as evts]))
+    [com.fulcrologic.statecharts.chart :refer [statechart]]
+    [com.fulcrologic.statecharts.util :refer [extend-key]]))
 
 (def nk
   "(nk :a \"b\") => :a/b
@@ -75,7 +71,7 @@
         (transition {:event :warn-pedestrians :target flashing-white})))))
 
 (def traffic-lights
-  (machine {}
+  (statechart {}
     (parallel {}
       (timer)
 
@@ -99,15 +95,33 @@
                            :cross-ew/white
                            :cross-ew/flashing-white} (::sc/configuration wmem)))))
 
-(comment
 
-  (def session-id 1)
-  (def queue (mpq/new-queue))
-  (def processor (simple/new-simple-machine traffic-lights {::sc/event-queue queue}))
-  (def wmem (let [a (atom {})] (add-watch a :printer (fn [_ _ _ n] (show-states n))) a))
-  (loop/run-event-loop! processor wmem session-id 100)      ; should see the state changing with the timers
+(comment
+  ;; Setup steps
+  (do
+    (def session-id 1)
+    ;; Override the working memory store so we can watch our working memory change
+    (def wmem (let [a (atom {})] (add-watch a :printer (fn [_ _ _ n] (show-states n))) a))
+    ;; Create an env that has all the components needed, but override the working memory store
+    (def env (simple/simple-env
+               {::sc/working-memory-store
+                (reify sp/WorkingMemoryStore
+                  (get-working-memory [_ _ _] @wmem)
+                  (save-working-memory! [_ _ _ m] (reset! wmem m)))}))
+
+    ;; Register the chart under a well-known name
+    (simple/register! env ::lights traffic-lights)
+
+    ;; Run an event loop that polls the queue every 100ms
+    (def running? (loop/run-event-loop! env 100)))
+
+  ;; Start takes the well-known ID of a chart that should be started. The working memory is tracked internally.
+  ;; You should see the tracking installed above emit the traffic signal pattern
+  (simple/start! env ::lights session-id)
 
   ;; Tell the state machine to exit abruptly
-  (sp/send! queue {:target session-id
-                   :event  evts/cancel-event}))
+  (simple/send! env {:target session-id
+                     :event  evts/cancel-event})
 
+  ;; Stop event loop
+  (reset! running? false))

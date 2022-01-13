@@ -1,24 +1,20 @@
 (ns com.fulcrologic.statecharts.data-model.working-memory-data-model-spec
   (:require
-    [com.fulcrologic.statecharts.elements :refer [state parallel script
-                                                  history final initial
-                                                  on-entry on-exit invoke
-                                                  data-model transition]]
+    [com.fulcrologic.statecharts.elements :refer [state]]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.util :refer [queue]]
-    [com.fulcrologic.statecharts.state-machine :as sm]
+    [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [fulcro-spec.core :refer [specification assertions component behavior =>]]
     [com.fulcrologic.statecharts.protocols :as sp]))
 
 (specification "Working memory model"
-  (let [machine  (sm/machine {}
+  (let [machine  (chart/statechart {}
                    (state {:id :A}
                      (state {:id :A/a})))
         DM       (wmdm/new-model)
         vwmem    (volatile! {})
-        mock-env {::sc/machine         machine
+        mock-env {::sc/statechart      machine
                   ::sc/data-model      DM
                   ::sc/execution-model (reify sp/ExecutionModel)
                   ::sc/event-queue     (reify sp/EventQueue)
@@ -69,12 +65,12 @@
         (sp/get-at DM (context :ROOT) :z) => nil))))
 
 (specification "Flat Working memory model" :focus
-  (let [machine  (sm/machine {}
+  (let [machine  (chart/statechart {}
                    (state {:id :A}
                      (state {:id :A/a})))
         DM       (wmdm/new-flat-model)
         vwmem    (volatile! {})
-        mock-env {::sc/machine         machine
+        mock-env {::sc/statechart      machine
                   ::sc/data-model      DM
                   ::sc/execution-model (reify sp/ExecutionModel)
                   ::sc/event-queue     (reify sp/EventQueue)

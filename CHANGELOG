@@ -1,3 +1,22 @@
+1.0.0-alpha8
+
+MAJOR REFACTORING AND CLEANUP. SEVERAL BREAKING CHANGES.
+
+* Renamed top-level statechart definition function `state-machine/machine` to `chart/statechart`
+* Renamed `state-machine` ns to `chart`.
+* Changed signature of a number of protocol methods to facilitate support for invocations in a self-running system
+* The simple namespace changed significantly in order to provide a one-shot local statechart runtime
+* Removed functions from `environment` that should not have been public
+* Updated examples and tests
+* Added working memory store and statechart registry protocols and basic implementations
+* Added invocation processors for statecharts and futures
+* Updated documentation
+
+1.0.0-alpha7
+
+* Elements now support children as nested sequences (helps when making convenience helpers)
+* Added convenience helpers/macros to make charts clearer
+
 1.0.0-alpha6
 
 Various refinements

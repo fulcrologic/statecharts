@@ -44,7 +44,7 @@
   [event target & actions] (apply transition {:event event :target target} actions))
 
 (defn choice
-  "Create a choice state. Notation is like `cond`, but `:else` is the only acceptable predicate
+  "Create a choice state. Notation is like `cond`, but `:else` is the only acceptable \"default\" predicate.
    The `pred` should `(fn [env data] boolean?)`. See also the `choice` macro in convenience-macros, which
    can include the expressions as annotations on the nodes.
 

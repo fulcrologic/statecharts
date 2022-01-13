@@ -1,15 +1,14 @@
 (ns history-sample
   (:require
-    [com.fulcrologic.statecharts.state-machine :refer [machine]]
-    [com.fulcrologic.statecharts.elements :refer [state parallel transition on-entry final done-data
-                                                  data-model log on-exit script history]]
+    [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.elements :refer [state transition history]]
     [com.fulcrologic.statecharts.events :refer [new-event]]
-    [com.fulcrologic.statecharts.simple :refer [new-simple-machine]]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.util :refer [extend-key]]))
+    [com.fulcrologic.statecharts.simple :as simple]
+    [com.fulcrologic.statecharts.chart :refer [statechart]]))
 
 (def sample
-  (machine {}
+  (statechart {}
     (state {:id :TOP}
       (state {:id :A}
         (transition {:event :top :target :B}))
@@ -29,25 +28,35 @@
         (state {:id :C2}
           (transition {:event :sub :target :C1}))))))
 
-(def processor (new-simple-machine sample {}))
+(defn show-states [wmem] (println (sort (::sc/configuration wmem))))
+(def env (simple/simple-env))
+(simple/register! env `sample sample)
+(def processor (::sc/processor env))
 
-(def s0 (sp/start! processor 1))
+(def s0 (sp/start! processor env `sample {::sc/session-id 1}))
+(show-states s0)
 ;; :TOP :A
 
-(def s1 (sp/process-event! processor s0 (new-event :top)))
+(def s1 (sp/process-event! processor env s0 (new-event :top)))
+(show-states s1)
 ;; :TOP :B
 
-(def s2 (sp/process-event! processor s1 (new-event :top)))
+(def s2 (sp/process-event! processor env s1 (new-event :top)))
+(show-states s2)
 ;; :TOP :C :C1
 
-(def s3 (sp/process-event! processor s2 (new-event :sub)))
+(def s3 (sp/process-event! processor env s2 (new-event :sub)))
+(show-states s3)
 ;; :TOP :C :C2
 
-(def s4 (sp/process-event! processor s3 (new-event :top)))
+(def s4 (sp/process-event! processor env s3 (new-event :top)))
+(show-states s4)
 ;; :TOP :A
 
-(def s5 (sp/process-event! processor s4 (new-event :top)))
+(def s5 (sp/process-event! processor env s4 (new-event :top)))
+(show-states s5)
 ;; :TOP :B
 
-(def s6 (sp/process-event! processor s5 (new-event :top)))
+(def s6 (sp/process-event! processor env s5 (new-event :top)))
+(show-states s6)
 ;; :TOP :C :C2 (history remembered)

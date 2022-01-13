@@ -6,13 +6,10 @@
 
    This queue can support any number of running statecharts via their session-ids. `send!` will reject any request that
    is missing a target that defines the target session-id. Just use the same instance as the event queue for every
-   chart.
-
-   "
+   chart."
   (:require
     [clojure.core.async :as async]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.util :refer [now-ms]]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
 
@@ -25,20 +22,27 @@
    from ::sc/configuration of the working memory, but you should leverage the data-model protocol for
    interfacing with the data a machine might need to see or manipulate.
 
-   Runs a core.async loop that will run `receive-events!` at the given time resolution. Can be used
-   with a manually-polled-queue to create an autonomous runtime.
+   Runs a core.async loop that will run `receive-events!` at the given time resolution.
 
-   Returns a channel that will stay open until the session ends."
-  [processor wmem-atom session-id resolution-ms]
-  (let [s0 (sp/start! processor session-id)
-        {::sc/keys [event-queue] :as base-env} (sp/get-base-env processor)]
-    (reset! wmem-atom s0)
-    (log/trace "Event loop started" event-queue)
+   Returns an atom containing a boolean that is what keeps the event loop running. If you swap that atom to `false` then
+   the event loop will exit."
+  [{::sc/keys [processor working-memory-store event-queue] :as env} resolution-ms]
+  (log/info "Event loop started")
+  (let [running? (atom true)]
     (async/go-loop []
       (async/<! (async/timeout resolution-ms))
-      (sp/receive-events! event-queue {:session-id session-id}
-        (fn [_ event]
-          (reset! wmem-atom (sp/process-event! processor @wmem-atom event))))
-      (if (::sc/running? @wmem-atom)
+      (sp/receive-events! event-queue env
+        (fn [env {:keys [target] :as event}]
+          (if-not target
+            (log/warn "Event did not have a session target. This queue only supports events to charts." event)
+            (let [session-id target
+                  wmem       (sp/get-working-memory working-memory-store env session-id)
+                  next-mem   (when wmem (sp/process-event! processor env wmem event))]
+              (if next-mem
+                (sp/save-working-memory! working-memory-store env session-id next-mem)
+                (log/error "Session had no working memory. Event to session ignored" session-id)))))
+        {})
+      (if @running?
         (recur)
-        (log/trace "Event loop ended")))))
+        (log/info "Event loop ended")))
+    running?))

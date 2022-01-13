@@ -16,19 +16,18 @@
   (:require
     [clojure.set :as set]
     [clojure.string :as str]
-    [clojure.walk :as walk]
     com.fulcrologic.statecharts.specs
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn >defn- => ?]]
+    [com.fulcrologic.guardrails.core :refer [>defn =>]]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.util :refer [genid]])
-  #?(:clj (:import (clojure.lang IFn))))
+    [com.fulcrologic.statecharts.util :refer [genid]]))
 
 (def executable-content-types #{:raise :log :if :else-if :else :for-each :assign :script :send :cancel})
 (def legal-children
   {:state      #{:on-entry :on-exit :transition :state :parallel :final :history :data-model :invoke}
    :initial    #{:transition}
    :final      #{:on-entry :on-exit :done-data}
+   :finalize   executable-content-types
    :on-entry   executable-content-types
    :on-exit    executable-content-types
    :history    #{:transition}
@@ -277,17 +276,20 @@
   "Sends an event to the specified (external) target (which could be an external system, this machine,
    or another machine).
 
-  * `:event` An expression that results in the event *name* to send.
-  * `:params` An expression that results in data to be included in the event.
-  * `:target` An expression that gives the target to send to.
-  * `:type` An expression generating a selector for which mechanism to use for sending.
-  * `:delay` A number of milliseconds to delay the send, or an expression for computing it.
-  * `:content` - An expression (for the ExecutionModel) whose result is sent as the data of the event.
-  * `:namelist` - A map from simple names to location expressions. The value at each location expression will be sent
-                  as the simple name. E.g. {:x [:ROOT :value]} will send {:x value-from-root-value}.
-  * `:idlocation` a vector of keywords that specifies a location in the DataModel
-    to store a generated ID that uniquely identifies the event instance
-    being sent. If not supplied then `id` will be the id of the element itself.
+   * `id` - The id of the send element. Used as the event send ID if no idlocation is provided.
+   * `:idlocation` a location in the DataModel
+     to store a generated ID that uniquely identifies the event instance
+     being sent. If not supplied then `id` will be the id of the element itself.
+   * `delay` - A literal number of ms to delay
+   * `delayexpr` - A (fn [env data]) to return ms of delay
+   * `namelist` - A list of locations that pull data from data model into the data of the event
+   * `content` - A (fn [env data]) to generate the data for the event
+   * `event` - Name of the event
+   * `eventexpr` - (fn [env data]) to generate the name of the event
+   * `target` - The target of the event
+   * `targetexpr` - A (fn [env data]) to generate the target of the event
+   * `type` - The type of event
+   * `typeexpr` - A (fn [env data]) to generate the type of the event
 
   If BOTH namelist and content are supplied, then they will be MERGED as the event data with `content` overwriting
   any conflicting keys from `namelist`.
@@ -316,11 +318,17 @@
   send)
 
 (defn cancel
-  "Cancel a delayed send (see `send`'s idlocation parameter). `:sendid` can be an expression.
+  "Cancel a delayed send (see `send`'s id and idlocation parameter).
+
+   `sendid` A literal value of the ID of the send to cancel
+   `sendidexpr` A `(fn [env data] id)` to calculate the ID of the send to cancel
 
   https://www.w3.org/TR/scxml/#cancel"
-  [{:keys [id sendid] :as attrs}]
+  [{:keys [id sendid sendidexpr] :as attrs}]
   (new-element :cancel attrs nil))
+
+(defn finalize [attrs & children]
+  (new-element :finalize attrs children))
 
 (defn invoke
   "Create an instance of an external service that can return data (and send events) back to the calling state(s). An
@@ -344,16 +352,14 @@
   * `:namelist` A map from parameter name to location path. E.g. `{:x [:ROOT :k]}`
   * `:src` A literal URI to be passed to the external service.
   * `:srcexpr` An expression in the execution model's notation to calculate a URI to be passed to the external service.
-  * `:finalize` An expression to run when the invocation returns. Receives an event, and may update the data model.
+  * `:finalize` A stand-in for the `expr` parameter on a nested `script` element.  i.e. this is a shorthand for
+                nesting a `(finalize {} (script {:expr=<this value>}))`.
   * `:type` A static value for the type of external service. Defaults to statechart, which is equivalent to the URI
             'http://www.w3.org/TR/scxml/'. Implementations may choose platform-specific interpretations of this argument.
   * `:typeexpr` An expression version of `:type`. Use your ExecutionModel to run the expression to get the type.
   * `:autoforward` Enable forwarding of (external) events to the invoked process.
-  * `:idlocation` a vector of keywords that specifies a location in the DataModel
-    to store a generated ID that uniquely identifies the event instance
-    being sent. If not supplied then `id` will be the id of the send.
-  * `:finalize` A `(fn [data-model-for-context event] data-model-for-context)`
-  that processes results from the external process.
+  * `:idlocation` a location (i.e. vector of keywords) that specifies a location in the DataModel
+                  to store a generated ID that uniquely identifies the invocation instance.
 
    NOTES:
 
@@ -361,5 +367,9 @@
      at each execution and stored in `idlocation`.
 
   https://www.w3.org/TR/scxml/#invoke"
-  [attrs]
-  (new-element :invoke attrs))
+  [attrs & children]
+  (let [fattr (:finalize attrs)]
+    (new-element :invoke (dissoc attrs :finalize)
+      (cond-> (vec children)
+        fattr (conj children (finalize {}
+                               (script {:expr fattr})))))))

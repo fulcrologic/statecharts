@@ -1,2 +1,10 @@
-{:lint-as {com.fulcrologic.statecharts.state-machine/with-working-memory clojure.core/let}
+{:lint-as      {
+                com.fulcrologic.statecharts.chart/with-working-memory clojure.core/let
+                com.fulcrologic.statecharts.elements/script-fn                clojure.core/fn
+                com.fulcrologic.statecharts.elements/exit-fn                clojure.core/fn
+                com.fulcrologic.statecharts.elements/entry-fn                clojure.core/fn
+                com.fulcrologic.guardrails.core/>defn                         clojure.core/defn
+                com.fulcrologic.guardrails.core/>defn-                        clojure.core/defn-
+                taoensso.encore/when-let                                      clojure.core/let
+                taoensso.encore/if-let                                        clojure.core/let}
  :config-paths []}
