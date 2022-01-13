@@ -30,8 +30,8 @@ endif::[]
 = Getting Started
 
 A statechart is defined as a (nested) map. Some of this content's behavior is <<Goals, configurable>>.
-The simplest setup is to use Clojure for the executable code and a simple data model that scopes
-data to states.
+The simplest setup is to use Clojure for the executable code and a simple flat data model that scopes all state machine
+to the session (running instance of state chart).
 
 NOTE: The SCXML standard is used for the semantics and processing, and MUCH of the overall structure. We keep
 the idea that each node in the chart has a unique ID, but take some license with executable content.
@@ -120,7 +120,8 @@ Working Memory:: A map of data that contains the current configuration of the st
  tracking, etc.).
 
 DataModel:: An implementation of the data model protocol defines how the data model of your chart works. The simple
-implementation places the data in Working Memory, and treats lookups in a scoped fashion.
+implementation places the data in Working Memory, and treats lookups as paths into a single top-level map scoped
+to the session (running chart instance).
 
 ExecutionModel:: An implementation of this protocol is handed the expressions that are included on the state chart, and
 chooses how to run them. A default implementation requires that they be Clojure `(fn [env data])`, and simply calls them
@@ -277,12 +278,13 @@ data model to an external database.
 
 See the docstrings in the `protocols` namespace.
 
-There is a predefined `WorkingMemoryDataModel` in `data-model.working-memory-data-model` that stores scoped data for
-states within the session working memory, allowing the data, for example, to be persisted with the state of
-a running session when pausing it for later revival.
+There is a predefined `FlatWorkingMemoryDataModel` (in `data-model.working-memory-data-model`) that puts all data into
+a single scope (a map which itself can be a nested data structure). This is the recommended model for ease of use.
 
-There is also a `FlatWorkingMemoryDataModel` (same ns) that puts all data into a single scope (it can still be a
-nested data structure).
+There is also a predefined `WorkingMemoryDataModel` in that scopes data to the state in which it is declared.
+
+Both of these put the real data in the session working memory, allowing the data, for example, to be persisted with the state of
+a running session when pausing it for later revival.
 
 == Execution Models
 
