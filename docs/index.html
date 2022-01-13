@@ -473,18 +473,19 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_invocations">2.9. Invocations</a></li>
 </ul>
 </li>
-<li><a href="#_custom_executable_content">3. Custom Executable Content</a></li>
-<li><a href="#_testing">4. Testing</a>
+<li><a href="#_shorthand_convenience">3. Shorthand Convenience</a></li>
+<li><a href="#_custom_executable_content">4. Custom Executable Content</a></li>
+<li><a href="#_testing">5. Testing</a>
 <ul class="sectlevel2">
-<li><a href="#_mocking">4.1. Mocking</a></li>
-<li><a href="#_event_sendscancels">4.2. Event Sends/Cancels</a></li>
-<li><a href="#_starting_in_a_specific_configuration">4.3. Starting in a Specific Configuration</a></li>
+<li><a href="#_mocking">5.1. Mocking</a></li>
+<li><a href="#_event_sendscancels">5.2. Event Sends/Cancels</a></li>
+<li><a href="#_starting_in_a_specific_configuration">5.3. Starting in a Specific Configuration</a></li>
 </ul>
 </li>
-<li><a href="#_relationship_to_scxml">5. Relationship to SCXML</a>
+<li><a href="#_relationship_to_scxml">6. Relationship to SCXML</a>
 <ul class="sectlevel2">
-<li><a href="#_related_work">5.1. Related Work</a></li>
-<li><a href="#_conformance">5.2. Conformance</a></li>
+<li><a href="#_related_work">6.1. Related Work</a></li>
+<li><a href="#_conformance">6.2. Conformance</a></li>
 </ul>
 </li>
 </ul>
@@ -1281,7 +1282,90 @@ still under construction at the time of this writing. Consult the source in case
 </div>
 </div>
 <div class="sect1">
-<h2 id="_custom_executable_content"><a class="anchor" href="#_custom_executable_content"></a><a class="link" href="#_custom_executable_content">3. Custom Executable Content</a></h2>
+<h2 id="_shorthand_convenience"><a class="anchor" href="#_shorthand_convenience"></a><a class="link" href="#_shorthand_convenience">3. Shorthand Convenience</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Making your statechart definition cleaner is a simple matter, since it
+is nothing more than a nested data structure.</p>
+</div>
+<div class="paragraph">
+<p>One thing to note is that every element of the statechart can accept a
+nested sequence of children, and it will automatically flatten them. This
+means you can write helper functions that emit sequences of children, which
+in turn can use other helpers that might emit sequences.</p>
+</div>
+<div class="paragraph">
+<p>Thus, macros and functions
+can be used to generate common patterns. The <code>convenience</code> and
+<code>convenience-macros</code> nses define some examples. These two namespaces
+are currently ALPHA and are not API stable, but it is a simple matter
+to copy their content if you like any of them and want to rely on them.</p>
+</div>
+<div class="paragraph">
+<p>The macro versions expect you to be using the lambda execution model, and
+require that you use a symbol for the expression (that resolves to a function).
+They add some additional <code>:diagram/???</code> attributes to the elements that are
+string versions of the expression, for use in diagram tools or possibly even
+export.</p>
+</div>
+<div class="paragraph">
+<p>One common pattern is to schedule a delayed event on entry to a state, but
+cancel (if non-delivered) on exit. This helper exists in <code>convenience</code>, and
+looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">defn</span> <span class="function">send-after</span>
+  [{<span class="symbol">:keys</span> [id <span class="keyword">delay</span> delayexpr] <span class="symbol">:as</span> send-props}]
+  (<span class="keyword">when-not</span> id (<span class="keyword">throw</span> (IllegalArgumentException. <span class="string"><span class="delimiter">&quot;</span><span class="content">send-after's props MUST include an :id.</span><span class="delimiter">&quot;</span></span>)))
+  [(on-entry {}
+     (Send send-props))
+   (on-exit {}
+     (cancel {<span class="symbol">:sendid</span> id}))])</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A good use-case for a macro comes up when you want to emit nodes that might
+be better suited for a diagram tool. The UML state chart system defines a choice node which is a node that
+makes a decision about where to transition to. In the SCXML standard they are coded as a state that includes nothing
+but event-less transitions with conditions:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">  (state {<span class="symbol">:id</span> node-id <span class="symbol">:diagram/prototype</span> <span class="symbol">:choice</span>}
+    (transition {<span class="symbol">:cond</span> pred <span class="symbol">:target</span> target-state})
+    (transition {<span class="symbol">:cond</span> pred2 <span class="symbol">:target</span> target-state2})
+    (transition {<span class="symbol">:target</span> else-target-state})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is a bit noisy, isn&#8217;t immediately obvious to the reader, and the predicates are code, so there is no way
+for them to easily be emitted to a diagram. So there is a macro version of <code>choice</code>
+in the <code>convenience-macros</code> namespaces:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">  (choice {<span class="symbol">:id</span> node-id <span class="keyword">..</span><span class="keyword">.</span>}
+    pred  target-state
+    pred2 target-state2
+    <span class="symbol">:else</span> else-target-state)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>that is not only more concise, but adds <code>{:diagram/condition "pred"}</code>
+to the transitions properties (the stringified expression of the predicate).</p>
+</div>
+<div class="paragraph">
+<p>There is also a function version of <code>choice</code> in <code>convenience</code> that does no add the diagram note, but looks identical
+to the reader.</p>
+</div>
+<div class="paragraph">
+<p>See the docstrings in those namespaces for more functions/macros that can make your charts more concise.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_custom_executable_content"><a class="anchor" href="#_custom_executable_content"></a><a class="link" href="#_custom_executable_content">4. Custom Executable Content</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>The SCXML standard defines a number of elements it terms "Executable Content", meaning child nodes that
@@ -1351,7 +1435,7 @@ executable children).</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_testing"><a class="anchor" href="#_testing"></a><a class="link" href="#_testing">4. Testing</a></h2>
+<h2 id="_testing"><a class="anchor" href="#_testing"></a><a class="link" href="#_testing">5. Testing</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>The main interface to this library is pure and functional, which makes the general job of testing easier in some cases,
@@ -1420,7 +1504,7 @@ would normally be run.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_mocking"><a class="anchor" href="#_mocking"></a><a class="link" href="#_mocking">4.1. Mocking</a></h3>
+<h3 id="_mocking"><a class="anchor" href="#_mocking"></a><a class="link" href="#_mocking">5.1. Mocking</a></h3>
 <div class="paragraph">
 <p>The mocking (set when creating the testing env) is a simple map (e.g. <code>{is-tuesday? true}</code>). The keys of the map
 must exactly match the expression in question (e.g. use <code>defn</code> to make them (as shown above), and then use those as the
@@ -1430,13 +1514,13 @@ the number of times that expression has run since the test env was created.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_event_sendscancels"><a class="anchor" href="#_event_sendscancels"></a><a class="link" href="#_event_sendscancels">4.2. Event Sends/Cancels</a></h3>
+<h3 id="_event_sendscancels"><a class="anchor" href="#_event_sendscancels"></a><a class="link" href="#_event_sendscancels">5.2. Event Sends/Cancels</a></h3>
 <div class="paragraph">
 <p>The sends and cancels will also be auto-recorded. See the docstrings in the testing namespace for more information.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_starting_in_a_specific_configuration"><a class="anchor" href="#_starting_in_a_specific_configuration"></a><a class="link" href="#_starting_in_a_specific_configuration">4.3. Starting in a Specific Configuration</a></h3>
+<h3 id="_starting_in_a_specific_configuration"><a class="anchor" href="#_starting_in_a_specific_configuration"></a><a class="link" href="#_starting_in_a_specific_configuration">5.3. Starting in a Specific Configuration</a></h3>
 <div class="paragraph">
 <p>Most of your tests will need the machine to be in some particular state as part of your setup. You <strong>could</strong> get there
 by triggering a sequence of events while having all of the mocks in perfect condition, but this creates a fragile
@@ -1477,7 +1561,7 @@ list a valid leaf from each region.</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">5. Relationship to SCXML</a></h2>
+<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">6. Relationship to SCXML</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>This library&#8217;s internal implementation follows (as closely as possible) the official
@@ -1546,7 +1630,7 @@ values in the data and excution model):</p>
 <code>script</code> tags to begin with.</p>
 </div>
 <div class="sect2">
-<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">5.1. Related Work</a></h3>
+<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">6.1. Related Work</a></h3>
 <div class="paragraph">
 <p>The primary alternative to this library is <a href="https://github.com/lucywang000/clj-statecharts">clj-statecharts</a>,
 which is a fine library modelled after xstate.</p>
@@ -1598,7 +1682,7 @@ Fulcro UI and I/O).</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">5.2. Conformance</a></h3>
+<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">6.2. Conformance</a></h3>
 <div class="paragraph">
 <p>This library was written using the reference implementation described in
 the <a href="https://www.w3.org/TR/scxml">SCXML standard</a>, but without the requirement
@@ -1622,7 +1706,7 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-01-13 11:38:23 -0800
+Last updated 2022-01-13 13:46:43 -0800
 </div>
 </div>
 <style>

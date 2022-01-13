@@ -359,6 +359,76 @@ still under construction at the time of this writing. Consult the source in case
 
 Exiting the `:BillingGracePeriod` state will cancel the timer so that no further `:timer` events are sent.
 
+= Shorthand Convenience
+
+Making your statechart definition cleaner is a simple matter, since it
+is nothing more than a nested data structure.
+
+One thing to note is that every element of the statechart can accept a
+nested sequence of children, and it will automatically flatten them. This
+means you can write helper functions that emit sequences of children, which
+in turn can use other helpers that might emit sequences.
+
+Thus, macros and functions
+can be used to generate common patterns. The `convenience` and
+`convenience-macros` nses define some examples. These two namespaces
+are currently ALPHA and are not API stable, but it is a simple matter
+to copy their content if you like any of them and want to rely on them.
+
+The macro versions expect you to be using the lambda execution model, and
+require that you use a symbol for the expression (that resolves to a function).
+They add some additional `:diagram/???` attributes to the elements that are
+string versions of the expression, for use in diagram tools or possibly even
+export.
+
+One common pattern is to schedule a delayed event on entry to a state, but
+cancel (if non-delivered) on exit. This helper exists in `convenience`, and
+looks like this:
+
+[source]
+-----
+(defn send-after
+  [{:keys [id delay delayexpr] :as send-props}]
+  (when-not id (throw (IllegalArgumentException. "send-after's props MUST include an :id.")))
+  [(on-entry {}
+     (Send send-props))
+   (on-exit {}
+     (cancel {:sendid id}))])
+-----
+
+A good use-case for a macro comes up when you want to emit nodes that might
+be better suited for a diagram tool. The UML state chart system defines a choice node which is a node that
+makes a decision about where to transition to. In the SCXML standard they are coded as a state that includes nothing
+but event-less transitions with conditions:
+
+[source]
+-----
+  (state {:id node-id :diagram/prototype :choice}
+    (transition {:cond pred :target target-state})
+    (transition {:cond pred2 :target target-state2})
+    (transition {:target else-target-state})
+-----
+
+This is a bit noisy, isn't immediately obvious to the reader, and the predicates are code, so there is no way
+for them to easily be emitted to a diagram. So there is a macro version of `choice`
+in the `convenience-macros` namespaces:
+
+[source]
+-----
+  (choice {:id node-id ...}
+    pred  target-state
+    pred2 target-state2
+    :else else-target-state)
+-----
+
+that is not only more concise, but adds `{:diagram/condition "pred"}`
+to the transitions properties (the stringified expression of the predicate).
+
+There is also a function version of `choice` in `convenience` that does no add the diagram note, but looks identical
+to the reader.
+
+See the docstrings in those namespaces for more functions/macros that can make your charts more concise.
+
 = Custom Executable Content
 
 The SCXML standard defines a number of elements it terms "Executable Content", meaning child nodes that
