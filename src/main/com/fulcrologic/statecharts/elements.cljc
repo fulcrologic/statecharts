@@ -38,11 +38,15 @@
 
 (defn new-element
   "Create a new element with the given `type` and `attrs`. Will auto-assign an ID if it is not supplied. Use
-   this as a helper when creating new element types (e.g. executable content) to ensure consistency in operation."
+   this as a helper when creating new element types (e.g. executable content) to ensure consistency in operation.
+
+   Allows for immediate children to be nested in vectors, which allows for helper functions that can emit more
+   that a single element from one function."
   ([type {:keys [id] :as attrs}]
    (new-element type attrs nil))
   ([type {:keys [id] :as attrs} children]
-   (let [children-types (into #{}
+   (let [children       (flatten children)
+         children-types (into #{}
                           (map :node-type)
                           children)
          legal-types    (get legal-children type)]
@@ -59,21 +63,19 @@
 ;; Core Constructs
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(>defn state
+(defn state
   "Create a state. ID will be generated if not supplied. The `initial` element is an alias for this
    element with `:initial? true`. The `:initial` key can be used in PLACE of a nested initial element.
 
    https://www.w3.org/TR/scxml/#state"
   [{:keys [id initial initial?] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
   (new-element :state attrs children))
 
-(>defn parallel
+(defn parallel
   "Create a parallel node.
 
   https://www.w3.org/TR/scxml/#parallel"
   [{:keys [id] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
   (new-element :parallel attrs children))
 
 (defn transition
@@ -107,22 +109,19 @@
       (transition {:target transition-or-target})
       transition-or-target)))
 
-(>defn final
+(defn final
   "https://www.w3.org/TR/scxml/#final"
   [{:keys [id] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
   (new-element :final attrs children))
 
-(>defn on-entry
+(defn on-entry
   "https://www.w3.org/TR/scxml/#onentry"
   [{:keys [id] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
   (new-element :on-entry attrs children))
 
-(>defn on-exit
+(defn on-exit
   "https://www.w3.org/TR/scxml/#onexit"
   [{:keys [id] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
   (new-element :on-exit attrs children))
 
 (defn- expr-label [stmts] (str/join "\n" (map pr-str stmts)))
@@ -166,7 +165,7 @@
                                ~@body)}))
 
 
-(>defn history
+(defn history
   "Create a history node.
 
    :type - :deep or :shallow (can also use `deep? as an alias). Defaults to shallow.
@@ -176,7 +175,6 @@
    https://www.w3.org/TR/scxml/#history
    "
   [{:keys [id type deep?] :as attrs} default-transition]
-  [map? ::sc/transition-element => ::sc/element]
   (let [{:keys [cond event target]
          :as   default-transition} (if (map? default-transition)
                                      default-transition
@@ -196,27 +194,25 @@
 ;; Executable Content
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(>defn raise
+(defn raise
   "Raise an event in the current session.
 
   https://www.w3.org/TR/scxml/#raise"
   [{:keys [id event] :as attrs}]
-  [map? => ::sc/element]
   (new-element :raise attrs nil))
 
-(>defn log
+(defn log
   "Log a message. (Currently uses Timbre, with debug level)
 
   https://www.w3.org/TR/scxml/#log"
   [{:keys [id label expr] :as attrs}]
-  [map? => ::sc/element]
   (new-element :log attrs nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Data Model
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(>defn data-model
+(defn data-model
   "Create a data model (in a state or machine context).
 
    `:expr` is an expression that can be run by your current ExecutionModel. The result of the expression
@@ -225,29 +221,26 @@
 
    https://www.w3.org/TR/scxml/#data-module"
   [{:keys [id src expr] :as attrs}]
-  [map? => ::sc/element]
   (new-element :data-model attrs))
 
-(>defn assign
+(defn assign
   "Assign the value of `expr` into the data model at `location`. Location expressions are typically vectors of
    keywords in the DataModel.
 
   https://www.w3.org/TR/scxml/#assign"
   [{:keys [id location expr] :as attrs} & children]
-  [map? (s/* ::sc/element) => ::sc/element]
   (new-element :assign attrs children))
 
-(>defn done-data
+(defn done-data
   "Data (calculated by expr) to return to caller when a final state is entered. See `data-model`.
 
   NOTE: Differs from spec (uses expr instead of child elements)
 
   https://www.w3.org/TR/scxml/#donedata"
   [{:keys [id expr] :as attrs}]
-  [map? => ::sc/element]
   (new-element :done-data attrs))
 
-(>defn script
+(defn script
   "A script to execute. MAY support loading the code via `src`, or supply the code via `expr` (in the format required
    by your ExecutionModel).
 
@@ -255,7 +248,6 @@
 
   https://www.w3.org/TR/scxml/#script"
   [{:keys [id src expr] :as attrs}]
-  [map? => ::sc/element]
   (new-element :script attrs))
 
 (defmacro script-fn
@@ -281,7 +273,7 @@
 ;; External Communication
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(>defn send
+(defn send
   "Sends an event to the specified (external) target (which could be an external system, this machine,
    or another machine).
 
@@ -301,7 +293,6 @@
   any conflicting keys from `namelist`.
   "
   [attrs]
-  [map? => ::sc/element]
   (new-element :send attrs))
 
 (def Send
@@ -324,15 +315,14 @@
     "
   send)
 
-(>defn cancel
+(defn cancel
   "Cancel a delayed send (see `send`'s idlocation parameter). `:sendid` can be an expression.
 
   https://www.w3.org/TR/scxml/#cancel"
   [{:keys [id sendid] :as attrs}]
-  [map? => ::sc/element]
   (new-element :cancel attrs nil))
 
-(>defn invoke
+(defn invoke
   "Create an instance of an external service that can return data (and send events) back to the calling state(s). An
   invoked service stays active while the state is active, and is terminated when the parent state is exited.
 
@@ -372,5 +362,4 @@
 
   https://www.w3.org/TR/scxml/#invoke"
   [attrs]
-  [map? => ::sc/element]
   (new-element :invoke attrs))
