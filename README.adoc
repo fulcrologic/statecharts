@@ -41,13 +41,10 @@ See the official https://fulcrologic.github.io/statecharts/[documentation].
 
 = Status
 
-ALPHA.
+ALPHA. Nearly complete, but test coverage is incomplete.
 
-The state chart definition (machine and elements) are API stable, as is the underlying base algorithm (though
-it may have bugs).
-
-The remaining API is 90+% stable, but may undergo minor changes to accommodate design of `invoke` and
-`send` elements.
+This library is *not* guaranteed to be API stable while in alpha versions; however, as of alpha8 the API should
+be 99% stable.
 
 * Implemented
 ** DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.
@@ -63,15 +60,20 @@ The remaining API is 90+% stable, but may undergo minor changes to accommodate d
 *** Script, raise, send, log, assign, and done-data.
 *** Executable content elements are extensible (you can make your own kind)
 ** Simple dev-mode SCXML -> CLJC conversion utility (see src/dev).
+** Invoke (services and other machines). You can add custom invocation handlers, but there are provided implementations
+for invoking other charts, and CLJ futures.
+** Send events to arbitrary other sessions/services.
+** A core.async event loop
 
-* Partially Implemented
-** Invoke (services and other machines). This is modelled with an example, but still has some bugs.
-** Send events to arbitrary other sessions/services. The provided event queues do not know how to do this,
-but the protocol makes it simple to implement.
+* Not implemented (yet)
+** SCXML Flow control executable content elements (if/else/elseif/foreach). Note: the executable content is extensible
+via multi-methods, so these are easy to add.
+** Complete test suite.
 
-* Not implemented
-** Additional Executable content:
-*** The other (e.g. if/else) SCXML flow control elements. (may not ever bother, but this is extensible, so you can easily do so)
+* Future Work
+** Integration with Fulcro for fancy statechart-based UI systems.
+** An export to js XState machines (with placeholders for the executable content), so we can use their diagram tool :D
+** Our own graphical design/simulation tool.
 
 == Deviations from the Standard
 
@@ -108,6 +110,8 @@ Thus you can define (via protocols):
   by your own execution model and may not actually be Clojure(script).
 * The actual state chart processing semantics/algorithm. A version of the W3C 2015-09-01 recommendation for SCXML is provided
   as a default.
+* How statechart working memory is stored over time (and space).
+* How statechart definitions are stored and retrieved.
 
 However, it would be a real hassle if you had to set up all of that stuff just to get what many people want:
 A statechart that can run in CLJC, using Clojure code, and a functional interface where you can manually
