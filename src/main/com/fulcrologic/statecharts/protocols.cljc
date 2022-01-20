@@ -5,55 +5,44 @@
    EventQueue - An external event queue for cross (and loopback) communication of machines and external services.
    DataModel - A model for saving/fetching data that can be directly manipulated by a state machine.
    ExecutionModel - A component that implements the interpretation of runnable code in the machine.
+   InvocationProcessor - A component that knows how to invoke a specific kind of thing.
+   StatechartRegistry - A component that can register/retrieve statechart definitions by their name.
+   WorkingMemoryStore - A component that can save/restore the working memory of a session.
 
-   Many methods in the namespace take an `env`. This map will contain at least:
+   Many methods in the namespace take an `env`. This map will contain keys for the above.
 
-   * `::sc/vwmem` A volatile (e.g. vswap!) holding working memory. The data model MAY place its data
-      in this map under namespaced keys, but it should not modify any of the preexisting things in working
-      memory.
-   ** The working memory will contain `::sc/session-id`
-   * `::sc/context-element-id` will be the ID of the state (or :ROOT) if the method is called by the Processor while
-     working on behalf of a state.
+   The data model requires a *processing* env, which is the same as above, but also includes a volatile
+   holding the working memory, context information, and the full statechart definition (e.g. from the
+   registry).
 
-  ::sc/machine  - The machine definition
-  ::sc/data-model - The current implementation of the DataModel
-  ::sc/event-queue - The current implementation of the external EventQueue
-  ::sc/execution-model - The current implementation of the ExecutionModel
+   See `com.fulcrologic.statecharts.specs`.
 
-  Implementations of a Processor MAY place (or allow you to place) other namespaced keys in `env` as well.
+   The `env` is allowed to contain any number of user-defined (namespaced) keys.
   ")
 
-(defprotocol TransactionSupport
-  "A protocol to add transaction support to a data model."
-  (begin! [provider env] "Begin a 'transaction' where calls to `update!` on a data model are batched together in
-    a transaction.")
-  (commit! [provider env]
-    "Commit all calls to `update!` that have happened since `begin!`.")
-  (rollback! [provider env]
-    "Skip the calls to `update!` that have happened since `begin!`."))
-
 (defprotocol DataModel
-  "A data model for a state machine.
+  "A data model for a state machine. Note that this protocol requires the *processing* env, which will
+   include the context of the state machine on whose behalf the data is being manipulated.
 
    The implementation of a DataModel MAY also implement TransactionSupport to add ACID guarantees
    (e.g. if the data model is backed by durable storage) around groups of calls to `update!`."
-  (load-data [provider env src]
+  (load-data [provider processing-env src]
     "OPTIONAL. Attempt to load data from the given `src` (as declared on a datamodel element in the machine.) into
      the data model.
 
      See ns docstring for description of `env`.
 
      Returns nothing.")
-  (current-data [provider env]
+  (current-data [provider processing-env]
     "Returns the current data (must be map-like) for the context in the given env.")
-  (get-at [provider env path] "Pull a data value from the model
+  (get-at [provider processing-env path] "Pull a data value from the model
    at a given `path` (a vector of keywords) (in the context of `env`).
    The data model can define what this path means, as well as the context.
 
    See ns docstring for description of `env`.
 
    Returns the value or nil.")
-  (update! [provider env {:keys [ops]}]
+  (update! [provider processing-env {:keys [ops]}]
     "Run a sequence of operations that updates/removes data from the data model in the context of `env`.
 
      `opts` is a vector of data model changes.
@@ -77,13 +66,13 @@
      See ns docstring for description of `env`."))
 
 (defprotocol EventQueue
-  (send! [event-queue {:keys [event
-                              data
-                              send-id
-                              source-session-id
-                              target
-                              type
-                              delay] :as send-request}]
+  (send! [event-queue env {:keys [event
+                                  data
+                                  send-id
+                                  source-session-id
+                                  target
+                                  type
+                                  delay] :as send-request}]
     "Put a send-request on the queue.
 
      The send request has:
@@ -93,6 +82,7 @@
      * :send-id - The id of the send element or an id customized by an expression on that element.
                   Need not be unique. Cancelling via this send-id cancels all undelivered events with that
                   send-id/source-session-id.
+     * :invoke-id - The id of the invocation, if this event is coming from a child statechart.
      * :source-session-id - The globally unique session ID.
      * :data (OPTIONAL) The data to include (encode into) in the event. The state chart processor will extract this
                         data from the Data Model according to the `send` content elements or `namelist` parameter.
@@ -112,30 +102,26 @@
      processing and delivering results/responses back to this queue for consumption by the sender.
 
      In this case the send isn't actually going *into* this event queue, but is instead being processed as described in
-     SCXML standard's Event I/O Processor.")
-  (cancel! [event-queue session-id send-id]
+     SCXML standard's Event I/O Processor.
+
+     Returns true if the event can be sent, and false if the type of event isn't supported.")
+  (cancel! [event-queue env session-id send-id]
     "Cancel the (delayed) send(s) with the given `send-id` that were `sent!` by `session-id`.
      This is only possible for events that have a delay and have not yet been delivered.")
-  (receive-events! [event-queue options handler]
-    "Pull the next event(s) from the queue that matches the given `options` (see event queue implementation for supported
-     options), and process it with `handler`, a `(fn [env message])` that MUST process the
-     event in a way that ensures the event is delivered, processed, and safe to remove from the event queue.
+  (receive-events! [event-queue env handler] [event-queue env handler options]
+    "Pull the next event(s) from the queue that can be delivered and run them through `handler`
 
-     The `env` of the handler is defined by the queue implementation, and is not required.
+     The `options` of the handler are defined by the queue implementation.
 
-     The format of `message` will depend on the `type` used in the `send`. For statechart session events, these should
-     be in the format created by `events/new-event`, but MAY include
-     any additional (preferably namespaced) keys to pass along additional information that the handler might
-     find useful. For example, a queue capable of a transactional nature (say, implemented with an SQL database)
+     For example, a queue capable of a transactional nature (say, implemented with an SQL database)
      might pass the database connection to the handler so it can participate in the transaction that was used to
      pull the event from the queue as part of the algorithm to ensure exactly-once event delivery.
 
-     This function MAY allow broader filtering options. For example, the user of the queue might be trying to find
-     all undelivered events to a specific target of all types, or all targets of a specific type. See the
-     notes on how the options are used and interpreted in the specific event queue implementation you choose.
+     The format of `message` will depend on the `type` used in the `send`. For statechart session events, these should
+     be in the format created by `events/new-event`, but MAY include
+     any additional (preferably namespaced) keys to pass along.
 
-     This function MAY block waiting for the next event, and the `options` map MAY allow you to
-     pass additional parameters to affect this behavior. Your selected event queue implementation's
+     This function MAY block waiting for the next event. Your selected event queue implementation's
      documentation should be consulted for the correct way to run your event loop.
 
      If `handler` throws (or never returns, for example due to a server reboot) then the
@@ -147,8 +133,8 @@
      exceed 5 seconds of run time. If this time limit is exceeded then an implementation MAY revert to
      AT LEAST ONCE delivery guarantees, though it MUST preserve event order.
 
-     As such, statechart machines that use a durable event queue should be defensively written to safely
-     tolerate AT LEAST ONCE message delivery. For example, instead of using a `toggle` event to switch
+     As such, statechart machines that use a durable event queue in a distributed environment should be defensively written
+     to safely tolerate AT LEAST ONCE message delivery. For example, instead of using a `toggle` event to switch
      between two states give each a unique name (like `turn-on` and `turn-off`)."))
 
 (defprotocol ExecutionModel
@@ -164,19 +150,27 @@
     See ns docstring for description of `env`."))
 
 (defprotocol Processor
-  (get-base-env [this] "Returns the base env that the processor is using. Will include the data-model,
-   execution-model, event-queue, and `processor` itself.")
-  (start! [this session-id]
-    "Initialize the state machine processor for a new session. `session-id` should be a globally unique identifier
-     for this particular instance of the machine.
+  (start! [this env statechart-src options]
+    "Start a new session.  The `statechart-src` is the name of the desired statechart definition you
+     wish to use out of the statechart registry.
 
-     Transitions to the initial state.  If you have the return value of this function or of `process-event!`, then
-     you can resume the session simply by calling `process-event!` with that value. This function will always
-     start a NEW machine.
+     This will start the chart, and transition to the initial state. Returns working memory, which is needed
+     in order to process further events with `process-event!`.
+
+     options can contain:
+
+     ::sc/session-id - A unique ID for the new session. If not present then a random one will be assigned.
+     :com.fulcrologic.statecharts/invocation-data - Data passed to this new session as invocation data
+     :com.fulcrologic.statecharts/parent-session-id - The calling session's ID
+     :org.w3.scxml.event/invokeid - The ID assigned to this if it is an invocation
 
      Returns the resulting working memory (current state) of the machine.")
-  (process-event! [this working-memory external-event]
-    "Process an event. `working-memory` should be the value last returned from this function (or start!).
+  (process-event! [this env working-memory event]
+    "Process an event.
+
+    `env` is an ::sc/env
+    `working-memory` should be the value last returned from this function (or start!).
+    `event` The event to process
 
      Returns the next value of working memory."))
 
@@ -200,3 +194,18 @@
   (forward-event! [this env {:keys [type invokeid event]}]
     "Forward the given event from the source `env` to the invocation of the given `type` that is identified by `invokeid`. The
      source session information can be found in the `env`."))
+
+(defprotocol StatechartRegistry
+  (register-statechart! [this src statechart-definition]
+    "Add a statechart definition to the known definitions. The `src` should be a unique well-known
+     key, and is what you would look the definition up by. If your invocation support uses this
+     system, then the `invoke` element's `src` will match the `src` passed here.")
+  (get-statechart [this src]
+    "Retrieve the definition of a statechart that is known by the well-known key `src`."))
+
+(defprotocol WorkingMemoryStore
+  (get-working-memory [this env session-id] "Get the working memory for a state machine with session-id")
+  (save-working-memory! [this env session-id wmem]
+    "Save working memory for session-id")
+  (delete-working-memory! [this env session-id]
+    "Remove the working memory for (presumably terminated) session-id"))

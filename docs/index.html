@@ -537,7 +537,7 @@ leverages parallel and compound states to simulate traffic lights with pedestria
 <pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">traffic-light</span>
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.state-machine <span class="symbol">:refer</span> [machine]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
     [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition raise on-entry assign data-model]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
     [com.fulcrologic.statecharts.simple <span class="symbol">:refer</span> [new-simple-machine]]
@@ -639,7 +639,7 @@ leverages parallel and compound states to simulate traffic lights with pedestria
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">history-sample</span>
   (<span class="symbol">:require</span>
-    [com.fulcrologic.statecharts.state-machine <span class="symbol">:refer</span> [machine]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
     [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition on-entry final done-data
                                                   data-model log on-exit script history]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
@@ -938,7 +938,7 @@ delayed event delivery will work, as long as your code watches for the delayed e
 <pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">traffic-light</span>
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.state-machine <span class="symbol">:refer</span> [machine]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
     [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition raise on-entry assign data-model]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
     [com.fulcrologic.statecharts.simple <span class="symbol">:refer</span> [new-simple-machine]]
@@ -1039,7 +1039,7 @@ automatically changes over time:</p>
    sent events and mutates in place (and handles timers in CLJC) via core.async.</span><span class="delimiter">&quot;</span></span>
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.state-machine <span class="symbol">:refer</span> [machine]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
     [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition raise on-entry assign data-model
                                                   Send]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
@@ -1469,7 +1469,7 @@ would normally be run.</p>
     [app.my-machine <span class="symbol">:refer</span> [some-statechart]]
     [com.fulcrologic.statecharts.algorithms.v20150901 <span class="symbol">:refer</span> [new-processor]]
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.state-machine <span class="symbol">:refer</span> [machine]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
     [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state on-entry]
     [com.fulcrologic.statecharts.execution-model.lambda <span class="symbol">:refer</span> [new-execution-model]]

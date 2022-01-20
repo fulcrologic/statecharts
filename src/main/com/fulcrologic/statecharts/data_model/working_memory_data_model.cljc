@@ -7,12 +7,12 @@
    There are two implementations: One where data is scoped to the state, and another where it is global.
    "
   (:require
-    [clojure.edn :as edn]
+    #?(:clj
+       [clojure.edn :as edn])
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.state-machine :as sm]
-    [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.protocols :as sp]
+    [com.fulcrologic.statecharts.chart :as chart]
     [taoensso.timbre :as log]))
 
 (defmulti run-op (fn [all-data context-id {:keys [op]}] op))
@@ -70,12 +70,12 @@
               (catch #?(:clj Throwable :cljs :default) e
                 (log/error e "Unable to load data from" src)))
        :cljs (log/error "src not supported.")))
-  (current-data [_ {::sc/keys [machine vwmem] :as env}]
+  (current-data [_ {::sc/keys [statechart vwmem] :as env}]
     (let [all-data (some-> vwmem deref ::data-model)]
       (loop [state-id (env/context-element-id env)
              result   {}]
         (let [result (merge (get all-data state-id) result)
-              parent (sm/get-parent machine state-id)]
+              parent (chart/get-parent statechart state-id)]
           (if (or (nil? parent) (= :ROOT parent))
             (merge (get all-data :ROOT) result)
             (recur parent result))))))
@@ -83,7 +83,7 @@
     (when (or (keyword? path) (vector? path))
       (let [all-data (sp/current-data provider env)]
         (get all-data (if (keyword? path) path (last path))))))
-  (update! [provider {::sc/keys [machine vwmem] :as env} {:keys [ops] :as args}]
+  (update! [provider {::sc/keys [statechart vwmem] :as env} {:keys [ops] :as args}]
     (when-not (map? args)
       (log/error "You forgot to wrap your operations in a map!" args))
     (let [all-data (some-> vwmem deref ::data-model)
@@ -170,7 +170,7 @@
         (and (vector? path) (= :ROOT (first path))) (get-in data (rest path))
         (vector? path) (get-in data path)
         :else nil)))
-  (update! [provider {::sc/keys [machine vwmem] :as env} {:keys [ops] :as args}]
+  (update! [provider {::sc/keys [statechart vwmem] :as env} {:keys [ops] :as args}]
     (when-not (map? args)
       (log/error "You forgot to wrap your operations in a map!" args))
     (let [all-data (some-> vwmem deref ::data-model)

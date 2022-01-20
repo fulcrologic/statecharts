@@ -1,7 +1,5 @@
 (ns com.fulcrologic.statecharts.data-model.operations
-  "Convenience helpers for interacting with `DataModel`s"
-  (:require
-    [taoensso.timbre :as log]))
+  "Convenience helpers for interacting with `DataModel`s")
 
 (defn assign
   "A operation element that indicates the desire to overwrite the given paths in the data model. E.g.

@@ -30,7 +30,7 @@ endif::[]
 = Getting Started
 
 A statechart is defined as a (nested) map. Some of this content's behavior is <<Goals, configurable>>.
-The simplest setup is to use Clojure for the executable code and a simple flat data model that scopes all state machine
+The simplest setup is to use Clojure for the executable code and a simple flat data model that scopes all state charts
 to the session (running instance of state chart).
 
 NOTE: The SCXML standard is used for the semantics and processing, and MUCH of the overall structure. We keep
@@ -43,8 +43,8 @@ To make it easier to write the maps there are functions for each element type in
 `com.fulcrologic.statecharts.elements` namespace, and it is recommended that you use these because some of
 them validate their parameters and children.
 
-Once you have a machine definition you need to create a session, which is just a running instance of the
-machine.
+Once you have a state chart definition you need to create a session, which is just a running instance of the
+chart.
 
 Once you have a session, you can send events to it, and look at the content of the session (or store it, etc).
 
@@ -79,6 +79,43 @@ include::src/examples/history_sample.cljc[]
 See the https://www.w3.org/TR/2015/REC-scxml-20150901/[SCXML spec] for how to structure elements. The structure and naming are kept close to that spec for easy
 cross-referencing with its documentation.
 
+= Autonomous State Charts
+
+The pure functional form for the charts is interesting and useful as a building-block, but if you want
+a fully-function SCXML-compatible system, you needs something that can run, deliver delayed events, send
+events from one statechart session to another, start/stop nested statecharts, etc.
+
+In order for this to work you must have a number of things: an event queue, invocation processor(s),
+a data/execution model, a working memory storage facility, a statechart registry, and an event loop.
+
+That's a lot of different things to set up!
+
+The `com.fulcrologic.statecharts.simple` namespace can set up all of these things for you, as long
+as you simple want to run statecharts all in the same JVM in RAM. That namespace also includes helper
+functions for starting a new session on a chart, and sending events to arbitrary sessions.
+
+NOTE: The design of this library is meant to accomplish much more complex distributed and long-lived systems, but you
+have to implement the various protocols for each of the above elements to build such a thing.
+
+The basic steps for using `simple` are:
+
+. Create a `(simple/simple-env)`
+. Register your charts with the statechart registry in that env with `(simple/register! env k chart)`
+. Run an event loop. The `com.fulcrologic.statecharts.event-queue.core-async-event-loop/run-event-loop!`
+uses `core.async` to run such a loop for you.
+. Start one or more state charts, via the `k` you registered them under.
+. (optionally) Send events `(simple/send! env {:event :evt :target sessionid})`
+
+Below is an example that uses these steps, but also overrides one of the components in the env
+(the working memory store) so it can output messages as the statechart changes state:
+
+[source]
+------
+include::src/examples/traffic_light_async.cljc[]
+------
+
+NOTE: The `send` element has a `Send` (capital S) alias so you can avoid shadowing the predefined Clojure function.
+
 = Going Deeper
 
 You can use the http://www.w3.org/TR/2015/REC-scxml-20150901/[SCXML guide] which has examples as a pretty
@@ -95,12 +132,12 @@ of this library:
 
 [source]
 -----
-(machine {} ; `machine` is an alias for scxml, which also exists in this library
+(statechart {}
   (state {:id :A})
   ...)
 -----
 
-See the docstrings on the `machine` and various elements for details of differences.
+See the docstrings on the `statechart` and various elements for details of differences.
 
 == Terminology
 
@@ -112,10 +149,10 @@ Parallel State:: A state that has more than one compound substate, all of which 
 thus have a child state that is active.
 
 Configuration:: When used in the context of a state chart, the configuration is the list of all active states. A
-state is active if it or ANY of its children are active. Thus, a parallel machine with hierarchical states may
+state is active if it or ANY of its children are active. Thus, a parallel statechart with hierarchical states may
 have a rather large set of IDs in its current configuration.
 
-Working Memory:: A map of data that contains the current configuration of the state machine, and other information
+Working Memory:: A map of data that contains the current configuration of the state chart, and other information
  necessary to know its current full state (which states have had their data model initialized, possible data model
  tracking, etc.).
 
@@ -128,14 +165,14 @@ chooses how to run them. A default implementation requires that they be Clojure 
 with the contextual data for their location.
 
 External Event:: An event that came from the external API, either by you calling `process-event` or some other
-actor code doing so (invocations, sends from external machines, etc.).
+actor code doing so (invocations, sends from external charts, etc.).
 
 Internal Event:: An event that came from the session that will process it. These come from the
-machine implementation itself (e.g. done evens) and from you using the `raise` element in an
+chart implementation itself (e.g. done evens) and from you using the `raise` element in an
 executable content position.
 
 EventQueue:: A FIFO queue for external event delivery. The event queue is responsible for holding onto pending
-External Events to "self", possibly other statechart sessions (instances of other machines),
+External Events to "self", possibly other statechart sessions (instances of other charts),
 remote services (e.g. send an email), and for delayed delivery. The default implementation is a "manually polled" queue
 that does *not* support most of
 these features, and the delayed event delivery is manual (e.g. you have to poll it, or ask it when the next one should
@@ -145,12 +182,27 @@ how you would use these in a more serious/production environment.
 Processor:: An implementation of the statechart algorithm. This library comes with an implementation that follows
 (as closely as possible) the SCXML recommended standard from 2015. You may provide your own.
 
+InvocationProcessor:: A protocol representing things that can be invoked while
+in a state. Implementations are provided for statechart invocations, and
+(in CLJ) futures. It is a simple matter to expand the list of supported types.
+
+WorkingMemoryStore:: A protocol that represents a place to put the working
+memory of a statechart. This is used when you want an autonomous system that
+can "freeze" and "thaw" running sessions as events are received. Such a store
+could be in RAM (implementation provided) or in something more durable
+(Redis, SQL, Datomic, Filesystem).
+
+StatechartRegistry:: A protocol that allows a statechart to be saved/retrieved
+by a well-known name. An implementation is provided for tracking them
+in RAM, but you could also choose an execution model that allows your charts
+to be serializable, and then store the charts in something more durable.
+
 Session:: The combination of the content of the DataModel and Working Memory. I.e. all of the data you'd need in order
 to resume working from where you last left off. Sessions typically have a unique ID, which could be used to store
 sessions into durable storage when they are "idle", and are used for cross-session events.
 
 Conditional Element::
-In statecharts there is a node type (represented as a diamond) that represents a state in which the machine
+In statecharts there is a node type (represented as a diamond) that represents a state in which the chart
 never "rests", but instead immediately transitions to another node based on predicate expressions. In this
 library (and SCXML) this is modelled with a state that has more than one transition, NONE of which have
 and `:event` qualifier (meaning they are exited as soon as they are entered, assuming there is a valid transition).
@@ -159,10 +211,6 @@ and `:event` qualifier (meaning they are exited as soon as they are entered, ass
 
 States may be atomic, compound (hierarchical), or parallel. The first two are generated with the `state` element, and
 the latter with `parallel`.
-
-=== Compound States
-
-=== Parallel States
 
 == Transitions
 
@@ -176,6 +224,13 @@ first transition that matches the current circumstance is taken. Transitions are
 * Their `cond` (if present) evaluates to true AND
 * Their `event` (if present) matches the current event's name (See event name matching)
 * OR neither are present.
+
+A transition that is marked external and targets its enclosing state will cause the exit/entry handlers to fire. An internal
+transition (that has no target at all) will not.
+
+See the SCXML standard for other behaviors of `transition`.
+
+See <<Convenience>> for some alternative ways to represent transitions that are easier to read.
 
 == "Condition" States
 
@@ -194,12 +249,16 @@ on the result of the first transition's condition expression:
   (transition {:target :Y}))
 -----
 
+NOTE: See <<Convenience>> for a nicer-looking version of this.
+
 == Event Processing
 
 In a fully-fleshed system your event queue would have a corresponding runtime story, where `process-event` was
-automatically called on the correct machine/session/invocation/service when an event is available. As such,
+automatically called on the correct chart/session/invocation/service when an event is available. As such,
 and event queue might be distributed and durable (e.g. using Kafka or the like), or might simply be something
 that runs in-core (a core.async `go-loop`).
+
+The library includes a fully-functional system for simple applications in the `simple` namespace.
 
 === Event Name Matching
 
@@ -243,7 +302,7 @@ as a desire to talk to another statechart session (and is the only/default prede
 === Manual Polling Queue
 
 There is a manually polled queue implementation in this library, with *no* automatic processing
-at all. If you want to support events that come from outside of the machine via the queue, then you have
+at all. If you want to support events that come from outside of the chart via the queue, then you have
 to create a loop that polls the queue and calls `process-event!`.  If you do this, then event the
 delayed event delivery will work, as long as your code watches for the delayed events to appear on the queue.
 
@@ -251,23 +310,6 @@ delayed event delivery will work, as long as your code watches for the delayed e
 ------
 include::src/examples/traffic_light.cljc[]
 ------
-
-=== Autonomous State Charts
-
-You can, of course, write your own "event loop". The library comes with a core.async event queue that works
-in conjunction with the simple model to provide an event loop that will automatically process events as they come
-in, and will allow the machine to send itself external events (usually done in order to get a delay). Note that the
-`raise` element does not use the external queue, but also does not provide delays.
-
-Below is an example of using the core.async queue to run a traffic light that
-automatically changes over time:
-
-[source]
-------
-include::src/examples/traffic_light_async.cljc[]
-------
-
-NOTE: The `send` element has a `Send` (capital S) alias so you can avoid shadowing the Clojure function.
 
 == Data Models
 
@@ -313,53 +355,52 @@ script elements:
 
 == Working Memory and Identity
 
-The working memory of the state machine is plain EDN and contains no code.
+The working memory of the state chart is plain EDN and contains no code.
 It is serializable by nippy, transit, etc. Therefore, you can easily save
-an active state machine by value into any data store. The value
+an active state chart by value into any data store. The value
 is intended to be as small as possible so that storage can be efficient.
 
-Every active state machine is assigned a ID on creation (which you
+Every active state chart is assigned a ID on creation (which you
 can override via `initialize`). This is intended as part of the story to
 allow you to coordinate external event sources with working with
-instances of machines that are archived in durable storage while idle.
+instances of chart that are archived in durable storage while idle.
 
 == Invocations
 
-An invocation is an "external" service/chart/process that can be started when your state machine enters a state,
+An invocation is an "external" service/chart/process that can be started when your state chart enters a state,
 exchanges events *while* that state is active (you can forward events and receive them). The invocation can self-terminate
 while the state is still active, but it will also be cancelled if your chart leaves the enclosing state.
 
-For example, suppose you've installed a service that can provide events on some interval. That service send back
-`:timer` events that include `sequence-number` in the event data. Suppose you want to use that to trigger reminder
-emails every two days while the billing system is in a Grace Period state for that user
-(one statechart session per user).
+Invocations can forward events to the target invocation, and can receive events back. An incoming event will be
+pre-processed by `finalize` elements and can update the data model before the event is further propagated through
+the chart. See the SCXML standard for a full description of how invocations work.
 
-You might end up with something like:
+=== Invoking other State Charts or Futures
+
+The library has a built-in `InvocationProcessor` that knows how to start other statecharts via an `invoke`, and in CLJ
+there is also support for futures (which are cancelled if the state containing the invoke is exited).
+
+The `src/examples` of the repository includes an example, shown below:
 
 [source]
 -----
-(state {:id :BillingGracePeriod}
-  (transition {:event :timer}
-    (send {:type :email
-           :event :billing-reminder
-           :namelist {:to [:ROOT :user/email]
-                      :reminder [:ROOT :reminders]}}))
-  (invoke {:type :interval-timer
-           :finalize (fn [env {:keys [sequence-number]}] [(ops/assign [:ROOT :reminders] sequence-number)])
-           :params {:period "2 days"}}))
+include::src/examples/invocations.cljc[]
 -----
 
-The `transition` element responds to the events received by the state chart, and `invoke` can send such events. So,
-the timer service here is sending `:timer` events, and then the `send` element is pulling data from the DataModel
-to construct the correct parameters to send to an email service that uses the event type (:billing-reminder) and
-the parameter data (generated in this case with `namelist`) to fill out some kind of email template.
+=== Custom Invocation Processors
 
-NOTE: The implementation of the invocation subsystem will define how these services are written and installed. It is
-still under construction at the time of this writing. Consult the source in case the docs are out of date).
+For example, suppose you want to install an invocation processor that can provide timer events on some interval.
+You could do something like:
 
-Exiting the `:BillingGracePeriod` state will cancel the timer so that no further `:timer` events are sent.
+[source]
+-----
+include::src/examples/custom_invocation.cljc[]
+-----
 
-= Shorthand Convenience
+The `transition` element responds to the events received by the state chart, and the invocation processor for
+an `invoke` can send such events. So, the timer service here is sending `:interval-timer/timeout` events.
+
+= Shorthand Convenience [[Convenience]]
 
 Making your statechart definition cleaner is a simple matter, since it
 is nothing more than a nested data structure.
@@ -396,10 +437,28 @@ looks like this:
      (cancel {:sendid id}))])
 -----
 
+There are also some simple ones (as functions) that clean up readability for common cases:
+
+[source]
+-----
+(transition {:event :E :target :target-state}
+  optional-executable-elements ...)
+
+;; has a convenience version:
+(on :E :target-state
+  optional-executable-elements...)
+
+;; or if there is just a script and no target (just an event handler that stays in the same state):
+(handle :E expr)
+;; means:
+(transition {:event :E}
+  (script {:expr expr}))
+-----
+
 A good use-case for a macro comes up when you want to emit nodes that might
 be better suited for a diagram tool. The UML state chart system defines a choice node which is a node that
-makes a decision about where to transition to. In the SCXML standard they are coded as a state that includes nothing
-but event-less transitions with conditions:
+makes a decision about where to transition to. In the SCXML standard they are coded as a state that includes
+nothing but event-less transitions with conditions:
 
 [source]
 -----
@@ -409,9 +468,11 @@ but event-less transitions with conditions:
     (transition {:target else-target-state})
 -----
 
-This is a bit noisy, isn't immediately obvious to the reader, and the predicates are code, so there is no way
-for them to easily be emitted to a diagram. So there is a macro version of `choice`
-in the `convenience-macros` namespaces:
+Which is not only a bit noisy, but it isn't immediately obvious to the reader that this is a node that
+merely makes a choice. Additionally, with the lambda execution model the predicates are code,
+so there is no way for them to easily be emitted to a diagram.
+
+So there is a macro version of this called `choice` in the `convenience-macros` namespace:
 
 [source]
 -----
@@ -484,7 +545,7 @@ executable children).
 
 ;; ...
 
-(machine {}
+(statechart {}
   (state {}
     (log-and-run
        (send {})
@@ -495,17 +556,17 @@ executable children).
 = Testing
 
 The main interface to this library is pure and functional, which makes the general job of testing easier in some cases,
-but the fact is that you often need to walk a state machine through several steps in order to get it *into* the
+but the fact is that you often need to walk a state chart through several steps in order to get it *into* the
 starting configuration to test.
 
 The fact that nodes can execute (possibly side-effecting) code also means that when testing it is usually desirable to
 eliminate these side effects through some kind of stubbing mechanism.
 
 Fortunately the design of the library makes it trivial to plug in a mock execution model, mock event queue,
-and a test data model, which allows you to easily exercise a state machine in tests in ways that do not
+and a test data model, which allows you to easily exercise a state chart in tests in ways that do not
 side effect in an uncontrolled fashion.
 
-The `com.fulcrologic.statecharts.testing` namespace includes mocks for all of the protocols, allows for
+The `com.fulcrologic.statecharts.testing` namespace includes mocks for the necessary protocols, allows for
 a pluggable data model (defaults to flat working memory), and has pre-written helpers and predicates.
 
 The mock execution model allows you to easily set up specific results for expressions and conditions that
@@ -515,43 +576,7 @@ Here is an example test (written with fulcro-spec):
 
 [source]
 -----
-(ns statecharts-spec
-  (:require
-    [app.my-machine :refer [some-statechart]]
-    [com.fulcrologic.statecharts.algorithms.v20150901 :refer [new-processor]]
-    [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.state-machine :refer [machine]]
-    [com.fulcrologic.statecharts.events :refer [new-event]]
-    [com.fulcrologic.statecharts.elements :refer [state on-entry]
-    [com.fulcrologic.statecharts.execution-model.lambda :refer [new-execution-model]]
-    [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.testing :as testing :refer [in? ran? will-send configuration-for-states]]
-    [fulcro-spec.core :refer [specification assertions component provided when-mocking! =>]]
-    [clojure.set :as set]))
-
-(defn is-tuesday? [env data] ...)
-(def some-statechart
-  (machine {}
-    (state {:id :state/start}
-      (transition {:cond is-tuesday?
-                   :event :event/trigger
-                   :target :state/next}))
-    (state {:id :state/next})))
-
-(defn config [] {:machine some-statechart})
-
-(specification "My Machine"
-  (component "When it is tuesday"
-    (let [env (testing/new-testing-env (config) {is-tuesday? true})]
-
-      (testing/start! env session-id)
-      (testing/run-events! env :event/trigger)
-
-      (assertions
-        "Checks to see that it is tuesday"
-        (testing/ran? env is-tuesday?) => true
-        "Goes to the next state"
-        (testing/in? env :state/next) => true))))
+include::src/test/com/fulcrologic/statecharts/testing_spec.cljc[]
 -----
 
 == Mocking
@@ -568,7 +593,7 @@ The sends and cancels will also be auto-recorded. See the docstrings in the test
 
 == Starting in a Specific Configuration
 
-Most of your tests will need the machine to be in some particular state as part of your setup. You *could* get there
+Most of your tests will need the chart to be in some particular state as part of your setup. You *could* get there
 by triggering a sequence of events while having all of the mocks in perfect condition, but this creates a fragile
 test where changes to the structure of the chart break a bunch of tests. The testing helpers include
 `(testing/goto-configuration! env data-ops config)` that allows you to set up the data model and configuration.
@@ -576,7 +601,7 @@ test where changes to the structure of the chart break a bunch of tests. The tes
 The `data-ops` is a vector of Data Model operations (e.g. ops/assign) to run on the data model. and `config` is
 a valid configuration (set of active states) for the chart.
 Unfortunately, the configuration of a statechart is non-trivial (it must include all active states in a complex
-hierarchy) and will change when you refactor the machine. So, another helper `testing/configuration-for-states` allows you
+hierarchy) and will change when you refactor the chart. So, another helper `testing/configuration-for-states` allows you
 to get a list of *all* of the states that would be active *given* the deepest desired leaf state(s).
 
 In a chart with no parallel states, there will only ever be one leaf, but when parallel states are active you must
@@ -586,14 +611,14 @@ Thus, a common test setup will look like this:
 
 [source]
 -----
-(defn config [] {:machine some-statechart})
+(defn config [] {:statechart some-statechart})
 
 (specification "Starting in Some State"
   (let [env (testing/new-testing-env (config) {})]
 
-    ;; assume a top-level parallel node, with two sub-regions. `configuration-for-states` will populate all of the necessary
-    ;; ancestor states
-    (testing/goto-configuration! env [] (configuration-for-states env #{:state.region1/leaf :state.region2/leaf}))
+    ;; assume a top-level parallel node, with two sub-regions. An internal call to `configuration-for-states`
+    ;; will populate all of the necessary ancestor states from these leaves.
+    (testing/goto-configuration! env [] #{:state.region1/leaf :state.region2/leaf})
     (testing/run-events! env :event/expired)
 
     ;; assertions
@@ -607,7 +632,7 @@ https://www.w3.org/TR/2015/REC-scxml-20150901/#AlgorithmforSCXMLInterpretation[S
 much of the implementation uses internal volatiles in order to match the imperative style of that doc for easier
 comparison and avoidance of bugs.
 
-The actual structure of the live CLJC data used to represent machines also closely mimics
+The actual structure of the live CLJC data used to represent charts also closely mimics
 the structure described there, but with some differences for convenient use in CLJC.
 
 Specifically, executable content is *still* treated as *data*, but the XML nodes that
@@ -657,7 +682,7 @@ into (scope and args still determined by the execution model selected):
                       (do-something b))))})
 -----
 
-If you're using XML tools to generate you machines, though, it's probably easiest to use
+If you're using XML tools to generate your charts, though, it's probably easiest to use
 `script` tags to begin with.
 
 == Related Work
@@ -692,7 +717,7 @@ Fulcro UI and I/O).
 
 This library was written using the reference implementation described in
 the https://www.w3.org/TR/scxml[SCXML standard], but without the requirement
-that the machine be written in XML.
+that the chart be written in XML.
 
 Any deviation from the standard (as far as general operation of state transitions, order
 of execution of entry/exit, etc.) should be considered a bug. Note that it is possible

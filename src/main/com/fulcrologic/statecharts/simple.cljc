@@ -5,42 +5,90 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
+    [com.fulcrologic.statecharts.algorithms.v20150901-validation :as v]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
-    [com.fulcrologic.statecharts.execution-model.lambda :as lambda]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
-    [com.fulcrologic.statecharts.protocols :as sp]))
+    [com.fulcrologic.statecharts.execution-model.lambda :as lambda]
+    [com.fulcrologic.statecharts.registry.local-memory-registry :as lmr]
+    [com.fulcrologic.statecharts.working-memory-store.local-memory-store :as lms]
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [com.fulcrologic.statecharts.util :refer [new-uuid]]
+    [com.fulcrologic.statecharts.invocation.statechart :as i.statechart]
+    #?(:clj [com.fulcrologic.statecharts.invocation.future :as i.future])))
 
-(deftype SimpleMachine [P DM Q EX]
-  sp/DataModel
-  (load-data [provider env src] (sp/load-data DM env src))
-  (current-data [provider env] (sp/current-data DM env))
-  (get-at [provider env path] (sp/get-at DM env path))
-  (update! [provider env args] (sp/update! DM env args))
-  sp/EventQueue
-  (send! [event-queue req] (sp/send! Q req))
-  (cancel! [event-queue session-id send-id] (sp/cancel! Q session-id send-id))
-  (receive-events! [event-queue options handler] (sp/receive-events! Q options handler))
-  sp/ExecutionModel
-  (run-expression! [model env expr] (sp/run-expression! EX env expr))
-  sp/Processor
-  (get-base-env [this] (sp/get-base-env P))
-  (start! [this session-id] (sp/start! P session-id))
-  (process-event! [this working-memory external-event]
-    (sp/process-event! P working-memory external-event)))
+(defn simple-env
+  "Creates an env that has a local and simple implementation of all required components.
 
-(defn new-simple-machine
-  "Creates a machine that defauts uses the standard processing with a working memory data model,
-   a manual event queue, and the lambda executor.
+   It defaults to standard processing with a flat working memory data model, a manual event queue,
+   local memory registry and memory storage, a statechart invocation processor,
+   the lambda executor, and a v20150901 processor.
 
    `extra-env` can contain anything extra you want in `env`, and can override any of the above by
-   key (e.g. :data-model)."
-  [machine-def {::sc/keys [data-model execution-model event-queue] :as extra-env}]
-  (let [dm (or data-model (wmdm/new-flat-model))
-        q  (or event-queue (mpq/new-queue))
-        ex (or execution-model (lambda/new-execution-model dm q))]
-    (->SimpleMachine
-      (alg/new-processor machine-def (merge {:data-model      dm
-                                             :execution-model ex
-                                             :event-queue     q}
-                                       extra-env))
-      dm q ex)))
+   key (e.g. ::sc/data-model).
+
+   Returns an `env` ready to be used with the processor (which is ::sc/processor in `env`).
+
+   Remember to register your charts via `(env/register! env k chart)` or by using the
+   ::sc/statechart-registry returned in `env` directly.
+
+   ```
+   (def env (simple-env))
+   (env/register! env ::chart some-chart)
+   (def processor (::sc/processor env))
+   (def s0 (sp/start! processor env ::chart {::sc/session-id 42}))
+   (def s1 (sp/process-event! processor env s0 event))
+   ...
+   ```
+   "
+  ([] (simple-env {}))
+  ([{::sc/keys [data-model execution-model event-queue
+                working-memory-store statechart-registry] :as extra-env}]
+   (let [dm       (or data-model (wmdm/new-flat-model))
+         q        (or event-queue (mpq/new-queue))
+         ex       (or execution-model (lambda/new-execution-model dm q))
+         registry (or statechart-registry (lmr/new-registry))
+         wmstore  (or working-memory-store (lms/new-store))
+         env      (merge {::sc/statechart-registry   registry
+                          ::sc/data-model            dm
+                          ::sc/event-queue           q
+                          ::sc/working-memory-store  wmstore
+                          ::sc/processor             (alg/new-processor)
+                          ::sc/invocation-processors #?(:clj
+                                                        [(i.statechart/new-invocation-processor)
+                                                         (i.future/new-future-processor)]
+                                                        :cljs
+                                                        [(i.statechart/new-invocation-processor)])
+                          ::sc/execution-model       ex}
+                    extra-env)]
+     env)))
+
+(defn register!
+  "Register a statechart `chart` at `chart-key` in the registry known by `env`."
+  [{::sc/keys [statechart-registry]} chart-key chart]
+  (if-let [problems (seq (v/problems chart))]
+    (throw (ex-info "Cannot register invalid chart" {:chart-key chart-key
+                                                     :problems  (vec problems)}))
+    (sp/register-statechart! statechart-registry chart-key chart))
+  true)
+
+(defn start!
+  "Start a statechart that has been previously registered with `env` as `chart-src`. The options map
+  can contain ::sc/session-id or one will be autogenerated. Note: This assumes you're going to send events
+  via the event queue, and that something is running an event loop on that event queue.
+
+  Returns nothing useful, but throws if there is a problem."
+  ([env chart-src]
+   (start! env chart-src (new-uuid)))
+  ([{::sc/keys [processor working-memory-store statechart-registry] :as env} chart-src session-id]
+   (assert statechart-registry "There is a statechart registry in env")
+   (assert working-memory-store "There is a working memory store in env")
+   (assert (sp/get-statechart statechart-registry chart-src) (str "A chart is registered under " chart-src))
+   (let [session-id session-id
+         s0         (sp/start! processor env chart-src {::sc/session-id session-id})]
+     (sp/save-working-memory! working-memory-store env session-id s0))
+   true))
+
+(defn send!
+  "Proxy to sp/send! on the event-queue in `env`."
+  [{::sc/keys [event-queue] :as env} event]
+  (sp/send! event-queue env event))

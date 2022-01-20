@@ -1,13 +1,15 @@
 (ns com.fulcrologic.statecharts.util
-  (:require
-    [com.fulcrologic.statecharts :as sc])
   #?(:clj
      (:import (clojure.lang PersistentQueue)
-              (java.util Date))))
+              (java.util UUID Date))))
 
 (defn genid
   "Generate a unique ID with a base prefix. Like `gensym` but returns a keyword."
   [s] (keyword (str (gensym (name s)))))
+
+(defn new-uuid []
+  #?(:clj  (UUID/randomUUID)
+     :cljs (random-uuid)) )
 
 (defn queue [& args]
   (reduce conj

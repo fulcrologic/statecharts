@@ -53,7 +53,7 @@
      (assign {:location ~location :expr ~expression :diagram/expression ~(str expression)})))
 
 (defmacro choice
-  "Create a choice state. Notation is like `cond`, but `:else` is the only acceptable predicate
+  "Create a choice state. Notation is like `cond`, but `:else` is the only acceptable \"default\" predicate
    The `pred` should be the symbols that will resolve to functions that take `[env data]`.
    The target states may be raw keywords, or symbols that refer to the raw keyword, but MUST
    NOT be more complex expressions.

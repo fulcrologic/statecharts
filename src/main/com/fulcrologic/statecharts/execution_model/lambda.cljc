@@ -4,27 +4,15 @@
    of scripts/expressions can return updates for the data model. It also requires the event queue
    so it can send error events back to the machine if the expression has an error."
   (:require
-    [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.statecharts.environment :as env]))
+    [taoensso.timbre :as log]))
 
 (deftype CLJCExecutionModel [data-model event-queue]
   sp/ExecutionModel
-  (run-expression! [this env expr]
+  (run-expression! [_this env expr]
     (if (fn? expr)
       (let [data       (sp/current-data data-model env)
-            session-id (env/session-id env)
-            result     (try
-                         (log/trace "Trying to run function in session" session-id)
-                         (log/spy :trace "expr => " (expr env data))
-                         (catch #?(:clj Throwable :cljs :default) e
-                           (log/trace e "Expression threw an exception.")
-                           ;; Switch to internal event queue
-                           (sp/send! event-queue {:event             :error.execution
-                                                  :data              {:error e}
-                                                  :source-session-id session-id})
-                           nil))
+            result     (log/spy :trace "expr => " (expr env data))
             update?    (vector? result)]
         (when update?
           (log/trace "trying vector result as a data model update" result)

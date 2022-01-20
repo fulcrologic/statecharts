@@ -4,10 +4,10 @@
   Note that there are built-in errors and events https://www.w3.org/TR/scxml/#errorsAndEvents."
   (:require
     [clojure.spec.alpha :as s]
-    com.fulcrologic.statecharts.specs
-    [com.fulcrologic.guardrails.core :refer [>defn => ? >defn-]]
+    [clojure.string :as str]
+    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.statecharts :as sc]
-    [clojure.string :as str]))
+    [com.fulcrologic.statecharts.specs]))
 
 (>defn name-match?
   "Match event names.

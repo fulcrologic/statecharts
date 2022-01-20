@@ -1,4 +1,4 @@
-(ns com.fulcrologic.statecharts.chart-io
+(ns chart-io
   "Functions to read/write an approximation of SCXML to/from the statecharts of this
    library.
 
@@ -7,10 +7,9 @@
    The input routines can be useful if you have a SCXML document as a starting point. The
    output uses plantuml because it was the best format for free tooling I could find."
   (:require
-    [com.fulcrologic.statecharts.state-machine :as sm]
-    [com.fulcrologic.statecharts :as sc]
-    [clojure.pprint :refer [pprint]]
     [clojure.string :as str]
+    [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.chart :as chart]
     [hickory.core :as hc]
     [taoensso.timbre :as log]))
 
@@ -111,7 +110,7 @@
       []
       element)))
 
-(def node-type->tag {:machine    :scxml
+(def node-type->tag {:statechart    :scxml
                      :on-exit    :onexit
                      :data-model :datamodel
                      :on-entry   :onentry})
@@ -120,16 +119,16 @@
 
 (declare write-element)
 (defn to-plantuml [chart element nesting-level]
-  (write-element chart (sm/element chart element) nesting-level))
+  (write-element chart (chart/element chart element) nesting-level))
 
 (defn plantuml-transition [chart source-name {:diagram/keys [condition]
                                               :keys         [target event cond] :as transition} nesting-level]
   (mapv
     (fn [target]
-      (let [{:keys [id deep?] :as target-element} (sm/element chart target)
-            history?        (sm/history-element? chart target)
+      (let [{:keys [id deep?] :as target-element} (chart/element chart target)
+            history?        (chart/history-element? chart target)
             ;; History nodes are different in UML...
-            uml-target      (if history? (sm/get-parent chart target) target)
+            uml-target      (if history? (chart/get-parent chart target) target)
             condition-label (and cond (or condition "???"))
             labeled?        (or event condition-label)]
         (str (indent nesting-level) (snake-case source-name) " --> " (some-> uml-target name snake-case)
@@ -141,14 +140,14 @@
     target))
 
 (defn plantuml-transitions [chart state nesting-level]
-  (let [transition-ids (sm/transitions chart state)
-        id             (sm/element-id chart state)
+  (let [transition-ids (chart/transitions chart state)
+        id             (chart/element-id chart state)
         tsource        (name id)]
     (str/join ""
       (vec
         (mapcat
           (fn [tid]
-            (let [transition (sm/element chart tid)]
+            (let [transition (chart/element chart tid)]
               (plantuml-transition chart tsource transition nesting-level)))
           transition-ids)))))
 
@@ -156,25 +155,25 @@
   (fn dispatch* [chart {:keys [id node-type initial?] :as element} nesting-level]
     (cond
       initial? :initial
-      (sm/atomic-state? chart element) :atomic-state
+      (chart/atomic-state? chart element) :atomic-state
       :else node-type)))
 
 (defn uml-priority [chart a b]
   (cond
-    (sm/initial? chart a) -1
+    (chart/initial? chart a) -1
     (and
-      (sm/atomic-state? chart a)
-      (sm/atomic-state? chart b)) 0
-    (sm/atomic-state? chart a) -1
+      (chart/atomic-state? chart a)
+      (chart/atomic-state? chart b)) 0
+    (chart/atomic-state? chart a) -1
     (= (:node-type a) (:node-type b)) 0
     :else 1))
 
 (defn render-children [chart children nesting-level]
   (map #(to-plantuml chart % nesting-level)
-    (sort-by (fn [id] (sm/element chart id)) (partial uml-priority chart) children)))
+    (sort-by (fn [id] (chart/element chart id)) (partial uml-priority chart) children)))
 
 (defmethod write-element :initial [chart {:keys [name node-type children] :as element} nesting-level]
-  (let [transition (sm/element chart (first (sm/transitions chart element)))]
+  (let [transition (chart/element chart (first (chart/transitions chart element)))]
     (str/join ""
       (plantuml-transition chart "[*]" transition nesting-level))))
 
@@ -183,7 +182,7 @@
   )
 
 (defmethod write-element :state [chart {:keys [id children] :as element} nesting-level]
-  (let [choice-nodes (into [] (filter (partial sm/condition-node? chart)) children)
+  (let [choice-nodes (into [] (filter (partial chart/condition-node? chart)) children)
         child-level  (inc nesting-level)]
     (str
       (indent nesting-level) "state " (-> id (name) snake-case) " {\n"
@@ -192,7 +191,7 @@
       (str/join "\n"
         (map
           (fn [cid]
-            (let [{:keys [id]} (sm/element chart cid)]
+            (let [{:keys [id]} (chart/element chart cid)]
               (str (indent child-level) "state " (some-> id name snake-case) " <<choice>>\n")))
           choice-nodes))
       (str/join "" (render-children chart children child-level))
@@ -212,19 +211,19 @@
       (executable-content chart element)
       (plantuml-transitions chart element (inc nesting-level)))))
 
-(defmethod write-element :machine [chart {:keys [name node-type children] :as element} nesting-level]
+(defmethod write-element :statechart [chart {:keys [name node-type children] :as element} nesting-level]
   (str
     "state " (or name "StateChart") " {\n"
     (str/join "" (render-children chart children (inc nesting-level)))
     "}\n"))
 
 (defmethod write-element :history [chart {:keys [node-type deep? children] :as element} nesting-level]
-  (let [p                  (->> element (sm/get-parent chart) name snake-case)
+  (let [p                  (->> element (chart/get-parent chart) name snake-case)
         label              (str p (if deep? "[H*]" "[H]"))
         default-transition (some->> element
-                             (sm/transitions chart)
+                             (chart/transitions chart)
                              (first)
-                             (sm/element chart))]
+                             (chart/element chart))]
     (str/join "" (plantuml-transition chart label default-transition nesting-level))))
 
 (defmethod write-element :default [chart {:keys [node-type children] :as element} nesting-level]

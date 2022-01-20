@@ -2,15 +2,14 @@
   "Utility functions to help with testing state charts."
   (:require
     [clojure.set :as set]
-    [clojure.test :refer [is testing]]
+    [clojure.test :refer [is]]
     [com.fulcrologic.statecharts.algorithms.v20150901-impl :refer [configuration-problems]]
-    [com.fulcrologic.statecharts.algorithms.v20150901 :refer [new-processor]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :refer [new-flat-model]]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.state-machine :as sm]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.statecharts.simple :as simple]
+    [com.fulcrologic.statecharts.chart :as chart]))
 
 (defprotocol Clearable
   (clear! [this] "Clear the recordings of the given mock"))
@@ -49,7 +48,7 @@
           (and found? (seq left-to-find) (seq remainder)) (recur remainder left-to-find)
           :else false))))
   sp/ExecutionModel
-  (run-expression! [model env expr]
+  (run-expression! [_model env expr]
     (swap! expressions-seen conj expr)
     (swap! call-counts update expr (fnil inc 0))
     (cond
@@ -94,10 +93,10 @@
     (has-element? @cancels-seen {:send-id    send-id
                                  :session-id session-id}))
   sp/EventQueue
-  (send! [this send-request] (swap! sends-seen conj send-request))
-  (cancel! [this session-id send-id] (swap! cancels-seen conj {:send-id    send-id
-                                                               :session-id session-id}))
-  (receive-events! [this opts handler]))
+  (send! [this env send-request] (swap! sends-seen conj send-request))
+  (cancel! [this env session-id send-id] (swap! cancels-seen conj {:send-id    send-id
+                                                                   :session-id session-id}))
+  (receive-events! [this env handler opts]))
 
 (defn new-mock-queue
   "Create an event queue that simply records what it sees. Use `sent?` and `cancelled?` to
@@ -105,26 +104,23 @@
   []
   (->MockEventQueue (atom []) (atom [])))
 
-(defrecord TestingEnv [machine working-memory configuration-validator
-                       data-model execution-model event-queue
-                       processor]
+(defrecord TestingEnv [statechart env]
   sp/EventQueue
-  (send! [_ r] (sp/send! event-queue r))
-  (cancel! [_ s si] (sp/cancel! event-queue s si))
-  (receive-events! [_ _ _])
+  (send! [_ e r] (sp/send! (::sc/event-queue env) e r))
+  (cancel! [_ e s si] (sp/cancel! (::sc/event-queue env) e s si))
+  (receive-events! [_ _ _ _])
   sp/Processor
-  (get-base-env [this] this)
-  (start! [_ session-id] (sp/start! processor session-id))
-  (process-event! [_ wm evt] (sp/process-event! processor wm evt))
+  (start! [_ env k options] (sp/start! (::sc/processor env) env k options))
+  (process-event! [_ env wm evt] (sp/process-event! (::sc/processor env) env wm evt))
   SendChecks
-  (sent? [_ eles] (sent? event-queue eles))
-  (cancelled? [_ s si] (cancelled? event-queue s si))
+  (sent? [_ eles] (sent? (::sc/event-queue env) eles))
+  (cancelled? [_ s si] (cancelled? (::sc/event-queue env) s si))
   ExecutionChecks
-  (ran? [_ fref] (ran? execution-model fref))
-  (ran-in-order? [_ frefs] (ran-in-order? execution-model frefs)))
+  (ran? [_ fref] (ran? (::sc/execution-model env) fref))
+  (ran-in-order? [_ frefs] (ran-in-order? (::sc/execution-model env) frefs)))
 
 (defn new-testing-env
-  "Returns a new testing `env` that can be used to run events against a state machine or otherwise
+  "Returns a new testing `env` that can be used to run events against a state chart or otherwise
    manipulate it for tests.
 
    `mocks` is a map from expression *value* (e.g. fn ref) to either a literal value or a `(fn [env])`, where
@@ -138,67 +134,86 @@
    The default data model is the flat working memory model, the default processor is the v20150901 version,
    and the validator checks things according to that same version.
    "
-  [{:keys [machine validator processor-factory data-model-factory session-id]
+  [{:keys [statechart processor-factory data-model-factory validator]
     :or   {data-model-factory new-flat-model
-           validator          configuration-problems
-           processor-factory  new-processor}} mocks]
+           validator          configuration-problems}} mocks]
   (let [data-model (data-model-factory)
         mock-queue (new-mock-queue)
         exec-model (new-mock-execution data-model (or mocks {}))
-        base-env   {:working-memory          (atom (cond-> {}
-                                                     session-id (assoc ::sc/session-id session-id)))
-                    :machine                 machine
-                    :configuration-validator validator
-                    :data-model              data-model
-                    :execution-model         exec-model
-                    :event-queue             mock-queue}
-        processor  (processor-factory machine base-env)]
-    (map->TestingEnv (merge base-env {:processor processor}))))
+        env        (simple/simple-env (cond-> {:statechart          statechart
+                                               ::sc/execution-model exec-model
+                                               ::sc/data-model      data-model
+                                               ::sc/event-queue     mock-queue}
+                                        validator (assoc :configuration-validator validator)
+                                        processor-factory (assoc ::sc/processor (processor-factory))))]
+    (simple/register! env ::chart statechart)
+    (map->TestingEnv {:statechart statechart :env env})))
+
+(defn configuration-for-states
+  "Returns a set of states that *should* represent a valid configuration of `statechart` in the testing
+   env AS LONG AS you list a valid set of leaf states. For example, if you have a top-level parallel state,
+   then `states` MUST contain a valid atomic state for each sub-region.
+
+   Another way to express this is that this function returns the union of the set of `states`
+   and their proper ancestors."
+  [{:keys [statechart]} states]
+  (into (set/union (set states) #{})
+    (mapcat (fn [sid] (chart/get-proper-ancestors statechart sid)))
+    states))
 
 (defn goto-configuration!
-  "Runs the given data-ops on the data model, then sets the working memory configuration to `configuration`.
+  "Runs the given data-ops on the data model, then sets the working memory configuration to a configuration
+   that contains the given `leaf-states`. This attempts to include parent states, but you can still generate
+   an invalid configuration be listing too few leaves in a parallel system.
+
+   NOTE: You can see the full configuration by directly calling `configuration-for-states`
+   on your own `leaf-states`.
 
    Previously recorded state history (via history nodes) is UNAFFECTED.
 
    Throws if the configuration validator returns a non-empty problems list."
-  [{:keys [data-model
-           machine
-           configuration-validator
-           working-memory] :as test-env} data-ops configuration]
-  (let [vwmem (volatile! @working-memory)]
+  [{{::sc/keys [data-model working-memory-store]
+     :keys     [statechart configuration-validator] :as env} :env} data-ops leaf-states]
+  (let [wmem          (sp/get-working-memory working-memory-store env :test)
+        configuration (configuration-for-states env leaf-states)
+        vwmem         (volatile! wmem)]
     (when (seq data-ops)
       ;; WMDM expects there to be a volatile version of working memory in env
-      (sp/update! data-model (assoc test-env ::sc/vwmem vwmem) {:ops data-ops}))
-    (swap! working-memory merge @vwmem)
-    (swap! working-memory assoc ::sc/configuration configuration)
+      (sp/update! data-model (assoc env ::sc/vwmem vwmem) {:ops data-ops}))
+    (vswap! vwmem assoc ::sc/configuration configuration)
     (when configuration-validator
-      (when-let [problems (seq (configuration-validator machine @working-memory))]
+      (when-let [problems (seq (configuration-validator statechart @vwmem))]
         (throw (ex-info "Invalid configuration!" {:configuration configuration
-                                                  :problems      problems}))))))
+                                                  :problems      problems}))))
+    (sp/save-working-memory! working-memory-store env :test @vwmem)))
 
 (defn start!
-  "Start the machine in the testing env, and assign it the given session-id."
-  [{:keys [working-memory processor] :as testing-env} session-id]
-  (reset! working-memory (sp/start! testing-env session-id)))
+  "Start the machine in the testing env."
+  [{{::sc/keys [working-memory-store processor] :as env} :env}]
+  (let [s0 (sp/start! processor env ::chart {::sc/session-id :test})]
+    (sp/save-working-memory! working-memory-store env :test s0)))
 
 (defn run-events!
   "Run the given sequence of events (names or maps) against the testing runtime. Returns the
    updated working memory (side effects against testing runtime, so you can run this multiple times
    to progressively walk the machine)"
-  [{:keys [processor working-memory] :as runtime} & events]
+  [{{::sc/keys [processor working-memory-store] :as env} :env} & events]
   (doseq [e events]
-    (swap! working-memory #(sp/process-event! processor % (new-event e))))
-  @working-memory)
+    (let [wmem  (sp/get-working-memory working-memory-store env :test)
+          wmem2 (sp/process-event! processor env wmem (new-event e))]
+      (sp/save-working-memory! working-memory-store env :test wmem2)))
+  (sp/get-working-memory working-memory-store env :test))
 
 (defn in?
   "Check to see that the machine in the testing-env is in the given state."
-  [{:keys [working-memory] :as testing-env} state-name]
-  (contains? (get @working-memory ::sc/configuration) state-name))
+  [{{::sc/keys [working-memory-store] :as env} :env} state-name]
+  (let [wmem (sp/get-working-memory working-memory-store env :test)]
+    (contains? (get wmem ::sc/configuration) state-name)))
 
 (defn will-send
   "Test assertions. Find `event-name` on the sends seen, and verify it will be sent after the
    given delay-ms. Also ensures it only occurs ONCE."
-  [{:keys [event-queue] :as testing-env} event delay-ms]
+  [{{::sc/keys [event-queue]} :env} event delay-ms]
   (let [{:keys [sends-seen]} event-queue
         sends       (filter #(and (= (:event %) event) %) @sends-seen)
         event-seen? (boolean (seq sends))
@@ -208,21 +223,8 @@
     (is has-delay?)
     true))
 
-(defn configuration-for-states
-  "Returns a set of states that *should* represent a valid configuration of `machine` in the testing
-   env AS LONG AS you list a valid set of leaf states. For example, if you have a top-level parallel state,
-   then `states` MUST contain a valid atomic state for each sub-region.
-
-   Another way to express this is that this function returns the union of the set of `states`
-   and their proper ancestors."
-  [{:keys [machine] :as testing-env} states]
-  (into (set/union (set states) #{})
-    (mapcat (fn [sid] (sm/get-proper-ancestors machine sid)))
-    states))
-
 (defn data
   "Returns the current data of the active data model. Ensures that working memory data models will
    function properly."
-  [{:keys [data-model
-           working-memory] :as env}]
-  (sp/current-data data-model (assoc env ::sc/vwmem (volatile! @working-memory))))
+  [{{::sc/keys [data-model working-memory-store] :as env} :env}]
+  (sp/current-data data-model (assoc env ::sc/vwmem (volatile! (sp/get-working-memory working-memory-store env :test)))))
