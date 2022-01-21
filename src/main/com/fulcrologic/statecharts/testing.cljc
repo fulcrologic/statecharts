@@ -6,10 +6,12 @@
     [com.fulcrologic.statecharts.algorithms.v20150901-impl :refer [configuration-problems]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :refer [new-flat-model]]
+    [com.fulcrologic.statecharts.working-memory-store.local-memory-store :as lms]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
-    [com.fulcrologic.statecharts.chart :as chart]))
+    [com.fulcrologic.statecharts.chart :as chart]
+    [taoensso.timbre :as log]))
 
 (defprotocol Clearable
   (clear! [this] "Clear the recordings of the given mock"))
@@ -40,9 +42,10 @@
   (ran-in-order? [_ frefs]
     (loop [remaining @expressions-seen
            to-find   frefs]
-      (let [found?       (has-element? remaining to-find)
-            remainder    (drop-while #(not= to-find %) remaining)
-            left-to-find (drop 1 to-find)]
+      (let [first-element (first to-find)
+            found?        (has-element? remaining first-element)
+            remainder     (drop-while #(not= first-element %) remaining)
+            left-to-find  (rest to-find)]
         (cond
           (and found? (empty? left-to-find)) true
           (and found? (seq left-to-find) (seq remainder)) (recur remainder left-to-find)
@@ -53,7 +56,7 @@
     (swap! call-counts update expr (fnil inc 0))
     (cond
       (fn? (get @mocks expr)) (let [mock (get @mocks expr)]
-                                (mock (assoc env :ncalls (get @expressions-seen expr))))
+                                (mock (assoc env :ncalls (get @call-counts expr))))
       (contains? @mocks expr) (get @mocks expr))))
 
 (defn new-mock-execution
@@ -68,6 +71,21 @@
    (->MockExecutionModel data-model (atom []) (atom {}) (atom {})))
   ([data-model mocks]
    (->MockExecutionModel data-model (atom []) (atom {}) (atom mocks))))
+
+(deftype MockInvocations [invocations]
+  sp/InvocationProcessor
+  (supports-invocation-type? [this typ] true)
+  (start-invocation! [this env {:keys [invokeid
+                                       type
+                                       params]}]
+    (swap! invocations assoc invokeid {:type type :forwarded-events [] :params params}))
+  (stop-invocation! [this env {:keys [type invokeid]}]
+    (swap! invocations assoc-in [invokeid :finished?] true))
+  (forward-event! [this env {:keys [type invokeid event]}]
+    (swap! invocations update-in [invokeid :forward-events] conj event)))
+
+(defn new-mock-invocations []
+  (->MockInvocations (atom {})))
 
 (defprotocol SendChecks
   (sent? [_ required-elements-of-send-request]
@@ -137,13 +155,15 @@
   [{:keys [statechart processor-factory data-model-factory validator]
     :or   {data-model-factory new-flat-model
            validator          configuration-problems}} mocks]
+  (assert statechart "Statechart is supplied")
   (let [data-model (data-model-factory)
         mock-queue (new-mock-queue)
         exec-model (new-mock-execution data-model (or mocks {}))
-        env        (simple/simple-env (cond-> {:statechart          statechart
-                                               ::sc/execution-model exec-model
-                                               ::sc/data-model      data-model
-                                               ::sc/event-queue     mock-queue}
+        env        (simple/simple-env (cond-> {:statechart                statechart
+                                               ::sc/execution-model       exec-model
+                                               ::sc/data-model            data-model
+                                               ::sc/invocation-processors [(new-mock-invocations)]
+                                               ::sc/event-queue           mock-queue}
                                         validator (assoc :configuration-validator validator)
                                         processor-factory (assoc ::sc/processor (processor-factory))))]
     (simple/register! env ::chart statechart)

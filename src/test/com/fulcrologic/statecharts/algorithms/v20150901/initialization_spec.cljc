@@ -1,4 +1,4 @@
-(ns com.fulcrologic.statecharts.algorithms.v20150901-spec
+(ns com.fulcrologic.statecharts.algorithms.v20150901.initialization-spec
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
