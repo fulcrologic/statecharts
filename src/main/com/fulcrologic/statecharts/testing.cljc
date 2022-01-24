@@ -11,7 +11,8 @@
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
     [com.fulcrologic.statecharts.chart :as chart]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.statecharts.environment :as env]))
 
 (defprotocol Clearable
   (clear! [this] "Clear the recordings of the given mock"))
@@ -130,6 +131,10 @@
   sp/Processor
   (start! [_ env k options] (sp/start! (::sc/processor env) env k options))
   (process-event! [_ env wm evt] (sp/process-event! (::sc/processor env) env wm evt))
+  sp/WorkingMemoryStore
+  (get-working-memory [this env session-id] (sp/get-working-memory (::sc/working-memory-store env) env session-id))
+  (save-working-memory! [this env session-id wmem] (sp/save-working-memory! (::sc/working-memory-store env) env session-id wmem))
+  (delete-working-memory! [this env session-id] (sp/delete-working-memory! (::sc/working-memory-store env) env session-id))
   SendChecks
   (sent? [_ eles] (sent? (::sc/event-queue env) eles))
   (cancelled? [_ s si] (cancelled? (::sc/event-queue env) s si))
@@ -152,7 +157,7 @@
    The default data model is the flat working memory model, the default processor is the v20150901 version,
    and the validator checks things according to that same version.
    "
-  [{:keys [statechart processor-factory data-model-factory validator]
+  [{:keys [statechart processor-factory data-model-factory validator session-id]
     :or   {data-model-factory new-flat-model
            validator          configuration-problems}} mocks]
   (assert statechart "Statechart is supplied")
@@ -167,7 +172,9 @@
                                         validator (assoc :configuration-validator validator)
                                         processor-factory (assoc ::sc/processor (processor-factory))))]
     (simple/register! env ::chart statechart)
-    (map->TestingEnv {:statechart statechart :env env})))
+    (map->TestingEnv {:statechart statechart
+                      :session-id (or session-id :test)
+                      :env        env})))
 
 (defn configuration-for-states
   "Returns a set of states that *should* represent a valid configuration of `statechart` in the testing
@@ -192,42 +199,48 @@
    Previously recorded state history (via history nodes) is UNAFFECTED.
 
    Throws if the configuration validator returns a non-empty problems list."
-  [{{::sc/keys [data-model working-memory-store]
+  [{:keys                                                    [session-id]
+    {::sc/keys [data-model working-memory-store]
      :keys     [statechart configuration-validator] :as env} :env} data-ops leaf-states]
-  (let [wmem          (sp/get-working-memory working-memory-store env :test)
+  (let [wmem          (sp/get-working-memory working-memory-store env session-id)
         configuration (configuration-for-states env leaf-states)
         vwmem         (volatile! wmem)]
     (when (seq data-ops)
       ;; WMDM expects there to be a volatile version of working memory in env
       (sp/update! data-model (assoc env ::sc/vwmem vwmem) {:ops data-ops}))
-    (vswap! vwmem assoc ::sc/configuration configuration)
+    (vswap! vwmem assoc ::sc/configuration configuration
+      ::sc/session-id session-id
+      ::sc/statechart-src ::chart)
     (when configuration-validator
       (when-let [problems (seq (configuration-validator statechart @vwmem))]
         (throw (ex-info "Invalid configuration!" {:configuration configuration
                                                   :problems      problems}))))
-    (sp/save-working-memory! working-memory-store env :test @vwmem)))
+    (sp/save-working-memory! working-memory-store env session-id @vwmem)))
 
 (defn start!
   "Start the machine in the testing env."
-  [{{::sc/keys [working-memory-store processor] :as env} :env}]
-  (let [s0 (sp/start! processor env ::chart {::sc/session-id :test})]
-    (sp/save-working-memory! working-memory-store env :test s0)))
+  [{:keys                                                [session-id]
+    {::sc/keys [working-memory-store processor] :as env} :env}]
+  (let [s0 (sp/start! processor env ::chart {::sc/session-id session-id})]
+    (sp/save-working-memory! working-memory-store env session-id s0)))
 
 (defn run-events!
   "Run the given sequence of events (names or maps) against the testing runtime. Returns the
    updated working memory (side effects against testing runtime, so you can run this multiple times
    to progressively walk the machine)"
-  [{{::sc/keys [processor working-memory-store] :as env} :env} & events]
+  [{:keys                                                [session-id]
+    {::sc/keys [processor working-memory-store] :as env} :env} & events]
   (doseq [e events]
-    (let [wmem  (sp/get-working-memory working-memory-store env :test)
+    (let [wmem  (sp/get-working-memory working-memory-store env session-id)
           wmem2 (sp/process-event! processor env wmem (new-event e))]
-      (sp/save-working-memory! working-memory-store env :test wmem2)))
-  (sp/get-working-memory working-memory-store env :test))
+      (sp/save-working-memory! working-memory-store env session-id wmem2)))
+  (sp/get-working-memory working-memory-store env session-id))
 
 (defn in?
   "Check to see that the machine in the testing-env is in the given state."
-  [{{::sc/keys [working-memory-store] :as env} :env} state-name]
-  (let [wmem (sp/get-working-memory working-memory-store env :test)]
+  [{:keys                                      [session-id]
+    {::sc/keys [working-memory-store] :as env} :env} state-name]
+  (let [wmem (sp/get-working-memory working-memory-store env session-id)]
     (contains? (get wmem ::sc/configuration) state-name)))
 
 (defn will-send
@@ -246,5 +259,8 @@
 (defn data
   "Returns the current data of the active data model. Ensures that working memory data models will
    function properly."
-  [{{::sc/keys [data-model working-memory-store] :as env} :env}]
-  (sp/current-data data-model (assoc env ::sc/vwmem (volatile! (sp/get-working-memory working-memory-store env :test)))))
+  [{:keys                                                 [session-id]
+    {::sc/keys [data-model working-memory-store] :as env} :env}]
+  (let [wmem (sp/get-working-memory working-memory-store env session-id)
+        penv (assoc env ::sc/vwmem (volatile! wmem))]
+    (sp/current-data data-model penv)))

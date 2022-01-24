@@ -120,7 +120,7 @@
   "Add an event to the internal (working memory) event queue."
   [{::sc/keys [vwmem]} event]
   [::sc/processing-env ::sc/event-or-name => nil?]
-  (swap! vwmem update ::sc/internal-queue conj (evts/new-event event))
+  (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event))
   nil)
 
 (>defn add-ancestor-states-to-enter! [{::sc/keys [statechart] :as env} state ancestor
@@ -411,7 +411,7 @@
             :let [to-remove  (volatile! #{})
                   preempted? (volatile! false)]]
       (doseq [t2 @filtered-transitions
-              :while (not preempted?)]
+              :while (not @preempted?)]
         (when (seq (set/intersection
                      (compute-exit-set env [t1])
                      (compute-exit-set env [t2])))
