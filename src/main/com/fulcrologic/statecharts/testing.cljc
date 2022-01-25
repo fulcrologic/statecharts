@@ -103,11 +103,12 @@
     (reset! cancels-seen []))
   SendChecks
   (sent? [_ req]
-    (some
-      (fn [send]
-        (let [sent (select-keys send (keys req))]
-          (= sent req)))
-      @sends-seen))
+    (boolean
+      (some
+        (fn [send]
+          (let [sent (select-keys send (keys req))]
+            (= sent req)))
+        @sends-seen)))
   (cancelled? [_ session-id send-id]
     (has-element? @cancels-seen {:send-id    send-id
                                  :session-id session-id}))
