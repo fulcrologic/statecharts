@@ -6,7 +6,11 @@
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
+    [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.protocols :as sp]))
+
+;; TODO: Several implentations in this ns assume the base implementation. If we add new algorithms, then they will need
+;; to be updated. Probably will have to be added to some kind of protocol or the env.
 
 (>defn session-id
   "Returns the session ID from an env."
@@ -43,4 +47,11 @@
   "Side effect against the data model in `env`, with the given keys/paths"
   [{::sc/keys [data-model] :as env} & ks]
   (sp/update! data-model env {:ops [(ops/delete ks)]})
+  nil)
+
+(>defn raise
+  "Place an event on the internal event queue for immediate processing. Only callable from within active runnable content"
+  [{::sc/keys [vwmem]} event]
+  [::sc/processing-env ::sc/event-or-name => nil?]
+  (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event))
   nil)
