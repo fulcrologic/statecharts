@@ -288,9 +288,11 @@
                         typeexpr] :as _send-element}]
           (let [event-name (!? env event eventexpr)
                 id         (if idlocation (genid "send") id)
-                data       (merge
-                             (named-data env namelist)
-                             (!? env {} content))]
+                data       (log/spy :trace
+                             "Computed send event data"
+                             (merge
+                               (named-data env namelist)
+                               (!? env nil content)))]
             (when idlocation (sp/update! data-model env {:ops [(ops/assign idlocation id)]}))
             (sp/send! event-queue env {:send-id           id
                                        :source-session-id (env/session-id env)

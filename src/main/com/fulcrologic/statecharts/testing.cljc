@@ -56,8 +56,16 @@
     (swap! expressions-seen conj expr)
     (swap! call-counts update expr (fnil inc 0))
     (cond
-      (fn? (get @mocks expr)) (let [mock (get @mocks expr)]
-                                (mock (assoc env :ncalls (get @call-counts expr))))
+      (fn? (get @mocks expr)) (let [expr    (get @mocks expr)
+                                    env     (assoc env :ncalls (get @call-counts expr))
+                                    data    (sp/current-data data-model env)
+                                    result  (log/spy :trace "expr => " (expr env data))
+                                    update? (vector? result)]
+                                (log/info "Running mock")
+                                (when update?
+                                  (log/trace "trying vector result as a data model update" result)
+                                  (sp/update! data-model env {:ops result}))
+                                result)
       (contains? @mocks expr) (get @mocks expr))))
 
 (defn new-mock-execution
