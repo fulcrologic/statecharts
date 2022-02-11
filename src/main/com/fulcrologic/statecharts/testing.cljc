@@ -67,6 +67,15 @@
                                   (sp/update! data-model env {:ops result}))
                                 result)
       (contains? @mocks expr) (get @mocks expr)
+      (fn? expr) (let [env     (assoc env :ncalls (get @call-counts expr))
+                       data    (sp/current-data data-model env)
+                       result  (log/spy :trace "expr => " (expr env data))
+                       update? (vector? result)]
+                   (log/info "Running expr")
+                   (when update?
+                     (log/trace "trying vector result as a data model update" result)
+                     (sp/update! data-model env {:ops result}))
+                   result)
       :else expr)))
 
 (defn new-mock-execution
