@@ -66,7 +66,8 @@
                                   (log/trace "trying vector result as a data model update" result)
                                   (sp/update! data-model env {:ops result}))
                                 result)
-      (contains? @mocks expr) (get @mocks expr))))
+      (contains? @mocks expr) (get @mocks expr)
+      :else expr)))
 
 (defn new-mock-execution
   "Create a mock exection model. Records the expressions seen. If the expression has an
