@@ -417,7 +417,7 @@
         (when (seq (set/intersection
                      (compute-exit-set env [t1])
                      (compute-exit-set env [t2])))
-          (if (chart/descendant? statechart (chart/source t1) (chart/source t2))
+          (if (chart/descendant? statechart (chart/source statechart t1) (chart/source statechart t2))
             (vswap! to-remove conj t2)
             (vreset! preempted? true))))
       (when (not @preempted?)

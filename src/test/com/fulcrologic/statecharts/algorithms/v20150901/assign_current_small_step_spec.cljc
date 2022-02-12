@@ -1,4 +1,4 @@
-(ns com.fulcrologic.statecharts.algorithms.v20150901.assign-current-small-step
+(ns com.fulcrologic.statecharts.algorithms.v20150901.assign-current-small-step-spec
   (:require
     [com.fulcrologic.statecharts.elements
      :refer [state
@@ -21,20 +21,20 @@
 (specification "test0"
   (let [chart (chart/statechart {}
                 (data-model
-                  {:id :x})
+                  {:expr {:x nil}})
                 (state {:id :a}
                   (on-entry {}
                     (assign {:location :x :expr -1})
                     (assign {:location :x :expr 99}))
                   (transition {:event :t
                                :target :b
-                               :cond (fn [_ {:keys [x]}] (println "AA") (= x 99))}))
+                               :cond (fn [_ {:keys [x]}] (= x 99))}))
                 (state {:id :b}
                   (on-entry {}
                     (script {:expr (fn script* [env {:keys [x]}]
                                      [(ops/assign [:ROOT :x] (* 2 x))])}))
                   (transition {:target :c
-                               :cond (fn [_ {:keys [x]}] (println "X" x) (= 200 x))})
+                               :cond (fn [_ {:keys [x]}] (= 200 x))})
                   (transition {:target :f}))
                 (state {:id :c})
                 (state {:id :f}))

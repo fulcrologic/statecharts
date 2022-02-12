@@ -1,4 +1,4 @@
-(ns com.fulcrologic.statecharts.algorithms.v20150901.assign
+(ns com.fulcrologic.statecharts.algorithms.v20150901.assign-spec-spec
   (:require
     [com.fulcrologic.statecharts.elements
      :refer [state
@@ -20,27 +20,27 @@
 
 ;; Not sure if this test makes sense?
 #_(specification "assign_invalid"
-  (let [chart (chart/statechart {}
-                (data-model
-                  {:id :o1})
-                (state {:id :uber}
-                  (transition {:event :error.execution :target :pass})
-                  (transition {:event :* :target :fail})
+    (let [chart (chart/statechart {}
+                  (data-model
+                    {:id :o1})
+                  (state {:id :uber}
+                    (transition {:event :error.execution :target :pass})
+                    (transition {:event :* :target :fail})
 
-                  (state {:id :s1}
-                    (on-entry {}
-                      (assign {:location :o1 :expr (fn [_ _] (throw (ex-info "Failing" {})))}))))
+                    (state {:id :s1}
+                      (on-entry {}
+                        (assign {:location :o1 :expr (fn [_ _] (throw (ex-info "Failing" {})))}))))
 
-                (final {:id :pass})
-                (final {:id :fail}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+                  (final {:id :pass})
+                  (final {:id :fail}))
+          env   (testing/new-testing-env {:statechart chart} {})]
 
-    (testing/start! env)
+      (testing/start! env)
 
-    (assertions
-      (testing/in? env :pass) => true)))
+      (assertions
+        (testing/in? env :pass) => true)))
 
-(specification "assign_map_literal" :focus
+(specification "assign_map_literal"
   (let [chart (chart/statechart {}
                 (data-model
                   {:id :o1})
