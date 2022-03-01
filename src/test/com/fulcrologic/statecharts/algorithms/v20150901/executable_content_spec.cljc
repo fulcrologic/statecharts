@@ -1,14 +1,21 @@
 (ns com.fulcrologic.statecharts.algorithms.v20150901.executable-content-spec
   (:require
+    [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.algorithms.v20150901.setup :refer [test-env]]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state parallel script on-entry
                                                   Send on-exit final log
                                                   initial data-model transition]]
+    [com.fulcrologic.statecharts.environment :as env]
+    [com.fulcrologic.statecharts.event-queue.event-processing :refer [standard-statechart-event-handler]]
     [com.fulcrologic.statecharts.events :as evts]
+    [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
     [com.fulcrologic.statecharts.testing :as testing]
+    [com.fulcrologic.statecharts.util :refer [new-uuid]]
     [fulcro-spec.core :refer [specification assertions component =>]]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.statecharts.working-memory-store.local-memory-store :as lms]))
 
 (def env (simple/simple-env))
 
@@ -125,4 +132,49 @@
     (assertions
       "Runs exits in reverse nested document order"
       (testing/ran-in-order? env [c b a]) => true)))
+
+(let [tries        (atom 0)
+      events       (atom [])
+      thing-to-try (fn [env {:keys [_event]}]
+                     (swap! events conj _event)
+                     (when (<= @tries 5)
+                       (swap! tries inc)
+                       (log/info "Retrying")
+                       (env/raise env (evts/new-event
+                                        {:name :retry
+                                         :data (:data _event)}))))
+      event-data   (fn [_env {:keys [_event]}] (:data _event))
+      send-chart   (chart/statechart {:id :me}
+                     (state {:id :top}
+                       (on-entry {}
+                         (script {:expr
+                                  (fn [_ _]
+                                    (reset! events [])
+                                    (reset! tries 0))}))
+
+                       (transition {:event :retry}
+                         (Send {:event   :try
+                                :content event-data}))
+                       (transition {:event :try}
+                         (script {:expr thing-to-try}))))]
+  (specification "Send data passing through an expression on :content" :focus
+    (let [{::sc/keys [event-queue working-memory-store processor] :as env} (assoc
+                                                                             (test-env send-chart)
+                                                                             ::sc/working-memory-store (lms/new-store))
+          session-id (new-uuid)
+          _          (sp/save-working-memory! working-memory-store env session-id
+                       (sp/start! processor env ::m {::sc/session-id session-id}))
+          next!      (fn [evt]
+                       (let [wmem (sp/get-working-memory working-memory-store env session-id)
+                             nmem (sp/process-event! processor env wmem (evts/new-event evt))]
+                         (sp/save-working-memory! working-memory-store env session-id nmem)))]
+      (next! (evts/new-event {:name :try
+                              :data {:x 1}}))
+
+      (sp/receive-events! event-queue env standard-statechart-event-handler)
+      (sp/receive-events! event-queue env standard-statechart-event-handler)
+
+      (assertions
+        "Includes that content in the events"
+        (every? #(= (:data %) {:x 1}) @events) => true))))
 

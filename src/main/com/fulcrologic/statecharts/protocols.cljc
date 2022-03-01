@@ -109,7 +109,8 @@
     "Cancel the (delayed) send(s) with the given `send-id` that were `sent!` by `session-id`.
      This is only possible for events that have a delay and have not yet been delivered.")
   (receive-events! [event-queue env handler] [event-queue env handler options]
-    "Pull the next event(s) from the queue that can be delivered and run them through `handler`
+    "Pull the next event(s) from the queue that can be delivered and run them through `handler`,
+     which is a `(fn [env event])`.
 
      The `options` of the handler are defined by the queue implementation.
 
