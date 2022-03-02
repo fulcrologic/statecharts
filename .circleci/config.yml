@@ -7,7 +7,7 @@ jobs:
       - checkout
       - restore_cache:
           key: cljs-{{ checksum "deps.edn" }}-{{ checksum "package.json" }}
-      - run: npm ci
+      - run: yarn install --frozen-lockfile
       - run: npx shadow-cljs -A:dev -v compile ci-tests
       - run: ls -l target
       - run: npx karma start --single-run
