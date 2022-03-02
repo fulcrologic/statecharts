@@ -21,4 +21,7 @@
                                      org.clojure/clojure         {:mvn/version "1.10.3"}
                                      org.clojure/clojurescript   {:mvn/version "1.10.891"}
                                      binaryage/devtools          {:mvn/version "1.0.4"}
-                                     org.clojure/tools.namespace {:mvn/version "1.1.0"}}}}}
+                                     org.clojure/tools.namespace {:mvn/version "1.1.0"}
+                                     org.clojure/data.json       {:mvn/version "2.4.0"}
+                                     zprint/zprint               {:mvn/version "1.2.2"}
+                                     camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.2"}}}}}

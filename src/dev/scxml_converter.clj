@@ -4,14 +4,26 @@
     [clojure.string :as str]
     [hickory.core :as hc]))
 
-(def coercions {:id     keyword
-                :event  keyword
-                :name   keyword
+(def coercions {:id       keyword
+                :event    keyword
+                :name     keyword
+                :initial  keyword
+                :type     keyword
+                :location keyword
                 :target (fn [t]
                           (let [targets (str/split t #" ")]
                             (if (= 1 (count targets))
                               (keyword (first targets))
                               (mapv keyword targets))))})
+
+(def tag-coercions
+  {"onentry" "on-entry"
+   "onexit" "on-exit"
+   "datamodel" "data-model"})
+
+
+(defn coerce-tag [tag]
+  (get tag-coercions tag tag))
 
 (defn element->call
   ([elem]
@@ -27,7 +39,7 @@
              (str/ends-with? elem "-->"))
            (re-matches #"^[ \n]*$" elem)))) nil
      (string? elem) (str/trim elem)
-     (vector? elem) (let [tag               (symbol (name (first elem)))
+     (vector? elem) (let [tag               (symbol (coerce-tag (name (first elem))))
                           raw-props         (second elem)
                           attrs             (reduce-kv
                                               (fn [acc k v]
