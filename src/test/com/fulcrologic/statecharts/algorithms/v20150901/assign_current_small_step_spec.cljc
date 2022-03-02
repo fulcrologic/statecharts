@@ -26,15 +26,16 @@
                   (on-entry {}
                     (assign {:location :x :expr -1})
                     (assign {:location :x :expr 99}))
-                  (transition {:event :t
+                  (transition {:event  :t
                                :target :b
-                               :cond (fn [_ {:keys [x]}] (= x 99))}))
+                               :cond   (fn [_ {:keys [x]}] (= x 99))}
+                    (assign {:location :x :expr (fn [_ {:keys [x]}] (+ x 1))})))
                 (state {:id :b}
                   (on-entry {}
                     (script {:expr (fn script* [env {:keys [x]}]
                                      [(ops/assign [:ROOT :x] (* 2 x))])}))
                   (transition {:target :c
-                               :cond (fn [_ {:keys [x]}] (= 200 x))})
+                               :cond   (fn [_ {:keys [x]}] (= 200 x))})
                   (transition {:target :f}))
                 (state {:id :c})
                 (state {:id :f}))
@@ -59,7 +60,7 @@
                     (assign {:location :i :expr 0})))
                 (state {:id :b}
                   (transition {:target :b
-                               :cond (fn [_ {:keys [i]}] (< i 100))}
+                               :cond   (fn [_ {:keys [i]}] (< i 100))}
                     (assign {:location :i :expr (fn [_ {:keys [i]}] (inc i))}))
                   (transition {:target :c :cond (fn [_ {:keys [i]}] (= i 100))}))
                 (state {:id :c}))
@@ -85,11 +86,11 @@
                 (state {:id :A}
                   (state {:id :b}
                     (transition {:target :c
-                                 :cond (fn [_ {:keys [i]}] (< i 100))}
+                                 :cond   (fn [_ {:keys [i]}] (< i 100))}
                       (assign {:location :i :expr (fn [_ {:keys [i]}] (inc i))})))
                   (state {:id :c}
                     (transition {:target :b
-                                 :cond (fn [_ {:keys [i]}] (< i 100))}
+                                 :cond   (fn [_ {:keys [i]}] (< i 100))}
                       (assign {:location :i :expr (fn [_ {:keys [i]}] (inc i))})))
                   (transition {:target :d :cond (fn [_ {:keys [i]}] (= i 100))}
                     (assign {:location :i :expr (fn [_ {:keys [i]}] (* 2 i))})))

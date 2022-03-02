@@ -3,6 +3,7 @@
    implementation (version), a working memory data model,
    CLJC execution support, and an event queue that requires manual polling."
   (:require
+    [clojure.string :as str]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
     [com.fulcrologic.statecharts.algorithms.v20150901-validation :as v]
@@ -14,7 +15,8 @@
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.util :refer [new-uuid]]
     [com.fulcrologic.statecharts.invocation.statechart :as i.statechart]
-    #?(:clj [com.fulcrologic.statecharts.invocation.future :as i.future])))
+    #?(:clj [com.fulcrologic.statecharts.invocation.future :as i.future])
+    [taoensso.timbre :as log]))
 
 (defn simple-env
   "Creates an env that has a local and simple implementation of all required components.
@@ -65,9 +67,15 @@
 (defn register!
   "Register a statechart `chart` at `chart-key` in the registry known by `env`."
   [{::sc/keys [statechart-registry]} chart-key chart]
-  (if-let [problems (seq (v/problems chart))]
-    (throw (ex-info "Cannot register invalid chart" {:chart-key chart-key
-                                                     :problems  (vec problems)}))
+  (let [problems  (v/problems chart)
+        errors?   (boolean (some #(= :error (:level %)) problems))
+        warnings? (boolean (some #(= :warn (:level %)) problems))]
+    (cond
+      errors? (throw (ex-info "Cannot register invalid chart" {:chart-key chart-key
+                                                               :problems  (vec problems)}))
+      warnings? (log/warn "Chart" chart-key "has problems: " (str/join ","
+                                                               (map (fn [{:keys [element message]}]
+                                                                      (str element ": " message)) problems))))
     (sp/register-statechart! statechart-registry chart-key chart))
   true)
 

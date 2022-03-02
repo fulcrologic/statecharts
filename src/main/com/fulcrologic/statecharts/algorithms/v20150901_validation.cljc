@@ -27,10 +27,10 @@
         by-event       (group-by (fn [e] [(:event e) (:cond e)]) transitions)
         ;; This case seems to be valid (at least it's supported in SCION), and document order should
         ;; take care of selecting the correct transition
-        event-problems [] #_(for [k (keys by-event)
+        event-problems (for [k (keys by-event)
                              :when (> (count (get by-event k)) 1)]
-                         (error ele (str "More than one transition in state " id
-                                      " has the exact same event and condition: " (get by-event k))))]
+                         (warning ele (str "More than one transition in state " id
+                                        " has the exact same event and condition: " (get by-event k))))]
     (cond-> []
       (seq event-problems) (into event-problems)
       (seq children) (into (mapcat #(problems chart %) children)))))

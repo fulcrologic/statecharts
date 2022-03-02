@@ -19,6 +19,7 @@
 (s/def ::sc/on-exit-element (s/and ::sc/element #(= :on-exit (:node-type %))))
 (s/def ::sc/on-entry-element (s/and ::sc/element #(= :on-entry (:node-type %))))
 (s/def ::sc/initial-element (s/and ::sc/element #(:initial? %)))
+(s/def ::sc/id-ordinals (s/map-of ::sc/id nat-int?))
 (s/def ::sc/state-element (s/and ::sc/element #(boolean (#{:state :parallel :final} (:node-type %)))))
 (s/def ::sc/elements-by-id (s/map-of keyword? ::sc/element))
 (s/def ::sc/element-or-id (s/or :element ::sc/element :id ::sc/id))
@@ -37,9 +38,13 @@
                              :opt [:org.w3.scxml.event/invokeid
                                    ::sc/parent-session-id]))
 
-(s/def ::sc/statechart #(and (map? %)
-                       (= (:id %) :ROOT)
-                       (= :statechart (:node-type %))))
+(s/def ::sc/statechart (s/and
+                         (s/keys
+                           :opt [::sc/id-ordinals
+                                       ::sc/ids-in-document-order
+                                       ::sc/elements-by-id]
+                           :opt-un [::sc/id
+                                    ::sc/children])))
 
 (s/def ::sc/event-name keyword?)
 (s/def :org.w3.scxml.event/name ::sc/event-name)

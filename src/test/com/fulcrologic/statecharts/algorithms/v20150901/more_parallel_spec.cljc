@@ -1,12 +1,12 @@
 (ns com.fulcrologic.statecharts.algorithms.v20150901.more-parallel-spec
-  (:require [com.fulcrologic.statecharts.elements :refer
-             [state initial parallel final transition raise on-entry on-exit
-              data-model assign script history log]]
-            [com.fulcrologic.statecharts :as sc]
-            [com.fulcrologic.statecharts.chart :as chart]
-            [com.fulcrologic.statecharts.testing :as testing]
-            [com.fulcrologic.statecharts.data-model.operations :as ops]
-            [fulcro-spec.core :refer [specification assertions =>]]))
+  (:require
+    [com.fulcrologic.statecharts.chart :as chart]
+    [com.fulcrologic.statecharts.elements :refer
+     [state initial parallel final transition raise on-entry on-exit
+      data-model assign script history log]]
+    [com.fulcrologic.statecharts.testing :as testing]
+    [fulcro-spec.core :refer [specification assertions =>]]
+    [taoensso.timbre :as log]))
 
 (defn inc-x-expr [_ {:keys [x]}]
   (inc x))
@@ -21,7 +21,7 @@
                 (parallel {:id :p}
                   (state {:id :a} (transition {:target :a, :event :t}))
                   (state {:id :b})))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
     (assertions (testing/in? env :a) => true (testing/in? env :b) => true)
     (testing/run-events! env :t)
@@ -37,20 +37,16 @@
                     (state {:id :a1})
                     (state {:id :a2}))
                   (state {:id :b} (state {:id :b1}) (state {:id :b2}))))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
     (assertions (testing/in? env :a1) => true (testing/in? env :b1) => true)
     (testing/run-events! env :t)
     (assertions (testing/in? env :a1) => true (testing/in? env :b1) => true)))
 
-(specification
-  "test10"
-  (let [chart (chart/statechart
-                {}
-                (data-model
-                  {:expr {:x 0}})
-                (parallel
-                  {:id :p}
+(specification "test10" :focus
+  (let [chart (chart/statechart {}
+                (data-model {:expr {:x 0}})
+                (parallel {:id :p}
                   (on-entry {} (assign {:location :x, :expr inc-x-expr}))
                   (on-exit {} (assign {:location :x, :expr inc-x-expr}))
                   (state {:id :a}
@@ -62,57 +58,31 @@
                 (state {:id :c}
                   (transition {:target :d, :event :t3, :cond (make-x-eq-expr 8)}))
                 (state {:id :d}))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
 
     (assertions
+      "initial configuration"
       (testing/in? env :a) => true
       (testing/in? env :b) => true)
 
     (testing/run-events! env :t1)
     (assertions
+      "after t1"
       (testing/in? env :a) => true
       (testing/in? env :b) => true)
 
     (testing/run-events! env :t2)
     (assertions
-      (testing/in? env :a) => true
-      (testing/in? env :b) => true)
+      "after t2"
+      (testing/in? env :c) => true)
 
     (testing/run-events! env :t3)
     (assertions
-      (testing/in? env :a) => true
-      (testing/in? env :b) => true)))
+      "after t3"
+      (testing/in? env :d) => true)))
 
-(specification
-  "test10b"
-  (let [chart (chart/statechart {}
-                (data-model {:expr {:x 0}})
-                (parallel
-                  {:id :p}
-                  (on-entry {} (assign {:location :x, :expr inc-x-expr}))
-                  (on-exit {} (assign {:location :x, :expr inc-x-expr}))
-                  (state {:id :a}
-                    (on-entry {} (assign {:location :x, :expr inc-x-expr}))
-                    (on-exit {} (assign {:location :x, :expr inc-x-expr}))
-                    (transition {:target :a, :event :t1, :cond (make-x-eq-expr 2)}))
-                  (state {:id :b})
-                  (transition {:target :c, :event :t2, :cond (make-x-eq-expr 4)}))
-                (state {:id :c}
-                  (transition {:target :d, :event :t3, :cond (make-x-eq-expr 6)}))
-                (state {:id :d}))
-        env (testing/new-testing-env {:statechart chart} {})]
-    (testing/start! env)
-    (assertions (testing/in? env :a) => true (testing/in? env :b) => true)
-    (testing/run-events! env :t1)
-    (assertions (testing/in? env :a) => true (testing/in? env :b) => true)
-    (testing/run-events! env :t2)
-    (assertions (testing/in? env :c) => true)
-    (testing/run-events! env :t3)
-    (assertions (testing/in? env :d) => true)))
-
-(specification
-  "test2" :focus
+(specification "test2"
   (let [chart (chart/statechart {}
                 (parallel
                   {:id :p}
@@ -124,7 +94,7 @@
                     (state {:id :b1}
                       (transition {:event :t, :target :b2}))
                     (state {:id :b2}))))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
 
     (assertions
@@ -149,7 +119,7 @@
                     (transition {:event :t, :target :a})
                     (state {:id :a1})
                     (state {:id :a2}))))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
 
     (assertions
@@ -161,20 +131,18 @@
       (testing/in? env :a1) => true
       (testing/in? env :b2) => true)))
 
-(specification
-  "test3"
-  (let [chart (chart/statechart
-                {}
-                (parallel
-                  {:id :p}
+(specification "test3"
+  (let [chart (chart/statechart {}
+                (parallel {:id :p}
                   (state {:id :a}
-                    (transition {:event :t, :target :a2})
+                    (transition {:event :t :target :a2})
                     (state {:id :a1})
                     (state {:id :a2}))
                   (state {:id :b}
-                    (state {:id :b1} (transition {:event :t, :target :b2}))
+                    (transition {:event :t :target :b2})
+                    (state {:id :b1})
                     (state {:id :b2}))))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
     (assertions
       (testing/in? env :a1) => true
@@ -197,7 +165,7 @@
                     (transition {:event :t, :target :a2})
                     (state {:id :a1})
                     (state {:id :a2}))))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
     (assertions
       (testing/in? env :a1) => true
@@ -220,7 +188,7 @@
                     (transition {:event :t, :target :b})
                     (state {:id :b1})
                     (state {:id :b2}))))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
     (assertions
       (testing/in? env :a1) => true
@@ -230,8 +198,7 @@
       (testing/in? env :a1) => true
       (testing/in? env :b1) => true)))
 
-(specification
-  "test5"
+(specification "test5"
   (let [chart (chart/statechart
                 {}
                 (parallel {:id :p}
@@ -243,7 +210,7 @@
                     (transition {:event :t, :target :b2})
                     (state {:id :b1})
                     (state {:id :b2}))))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
     (assertions
       (testing/in? env :a1) => true
@@ -253,8 +220,7 @@
       (testing/in? env :a2) => true
       (testing/in? env :b1) => true)))
 
-(specification
-  "test6"
+(specification "test6"
   (let [chart
             (chart/statechart
               {}
@@ -359,3 +325,5 @@
     (assertions (testing/in? env :x) => true)
     (testing/run-events! env :t)
     (assertions (testing/in? env :a22) => true (testing/in? env :b22) => true)))
+
+(log/set-level! :info)

@@ -25,8 +25,8 @@
    (defmacro with-processing-context [env & body]
      `(let [vwmem# (get ~env ::sc/vwmem)]
         (vswap! vwmem# (fn [m#] (merge
-                                  {::sc/enabled-transitions #{}
-                                   ::sc/states-to-invoke    #{}
+                                  {::sc/enabled-transitions (chart/document-ordered-set (::sc/statechart ~env))
+                                   ::sc/states-to-invoke    (chart/document-ordered-set (::sc/statechart ~env))
                                    ;; This belongs elsewhere, I think
                                    ::sc/internal-queue      (com.fulcrologic.statecharts.util/queue)}
                                   m#)))
@@ -183,22 +183,22 @@
             #_=> (let [default-transition (first (chart/transitions statechart s))] ; spec + validation. There will be exactly one
                    (set/union targets (get-effective-target-states env default-transition)))
             :else (conj targets id))))
-      #{}
+      (chart/document-ordered-set statechart)
       (log/spy :trace "target(s)"
         (:target (chart/element statechart t))))))
 
 (>defn get-transition-domain
   [{::sc/keys [statechart] :as env} t]
   [::sc/processing-env ::sc/element-or-id => (? ::sc/id)]
-  (let [tstates (get-effective-target-states env t)
-        tsource (chart/nearest-ancestor-state statechart t)]
+  (let [tstates (log/spy :trace (get-effective-target-states env t))
+        tsource (log/spy :trace (chart/nearest-ancestor-state statechart t))]
     (cond
       (empty? tstates) nil
       (and
         (= :internal (:type t))
         (chart/compound-state? statechart tsource)
         (every? (fn [s] (chart/descendant? statechart s tsource)) tstates)) tsource
-      :else (:id (chart/find-least-common-compound-ancestor statechart (into (if tsource [tsource] []) tstates))))))
+      :else (:id (log/spy :trace (chart/find-least-common-compound-ancestor statechart (into (if tsource [tsource] []) tstates)))))))
 
 (>defn compute-entry-set!
   "Returns [states-to-enter states-for-default-entry default-history-content]."
@@ -395,10 +395,10 @@
 (>defn compute-exit-set
   [{::sc/keys [statechart vwmem] :as env} transitions]
   [::sc/processing-env (s/every ::sc/element-or-id) => (s/every ::sc/id :kind set?)]
-  (let [states-to-exit (volatile! #{})]
+  (let [states-to-exit (volatile! (chart/document-ordered-set statechart))]
     (doseq [t (map #(chart/element statechart %) transitions)]
       (when (contains? t :target)
-        (let [domain (get-transition-domain env t)]
+        (let [domain (log/spy :trace (get-transition-domain env t))]
           (doseq [s (::sc/configuration @vwmem)]
             (when (chart/descendant? statechart s domain)
               (vswap! states-to-exit conj s))))))
@@ -408,15 +408,16 @@
   "Updates working-mem so that enabled-transitions no longer includes any conflicting ones."
   [{::sc/keys [statechart] :as env} enabled-transitions]
   [::sc/processing-env (s/every ::sc/id) => (s/every ::sc/id)]
-  (let [filtered-transitions (volatile! #{})]
+  (log/spy :trace "conflicting?" enabled-transitions)
+  (let [filtered-transitions (volatile! (chart/document-ordered-set statechart))]
     (doseq [t1 enabled-transitions
-            :let [to-remove  (volatile! #{})
+            :let [to-remove  (volatile! (chart/document-ordered-set statechart))
                   preempted? (volatile! false)]]
       (doseq [t2 @filtered-transitions
               :while (not @preempted?)]
         (when (seq (set/intersection
-                     (compute-exit-set env [t1])
-                     (compute-exit-set env [t2])))
+                     (log/spy :trace (compute-exit-set env [t1]))
+                     (log/spy :trace (compute-exit-set env [t2]))))
           (if (chart/descendant? statechart (chart/source statechart t1) (chart/source statechart t2))
             (vswap! to-remove conj t2)
             (vreset! preempted? true))))
@@ -429,7 +430,7 @@
 
 (>defn select-transitions* [machine configuration predicate]
   [::sc/statechart ::sc/configuration ifn? => ::sc/enabled-transitions]
-  (let [enabled-transitions (volatile! #{})
+  (let [enabled-transitions (volatile! (chart/document-ordered-set machine))
         looping?            (volatile! true)
         start-loop!         #(vreset! looping? true)
         break!              #(vreset! looping? false)
@@ -458,12 +459,13 @@
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [{::sc/keys [statechart vwmem] :as env} event]
   [::sc/processing-env ::sc/event-or-name => ::sc/working-memory]
-  (let [tns (log/spy :trace "enabled transitions" (remove-conflicting-transitions env
-                                                    (select-transitions* statechart (::sc/configuration @vwmem)
-                                                      (fn [t] (and
-                                                                (contains? t :event)
-                                                                (evts/name-match? (:event t) event)
-                                                                (condition-match env t))))))]
+  (let [tns (log/spy :trace "enabled transitions"
+              (remove-conflicting-transitions env
+                (select-transitions* statechart (::sc/configuration @vwmem)
+                  (fn [t] (and
+                            (contains? t :event)
+                            (evts/name-match? (:event t) event)
+                            (condition-match env t))))))]
     (vswap! vwmem assoc ::sc/enabled-transitions tns)))
 
 (defn- invocation-details
@@ -521,7 +523,7 @@
           (doseq [i (chart/in-document-order statechart (chart/invocations statechart state-to-invoke))]
             (start-invocation! env i))))
       ;; Clear states to invoke
-      (vswap! vwmem assoc ::sc/states-to-invoke #{}))
+      (vswap! vwmem assoc ::sc/states-to-invoke (chart/document-ordered-set statechart)))
     nil))
 
 (>defn run-many!
@@ -655,7 +657,7 @@
   (let [{::sc/keys [running?]} @vwmem]
     (when running?
       (loop []
-        (vswap! vwmem assoc ::sc/enabled-transitions #{} ::sc/macrostep-done? false)
+        (vswap! vwmem assoc ::sc/enabled-transitions (chart/document-ordered-set statechart) ::sc/macrostep-done? false)
         (handle-eventless-transitions! env)
         (if running?
           (do
@@ -767,7 +769,9 @@
     (vswap! vwmem (fn [wm]
                     (cond-> (assoc wm
                               ::sc/statechart-src statechart-src
-                              ::sc/enabled-transitions (if t #{t} #{}))
+                              ::sc/enabled-transitions (if t
+                                                         (chart/document-ordered-set statechart t)
+                                                         (chart/document-ordered-set statechart)))
                       parent-session-id (assoc ::sc/parent-session-id parent-session-id)
                       invokeid (assoc :org.w3.scxml.event/invokeid invokeid))))
     (with-processing-context env

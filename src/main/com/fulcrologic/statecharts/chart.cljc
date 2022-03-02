@@ -91,6 +91,7 @@
         children         (assign-parents node children)
         node             (assoc node :children (vec children))
         ids-in-order     (ids-in-document-order node)
+        id-ordinals      (zipmap ids-in-order (range))
         node             (assoc node
                            :children (mapv :id children)
                            ::sc/elements-by-id (reduce
@@ -107,6 +108,7 @@
                                                  {}
                                                  (tree-seq :children :children node))
                            :id :ROOT
+                           ::sc/id-ordinals id-ordinals
                            ::sc/ids-in-document-order ids-in-order)
         node-types       (into #{}
                            (map :node-type)
@@ -325,6 +327,22 @@
       (keep
         (fn [id] (when (ids id) id))
         ordered-ids))))
+
+(>defn compare-in-document-order
+  "Comparator function returning -1, 0, or 1 to establish the relative order of two element IDs"
+  [{::sc/keys [id-ordinals] :as chart} a b]
+  [::sc/statechart ::sc/element-or-id ::sc/element-or-id => #{-1 0 1}]
+  (let [a (element-id chart a)
+        b (element-id chart b)]
+    (compare (get id-ordinals a) (get id-ordinals b))))
+
+(>defn document-ordered-set
+  "Returns a set that keeps the IDs in document order"
+  [chart & initial-elements]
+  [::sc/statechart (s/* ::sc/id) => set?]
+  (into
+    (sorted-set-by (partial compare-in-document-order chart))
+    initial-elements))
 
 (def in-entry-order
   "[chart nodes]

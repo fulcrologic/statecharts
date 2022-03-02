@@ -11,8 +11,7 @@
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
     [com.fulcrologic.statecharts.chart :as chart]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.statecharts.environment :as env]))
+    [taoensso.timbre :as log]))
 
 (defprotocol Clearable
   (clear! [this] "Clear the recordings of the given mock"))
@@ -61,7 +60,6 @@
                                     data    (sp/current-data data-model env)
                                     result  (log/spy :trace "expr => " (expr env data))
                                     update? (vector? result)]
-                                (log/info "Running mock")
                                 (when update?
                                   (log/trace "trying vector result as a data model update" result)
                                   (sp/update! data-model env {:ops result}))
@@ -71,7 +69,6 @@
                        data    (sp/current-data data-model env)
                        result  (log/spy :trace "expr => " (expr env data))
                        update? (vector? result)]
-                   (log/info "Running expr")
                    (when update?
                      (log/trace "trying vector result as a data model update" result)
                      (sp/update! data-model env {:ops result}))

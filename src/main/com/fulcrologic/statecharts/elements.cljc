@@ -84,12 +84,12 @@
    `:event` - Name of the event as a keyword, or a list of such keywords. See `events/name-match?` or SCXML for semantics.
    `:cond` - Expression that must be true for this transition to be enabled. See execution model.
    `:target` - Target state or parallel region(s) as a single keyword or list of them.
-   `:type` - :internal or :external
+   `:type` - :internal or :external (default)
 
    https://www.w3.org/TR/scxml/#transition"
   [{:keys [event cond target type] :as attrs} & children]
-  (let [t    (if (keyword? target) [target] target)
-        type (or type :external)]
+  (let [t     (if (keyword? target) [target] target)
+        type  (or type :external)]
     (new-element :transition (assoc attrs :target t :type type) children)))
 
 (>defn initial
