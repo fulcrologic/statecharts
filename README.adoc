@@ -41,10 +41,8 @@ See the official https://fulcrologic.github.io/statecharts/[documentation].
 
 = Status
 
-ALPHA. Nearly complete, but test coverage is incomplete.
-
-This library is *not* guaranteed to be API stable while in alpha versions; however, as of alpha8 the API should
-be 99% stable.
+Production quality and API stable. Some obscure elements may not yet be implemented, but it is heavy use in a
+production environment without any issues.
 
 * Implemented
 ** DataModel, ExecutionModel, and EventQueue abstractions, along with a simple implementation.
@@ -65,7 +63,7 @@ for invoking other charts, and CLJ futures.
 ** Send events to arbitrary other sessions/services.
 ** A core.async event loop
 
-* Not implemented (yet)
+* Not implemented
 ** SCXML Flow control executable content elements (if/else/elseif/foreach). Note: the executable content is extensible
 via multi-methods, so these are easy to add.
 ** Complete test suite.
