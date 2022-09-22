@@ -32,7 +32,8 @@
 (defrecord MockExecutionModel [data-model
                                expressions-seen
                                call-counts
-                               mocks]
+                               mocks
+                               options]
   Clearable
   (clear! [_]
     (reset! expressions-seen [])
@@ -52,28 +53,29 @@
           :else false))))
   sp/ExecutionModel
   (run-expression! [_model env expr]
-    (swap! expressions-seen conj expr)
-    (swap! call-counts update expr (fnil inc 0))
-    (cond
-      (fn? (get @mocks expr)) (let [expr    (get @mocks expr)
-                                    env     (assoc env :ncalls (get @call-counts expr))
-                                    data    (sp/current-data data-model env)
-                                    result  (log/spy :trace "expr => " (expr env data))
-                                    update? (vector? result)]
-                                (when update?
-                                  (log/trace "trying vector result as a data model update" result)
-                                  (sp/update! data-model env {:ops result}))
-                                result)
-      (contains? @mocks expr) (get @mocks expr)
-      (fn? expr) (let [env     (assoc env :ncalls (get @call-counts expr))
-                       data    (sp/current-data data-model env)
-                       result  (log/spy :trace "expr => " (expr env data))
-                       update? (vector? result)]
-                   (when update?
-                     (log/trace "trying vector result as a data model update" result)
-                     (sp/update! data-model env {:ops result}))
-                   result)
-      :else expr)))
+    (let [{:keys [run-unmocked?]} options]
+      (swap! expressions-seen conj expr)
+      (swap! call-counts update expr (fnil inc 0))
+      (cond
+        (fn? (get @mocks expr)) (let [expr    (get @mocks expr)
+                                      env     (assoc env :ncalls (get @call-counts expr))
+                                      data    (sp/current-data data-model env)
+                                      result  (log/spy :trace "expr => " (expr env data))
+                                      update? (vector? result)]
+                                  (when update?
+                                    (log/trace "trying vector result as a data model update" result)
+                                    (sp/update! data-model env {:ops result}))
+                                  result)
+        (contains? @mocks expr) (get @mocks expr)
+        (and run-unmocked? (fn? expr)) (let [env     (assoc env :ncalls (get @call-counts expr))
+                                             data    (sp/current-data data-model env)
+                                             result  (log/spy :trace "expr => " (expr env data))
+                                             update? (vector? result)]
+                                         (when update?
+                                           (log/trace "trying vector result as a data model update" result)
+                                           (sp/update! data-model env {:ops result}))
+                                         result)
+        (not (fn? expr)) expr))))
 
 (defn new-mock-execution
   "Create a mock exection model. Records the expressions seen. If the expression has an
@@ -82,11 +84,16 @@
    called). Otherwise the value in the map is returned.
 
    You can use `ran?`, `ran-in-order?` and other ExecutionChecks to do verifications.
+
+   `options` is a map that can contain `:run-unmocked?` to indicate that any unmocked functions
+   should default to their real (clojure(script)) implementation (default false).
    "
   ([data-model]
-   (->MockExecutionModel data-model (atom []) (atom {}) (atom {})))
+   (->MockExecutionModel data-model (atom []) (atom {}) (atom {}) {:run-unmocked? false}))
   ([data-model mocks]
-   (->MockExecutionModel data-model (atom []) (atom {}) (atom mocks))))
+   (->MockExecutionModel data-model (atom []) (atom {}) (atom mocks) {}))
+  ([data-model mocks options]
+   (->MockExecutionModel data-model (atom []) (atom {}) (atom mocks) options)))
 
 (deftype MockInvocations [invocations]
   sp/InvocationProcessor
@@ -173,13 +180,13 @@
    The default data model is the flat working memory model, the default processor is the v20150901 version,
    and the validator checks things according to that same version.
    "
-  [{:keys [statechart processor-factory data-model-factory validator session-id]
+  [{:keys [statechart processor-factory data-model-factory validator session-id mocking-options]
     :or   {data-model-factory new-flat-model
            validator          configuration-problems}} mocks]
   (assert statechart "Statechart is supplied")
   (let [data-model (data-model-factory)
         mock-queue (new-mock-queue)
-        exec-model (new-mock-execution data-model (or mocks {}))
+        exec-model (new-mock-execution data-model (or mocks {}) mocking-options)
         env        (simple/simple-env (cond-> {:statechart                statechart
                                                ::sc/execution-model       exec-model
                                                ::sc/data-model            data-model

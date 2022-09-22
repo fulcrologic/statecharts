@@ -1,22 +1,11 @@
 (ns com.fulcrologic.statecharts.algorithms.v20150901.assign-current-small-step-spec
   (:require
-    [com.fulcrologic.statecharts.elements
-     :refer [state
-             initial
-             parallel
-             final
-             transition
-             raise
-             on-entry
-             on-exit
-             data-model
-             assign
-             script]]
-    [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.testing :as testing]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [fulcro-spec.core :refer [specification assertions =>]]))
+    [com.fulcrologic.statecharts.elements
+     :refer [assign data-model on-entry parallel script state transition]]
+    [com.fulcrologic.statecharts.testing :as testing]
+    [fulcro-spec.core :refer [=> assertions specification]]))
 
 (specification "test0"
   (let [chart (chart/statechart {}
@@ -39,7 +28,8 @@
                   (transition {:target :f}))
                 (state {:id :c})
                 (state {:id :f}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart
+                                        :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
 
@@ -64,7 +54,8 @@
                     (assign {:location :i :expr (fn [_ {:keys [i]}] (inc i))}))
                   (transition {:target :c :cond (fn [_ {:keys [i]}] (= i 100))}))
                 (state {:id :c}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart
+                                        :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
 
@@ -99,7 +90,8 @@
                   (transition {:target :f}))
                 (state {:id :e})
                 (state {:id :f}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart
+                                        :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
 
@@ -134,7 +126,8 @@
                   (transition {:event :t3 :target :f}))
                 (state {:id :d})
                 (state {:id :f}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart
+                                        :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
 
@@ -182,7 +175,8 @@
 
                 (state {:id :c})
                 (state {:id :f}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart
+                                        :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
 

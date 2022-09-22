@@ -324,7 +324,8 @@
                 (state {:id :success})
                 (state {:id :fail})
                 (state {:id :really-fail}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart :mocking-options {:run-unmocked? true}}
+                {})]
     (testing/start! env)
     (assertions (testing/in? env :a) => true)
     (testing/run-events! env :t1)

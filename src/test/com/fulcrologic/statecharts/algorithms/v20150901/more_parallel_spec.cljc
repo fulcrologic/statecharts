@@ -58,7 +58,8 @@
                 (state {:id :c}
                   (transition {:target :d, :event :t3, :cond (make-x-eq-expr 8)}))
                 (state {:id :d}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart
+                                        :mocking-options {:run-unmocked? true}} {})]
     (testing/start! env)
 
     (assertions
