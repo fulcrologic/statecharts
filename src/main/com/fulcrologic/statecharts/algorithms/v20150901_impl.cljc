@@ -77,10 +77,13 @@
 
 (defn- run-expression! [{::sc/keys [event-queue execution-model] :as env} expr]
   (try
-    (sp/run-expression! execution-model env expr)
+    (log/trace "Running expression" expr)
+    (log/spy :trace
+      (sp/run-expression! execution-model env expr))
     (catch #?(:clj Throwable :cljs :default) e
       (log/error e "Expression failure")
       (let [session-id (env/session-id env)]
+        (log/trace "Sending event" :error.execution "for exception" (ex-message e))
         (sp/send! event-queue env {:event             :error.execution
                                    :send-id           session-id
                                    :data              {:error e}
@@ -92,7 +95,10 @@
   (let [{:keys [cond]} (chart/element statechart element-or-id)]
     (if (nil? cond)
       true
-      (boolean (run-expression! env cond)))))
+      (do
+        (log/trace "evaluating condition" cond)
+        (log/spy :trace
+          (boolean (run-expression! env cond)))))))
 
 (>defn session-id
   "Returns the unique session id from an initialized `env`."
@@ -173,7 +179,8 @@
     (reduce
       (fn [targets s]
         (log/spy :trace "target" s)
-        (let [{:keys [id] :as s} (log/spy :trace "target element" (chart/element statechart s))]
+        (let [{:keys [id] :as s} (chart/element statechart s)]
+          (log/spy :trace "target-element" id)
           (cond
             (and
               (chart/history-element? statechart s)
@@ -198,7 +205,7 @@
         (= :internal (:type t))
         (chart/compound-state? statechart tsource)
         (every? (fn [s] (chart/descendant? statechart s tsource)) tstates)) tsource
-      :else (:id (log/spy :trace (chart/find-least-common-compound-ancestor statechart (into (if tsource [tsource] []) tstates)))))))
+      :else (log/spy :trace (:id (chart/find-least-common-compound-ancestor statechart (into (if tsource [tsource] []) tstates)))))))
 
 (>defn compute-entry-set!
   "Returns [states-to-enter states-for-default-entry default-history-content]."
@@ -235,8 +242,8 @@
         src (sp/load-data data-model env src)
         (fn? expr) (let [ops (run-expression! env expr)]
                      (when (vector? ops)
-                       (sp/update! data-model env {:ops ops})))
-        (map? expr) (sp/update! data-model env {:ops (ops/set-map-ops expr)})
+                       (sp/update! data-model env {:ops (log/spy :trace ops)})))
+        (map? expr) (sp/update! data-model env {:ops (log/spy :trace (ops/set-map-ops expr))})
         :else (sp/update! data-model env {:ops (ops/set-map-ops {})})))
     nil))
 
@@ -499,8 +506,10 @@
                     params    (merge
                                 (named-data env namelist)
                                 param-map)]
-                (when (log/spy :info idlocation)
+                (when idlocation
                   (sp/update! data-model env {:ops [(ops/assign idlocation invokeid)]}))
+                (log/tracef "Starting invocation id = %s, type = %s, src = %s, params = %s"
+                  (str invokeid) (str type) (str src) (str params))
                 (sp/start-invocation! processor env {:invokeid invokeid
                                                      :src      src
                                                      :type     type
@@ -580,6 +589,7 @@
                     (= s (chart/element-id statechart (chart/get-parent statechart s0)))))]
           (vswap! vwmem assoc-in [::sc/history-value id] (into #{} (filter f configuration))))))
     (doseq [s states-to-exit]
+      (log/trace "Leaving state " s)
       (in-state-context env s
         (let [to-exit (chart/exit-handlers statechart s)]
           (run-many! env to-exit)
