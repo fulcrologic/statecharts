@@ -53,10 +53,10 @@
                                    :source-session-id source-session-id
                                    :event             evts/cancel-event}))
       true))
-  (forward-event! [this {::sc/keys [ event-queue] :as env} {:keys [type invokeid event]}]
+  (forward-event! [this {::sc/keys [event-queue] :as env} {:keys [type invokeid event]}]
     (log/trace "Forward event " invokeid event)
     (let [source-session-id (env/session-id env)
-          child-session-id  (str source-session-id "." invokeid) ]
+          child-session-id  (str source-session-id "." invokeid)]
       (when event-queue
         (log/trace "sending event on event queue to" child-session-id)
         (sp/send! event-queue env {:target            child-session-id

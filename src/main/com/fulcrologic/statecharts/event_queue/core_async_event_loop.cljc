@@ -11,6 +11,7 @@
     [clojure.core.async :as async]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.protocols :as sp]
+    [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 (defn run-event-loop!
@@ -31,17 +32,19 @@
   (let [running? (atom true)]
     (async/go-loop []
       (async/<! (async/timeout resolution-ms))
-      (sp/receive-events! event-queue env
-        (fn [env {:keys [target] :as event}]
-          (if-not target
-            (log/warn "Event did not have a session target. This queue only supports events to charts." event)
-            (let [session-id target
-                  wmem       (sp/get-working-memory working-memory-store env session-id)
-                  next-mem   (when wmem (sp/process-event! processor env wmem event))]
-              (if next-mem
-                (sp/save-working-memory! working-memory-store env session-id next-mem)
-                (log/error "Session had no working memory. Event to session ignored" session-id)))))
-        {})
+      (enc/catching
+        (sp/receive-events! event-queue env
+          (fn [env {:keys [target] :as event}]
+            (log/debug "Received event" event)
+            (if-not target
+              (log/warn "Event did not have a session target. This queue only supports events to charts." event)
+              (let [session-id target
+                    wmem       (sp/get-working-memory working-memory-store env session-id)
+                    next-mem   (when wmem (sp/process-event! processor env wmem event))]
+                (if next-mem
+                  (sp/save-working-memory! working-memory-store env session-id next-mem)
+                  (log/error "Session had no working memory. Event to session ignored" session-id)))))
+          {}))
       (if @running?
         (recur)
         (log/info "Event loop ended")))

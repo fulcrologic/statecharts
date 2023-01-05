@@ -36,7 +36,7 @@
 (defrecord ManuallyPolledQueue [session-queues]
   sp/EventQueue
   (send! [_ _env {:keys [event data type target source-session-id send-id invoke-id delay]}]
-    (if (supported-type? type)
+    (if (and (supported-type? type) (or target source-session-id))
       (let [target (or target source-session-id)
             now    (now-ms)
             tm     (if delay (+ now delay) (dec now))

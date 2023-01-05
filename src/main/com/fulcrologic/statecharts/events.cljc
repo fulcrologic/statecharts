@@ -5,11 +5,10 @@
   (:require
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.specs]))
 
-(>defn name-match?
+(defn name-match?
   "Match event names.
 
   `event` is either the full name of an event, which can have dot-separated segments,
@@ -24,8 +23,7 @@
    Returns `true` if any of the `candidates` is a prefix of `event-name` (on
    a dot-separated segment-by-segment basis)"
   [candidates event]
-  [(? (s/or :k ::sc/event-name
-        :ks (s/every ::sc/event-name))) (? ::sc/event-or-name) => boolean?]
+
   (let [event-name (if (map? event) (::sc/event-name event) event)]
     (boolean
       (and
@@ -43,7 +41,7 @@
                     (= candidate (subvec event-name 0 (count candidate))))))
               (some #(name-match? % event-name) (seq candidates)))))))))
 
-(>defn new-event
+(defn new-event
   "Generate a new event containing `data`. It is recommended that `data` be
    easily serializable (plain EDN without code) if you wish to use it
    in a distributed or durable environment.
@@ -56,7 +54,7 @@
 
    https://www.w3.org/TR/scxml/#events"
   [event-name-or-map]
-  [(s/or :k keyword :evt map?) => ::sc/event]
+
   (if (map? event-name-or-map)
     (let [{:keys [name data] :as base-event} event-name-or-map]
       (merge
@@ -70,8 +68,7 @@
      :data           {}
      ::sc/event-name event-name-or-map}))
 
-(>defn event-name [event-or-name]
-  [::sc/event-or-name => ::sc/event-name]
+(defn event-name [event-or-name]
   (if (keyword? event-or-name)
     event-or-name
     (::sc/event-name event-or-name)))

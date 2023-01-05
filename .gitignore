@@ -58,7 +58,8 @@ docs/.jekyll-metadata
 resources/public/workspaces
 !.idea/runConfigurations
 .lsp
-.clj-kondo/.cache/
+.clj-kondo
+!.clj-kondo/config.edn
 resources
 lsp
 /*.lock

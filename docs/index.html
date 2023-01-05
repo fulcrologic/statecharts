@@ -4,26 +4,24 @@
 <meta charset="UTF-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="generator" content="Asciidoctor 2.0.10">
+<meta name="generator" content="Asciidoctor 2.0.17">
 <meta name="author" content="Tony Kay">
 <title>State Charts for Clojure(script)</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
 <style>
-/* Asciidoctor default stylesheet | MIT License | https://asciidoctor.org */
-/* Uncomment @import statement to use as custom stylesheet */
-/*@import "https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700";*/
-article,aside,details,figcaption,figure,footer,header,hgroup,main,nav,section{display:block}
-audio,video{display:inline-block}
-audio:not([controls]){display:none;height:0}
-html{font-family:sans-serif;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%}
+/*! Asciidoctor default stylesheet | MIT License | https://asciidoctor.org */
+/* Uncomment the following line when using as a custom stylesheet */
+/* @import "https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700"; */
+html{font-family:sans-serif;-webkit-text-size-adjust:100%}
 a{background:none}
 a:focus{outline:thin dotted}
 a:active,a:hover{outline:0}
 h1{font-size:2em;margin:.67em 0}
-abbr[title]{border-bottom:1px dotted}
 b,strong{font-weight:bold}
+abbr{font-size:.9em}
+abbr[title]{cursor:help;border-bottom:1px dotted #dddddf;text-decoration:none}
 dfn{font-style:italic}
-hr{-moz-box-sizing:content-box;box-sizing:content-box;height:0}
+hr{height:0}
 mark{background:#ff0;color:#000}
 code,kbd,pre,samp{font-family:monospace;font-size:1em}
 pre{white-space:pre-wrap}
@@ -35,20 +33,22 @@ sub{bottom:-.25em}
 img{border:0}
 svg:not(:root){overflow:hidden}
 figure{margin:0}
+audio,video{display:inline-block}
+audio:not([controls]){display:none;height:0}
 fieldset{border:1px solid silver;margin:0 2px;padding:.35em .625em .75em}
 legend{border:0;padding:0}
 button,input,select,textarea{font-family:inherit;font-size:100%;margin:0}
 button,input{line-height:normal}
 button,select{text-transform:none}
-button,html input[type="button"],input[type="reset"],input[type="submit"]{-webkit-appearance:button;cursor:pointer}
+button,html input[type=button],input[type=reset],input[type=submit]{-webkit-appearance:button;cursor:pointer}
 button[disabled],html input[disabled]{cursor:default}
-input[type="checkbox"],input[type="radio"]{box-sizing:border-box;padding:0}
+input[type=checkbox],input[type=radio]{padding:0}
 button::-moz-focus-inner,input::-moz-focus-inner{border:0;padding:0}
 textarea{overflow:auto;vertical-align:top}
 table{border-collapse:collapse;border-spacing:0}
-*,*::before,*::after{-moz-box-sizing:border-box;-webkit-box-sizing:border-box;box-sizing:border-box}
+*,::before,::after{box-sizing:border-box}
 html,body{font-size:100%}
-body{background:#fff;color:rgba(0,0,0,.8);padding:0;margin:0;font-family:"Noto Serif","DejaVu Serif",serif;font-weight:400;font-style:normal;line-height:1;position:relative;cursor:auto;tab-size:4;-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased}
+body{background:#fff;color:rgba(0,0,0,.8);padding:0;margin:0;font-family:"Noto Serif","DejaVu Serif",serif;line-height:1;position:relative;cursor:auto;-moz-tab-size:4;-o-tab-size:4;tab-size:4;word-wrap:anywhere;-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased}
 a:hover{cursor:pointer}
 img,object,embed{max-width:100%;height:auto}
 object,embed{height:100%}
@@ -63,14 +63,12 @@ img{-ms-interpolation-mode:bicubic}
 img,object,svg{display:inline-block;vertical-align:middle}
 textarea{height:auto;min-height:50px}
 select{width:100%}
-.center{margin-left:auto;margin-right:auto}
-.stretch{width:100%}
 .subheader,.admonitionblock td.content>.title,.audioblock>.title,.exampleblock>.title,.imageblock>.title,.listingblock>.title,.literalblock>.title,.stemblock>.title,.openblock>.title,.paragraph>.title,.quoteblock>.title,table.tableblock>.title,.verseblock>.title,.videoblock>.title,.dlist>.title,.olist>.title,.ulist>.title,.qlist>.title,.hdlist>.title{line-height:1.45;color:#7a2518;font-weight:400;margin-top:0;margin-bottom:.25em}
-div,dl,dt,dd,ul,ol,li,h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6,pre,form,p,blockquote,th,td{margin:0;padding:0;direction:ltr}
+div,dl,dt,dd,ul,ol,li,h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6,pre,form,p,blockquote,th,td{margin:0;padding:0}
 a{color:#2156a5;text-decoration:underline;line-height:inherit}
 a:hover,a:focus{color:#1d4b8f}
 a img{border:0}
-p{font-family:inherit;font-weight:400;font-size:1em;line-height:1.6;margin-bottom:1.25em;text-rendering:optimizeLegibility}
+p{line-height:1.6;margin-bottom:1.25em;text-rendering:optimizeLegibility}
 p aside{font-size:.875em;line-height:1.35;font-style:italic}
 h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6{font-family:"Open Sans","DejaVu Sans",sans-serif;font-weight:300;font-style:normal;color:#ba3925;text-rendering:optimizeLegibility;margin-top:1em;margin-bottom:.5em;line-height:1.0125em}
 h1 small,h2 small,h3 small,#toctitle small,.sidebarblock>.content>.title small,h4 small,h5 small,h6 small{font-size:60%;color:#e99b8f;line-height:0}
@@ -79,14 +77,14 @@ h2{font-size:1.6875em}
 h3,#toctitle,.sidebarblock>.content>.title{font-size:1.375em}
 h4,h5{font-size:1.125em}
 h6{font-size:1em}
-hr{border:solid #dddddf;border-width:1px 0 0;clear:both;margin:1.25em 0 1.1875em;height:0}
+hr{border:solid #dddddf;border-width:1px 0 0;clear:both;margin:1.25em 0 1.1875em}
 em,i{font-style:italic;line-height:inherit}
 strong,b{font-weight:bold;line-height:inherit}
 small{font-size:60%;line-height:inherit}
 code{font-family:"Droid Sans Mono","DejaVu Sans Mono",monospace;font-weight:400;color:rgba(0,0,0,.9)}
-ul,ol,dl{font-size:1em;line-height:1.6;margin-bottom:1.25em;list-style-position:outside;font-family:inherit}
+ul,ol,dl{line-height:1.6;margin-bottom:1.25em;list-style-position:outside;font-family:inherit}
 ul,ol{margin-left:1.5em}
-ul li ul,ul li ol{margin-left:1.25em;margin-bottom:0;font-size:1em}
+ul li ul,ul li ol{margin-left:1.25em;margin-bottom:0}
 ul.square li ul,ul.circle li ul,ul.disc li ul{list-style:inherit}
 ul.square{list-style-type:square}
 ul.circle{list-style-type:circle}
@@ -94,31 +92,29 @@ ul.disc{list-style-type:disc}
 ol li ul,ol li ol{margin-left:1.25em;margin-bottom:0}
 dl dt{margin-bottom:.3125em;font-weight:bold}
 dl dd{margin-bottom:1.25em}
-abbr,acronym{text-transform:uppercase;font-size:90%;color:rgba(0,0,0,.8);border-bottom:1px dotted #ddd;cursor:help}
-abbr{text-transform:none}
 blockquote{margin:0 0 1.25em;padding:.5625em 1.25em 0 1.1875em;border-left:1px solid #ddd}
-blockquote cite{display:block;font-size:.9375em;color:rgba(0,0,0,.6)}
-blockquote cite::before{content:"\2014 \0020"}
-blockquote cite a,blockquote cite a:visited{color:rgba(0,0,0,.6)}
 blockquote,blockquote p{line-height:1.6;color:rgba(0,0,0,.85)}
 @media screen and (min-width:768px){h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6{line-height:1.2}
 h1{font-size:2.75em}
 h2{font-size:2.3125em}
 h3,#toctitle,.sidebarblock>.content>.title{font-size:1.6875em}
 h4{font-size:1.4375em}}
-table{background:#fff;margin-bottom:1.25em;border:solid 1px #dedede}
+table{background:#fff;margin-bottom:1.25em;border:1px solid #dedede;word-wrap:normal}
 table thead,table tfoot{background:#f7f8f7}
 table thead tr th,table thead tr td,table tfoot tr th,table tfoot tr td{padding:.5em .625em .625em;font-size:inherit;color:rgba(0,0,0,.8);text-align:left}
 table tr th,table tr td{padding:.5625em .625em;font-size:inherit;color:rgba(0,0,0,.8)}
 table tr.even,table tr.alt{background:#f8f8f7}
-table thead tr th,table tfoot tr th,table tbody tr td,table tr td,table tfoot tr td{display:table-cell;line-height:1.6}
+table thead tr th,table tfoot tr th,table tbody tr td,table tr td,table tfoot tr td{line-height:1.6}
 h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6{line-height:1.2;word-spacing:-.05em}
 h1 strong,h2 strong,h3 strong,#toctitle strong,.sidebarblock>.content>.title strong,h4 strong,h5 strong,h6 strong{font-weight:400}
+.center{margin-left:auto;margin-right:auto}
+.stretch{width:100%}
 .clearfix::before,.clearfix::after,.float-group::before,.float-group::after{content:" ";display:table}
 .clearfix::after,.float-group::after{clear:both}
-:not(pre):not([class^=L])>code{font-size:.9375em;font-style:normal!important;letter-spacing:0;padding:.1em .5ex;word-spacing:-.15em;background:#f7f7f8;-webkit-border-radius:4px;border-radius:4px;line-height:1.45;text-rendering:optimizeSpeed;word-wrap:break-word}
-:not(pre)>code.nobreak{word-wrap:normal}
-:not(pre)>code.nowrap{white-space:nowrap}
+:not(pre).nobreak{word-wrap:normal}
+:not(pre).nowrap{white-space:nowrap}
+:not(pre).pre-wrap{white-space:pre-wrap}
+:not(pre):not([class^=L])>code{font-size:.9375em;font-style:normal!important;letter-spacing:0;padding:.1em .5ex;word-spacing:-.15em;background:#f7f7f8;border-radius:4px;line-height:1.45;text-rendering:optimizeSpeed}
 pre{color:rgba(0,0,0,.9);font-family:"Droid Sans Mono","DejaVu Sans Mono",monospace;line-height:1.45;text-rendering:optimizeSpeed}
 pre code,pre pre{color:inherit;font-size:inherit;line-height:inherit}
 pre>code{display:block}
@@ -126,7 +122,7 @@ pre.nowrap,pre.nowrap pre{white-space:pre;word-wrap:normal}
 em em{font-style:normal}
 strong strong{font-weight:400}
 .keyseq{color:rgba(51,51,51,.8)}
-kbd{font-family:"Droid Sans Mono","DejaVu Sans Mono",monospace;display:inline-block;color:rgba(0,0,0,.8);font-size:.65em;line-height:1.45;background:#f7f7f7;border:1px solid #ccc;-webkit-border-radius:3px;border-radius:3px;-webkit-box-shadow:0 1px 0 rgba(0,0,0,.2),0 0 0 .1em white inset;box-shadow:0 1px 0 rgba(0,0,0,.2),0 0 0 .1em #fff inset;margin:0 .15em;padding:.2em .5em;vertical-align:middle;position:relative;top:-.1em;white-space:nowrap}
+kbd{font-family:"Droid Sans Mono","DejaVu Sans Mono",monospace;display:inline-block;color:rgba(0,0,0,.8);font-size:.65em;line-height:1.45;background:#f7f7f7;border:1px solid #ccc;border-radius:3px;box-shadow:0 1px 0 rgba(0,0,0,.2),inset 0 0 0 .1em #fff;margin:0 .15em;padding:.2em .5em;vertical-align:middle;position:relative;top:-.1em;white-space:nowrap}
 .keyseq kbd:first-child{margin-left:0}
 .keyseq kbd:last-child{margin-right:0}
 .menuseq,.menuref{color:#000}
@@ -138,7 +134,7 @@ b.button::before,b.button::after{position:relative;top:-1px;font-weight:400}
 b.button::before{content:"[";padding:0 3px 0 2px}
 b.button::after{content:"]";padding:0 2px 0 3px}
 p a>code:hover{color:rgba(0,0,0,.9)}
-#header,#content,#footnotes,#footer{width:100%;margin-left:auto;margin-right:auto;margin-top:0;margin-bottom:0;max-width:62.5em;*zoom:1;position:relative;padding-left:.9375em;padding-right:.9375em}
+#header,#content,#footnotes,#footer{width:100%;margin:0 auto;max-width:62.5em;*zoom:1;position:relative;padding-left:.9375em;padding-right:.9375em}
 #header::before,#header::after,#content::before,#content::after,#footnotes::before,#footnotes::after,#footer::before,#footer::after{content:" ";display:table}
 #header::after,#content::after,#footnotes::after,#footer::after{clear:both}
 #content{margin-top:1.25em}
@@ -146,7 +142,7 @@ p a>code:hover{color:rgba(0,0,0,.9)}
 #header>h1:first-child{color:rgba(0,0,0,.85);margin-top:2.25rem;margin-bottom:0}
 #header>h1:first-child+#toc{margin-top:8px;border-top:1px solid #dddddf}
 #header>h1:only-child,body.toc2 #header>h1:nth-last-child(2){border-bottom:1px solid #dddddf;padding-bottom:8px}
-#header .details{border-bottom:1px solid #dddddf;line-height:1.45;padding-top:.25em;padding-bottom:.25em;padding-left:.25em;color:rgba(0,0,0,.6);display:-ms-flexbox;display:-webkit-flex;display:flex;-ms-flex-flow:row wrap;-webkit-flex-flow:row wrap;flex-flow:row wrap}
+#header .details{border-bottom:1px solid #dddddf;line-height:1.45;padding-top:.25em;padding-bottom:.25em;padding-left:.25em;color:rgba(0,0,0,.6);display:flex;flex-flow:row wrap}
 #header .details span:first-child{margin-left:-.125em}
 #header .details span.email a{color:rgba(0,0,0,.85)}
 #header .details br{display:none}
@@ -180,11 +176,11 @@ body.toc2.toc-right #toc.toc2{border-right-width:0;border-left:1px solid #e7e7e9
 #toc.toc2>ul{font-size:.95em}
 #toc.toc2 ul ul{padding-left:1.25em}
 body.toc2.toc-right{padding-left:0;padding-right:20em}}
-#content #toc{border-style:solid;border-width:1px;border-color:#e0e0dc;margin-bottom:1.25em;padding:1.25em;background:#f8f8f7;-webkit-border-radius:4px;border-radius:4px}
+#content #toc{border:1px solid #e0e0dc;margin-bottom:1.25em;padding:1.25em;background:#f8f8f7;border-radius:4px}
 #content #toc>:first-child{margin-top:0}
 #content #toc>:last-child{margin-bottom:0}
-#footer{max-width:100%;background:rgba(0,0,0,.8);padding:1.25em}
-#footer-text{color:rgba(255,255,255,.8);line-height:1.44}
+#footer{max-width:none;background:rgba(0,0,0,.8);padding:1.25em}
+#footer-text{color:hsla(0,0%,100%,.8);line-height:1.44}
 #content{margin-bottom:.625em}
 .sect1{padding-bottom:.625em}
 @media screen and (min-width:768px){#content{margin-bottom:1.25em}
@@ -197,29 +193,33 @@ body.toc2.toc-right{padding-left:0;padding-right:20em}}
 #content h1>a.link,h2>a.link,h3>a.link,#toctitle>a.link,.sidebarblock>.content>.title>a.link,h4>a.link,h5>a.link,h6>a.link{color:#ba3925;text-decoration:none}
 #content h1>a.link:hover,h2>a.link:hover,h3>a.link:hover,#toctitle>a.link:hover,.sidebarblock>.content>.title>a.link:hover,h4>a.link:hover,h5>a.link:hover,h6>a.link:hover{color:#a53221}
 details,.audioblock,.imageblock,.literalblock,.listingblock,.stemblock,.videoblock{margin-bottom:1.25em}
-details>summary:first-of-type{cursor:pointer;display:list-item;outline:none;margin-bottom:.75em}
+details{margin-left:1.25rem}
+details>summary{cursor:pointer;display:block;position:relative;line-height:1.6;margin-bottom:.625rem;outline:none;-webkit-tap-highlight-color:transparent}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"";border:solid transparent;border-left:solid;border-width:.3em 0 .3em .5em;position:absolute;top:.5em;left:-1.25rem;transform:translateX(15%)}
+details[open]>summary::before{border:solid transparent;border-top:solid;border-width:.5em .3em 0;transform:translateY(15%)}
+details>summary::after{content:"";width:1.25rem;height:1em;position:absolute;top:.3em;left:-1.25rem}
 .admonitionblock td.content>.title,.audioblock>.title,.exampleblock>.title,.imageblock>.title,.listingblock>.title,.literalblock>.title,.stemblock>.title,.openblock>.title,.paragraph>.title,.quoteblock>.title,table.tableblock>.title,.verseblock>.title,.videoblock>.title,.dlist>.title,.olist>.title,.ulist>.title,.qlist>.title,.hdlist>.title{text-rendering:optimizeLegibility;text-align:left;font-family:"Noto Serif","DejaVu Serif",serif;font-size:1rem;font-style:italic}
 table.tableblock.fit-content>caption.title{white-space:nowrap;width:0}
-.paragraph.lead>p,#preamble>.sectionbody>[class="paragraph"]:first-of-type p{font-size:1.21875em;line-height:1.6;color:rgba(0,0,0,.85)}
-table.tableblock #preamble>.sectionbody>[class="paragraph"]:first-of-type p{font-size:inherit}
+.paragraph.lead>p,#preamble>.sectionbody>[class=paragraph]:first-of-type p{font-size:1.21875em;line-height:1.6;color:rgba(0,0,0,.85)}
 .admonitionblock>table{border-collapse:separate;border:0;background:none;width:100%}
 .admonitionblock>table td.icon{text-align:center;width:80px}
 .admonitionblock>table td.icon img{max-width:none}
 .admonitionblock>table td.icon .title{font-weight:bold;font-family:"Open Sans","DejaVu Sans",sans-serif;text-transform:uppercase}
-.admonitionblock>table td.content{padding-left:1.125em;padding-right:1.25em;border-left:1px solid #dddddf;color:rgba(0,0,0,.6)}
+.admonitionblock>table td.content{padding-left:1.125em;padding-right:1.25em;border-left:1px solid #dddddf;color:rgba(0,0,0,.6);word-wrap:anywhere}
 .admonitionblock>table td.content>:last-child>:last-child{margin-bottom:0}
-.exampleblock>.content{border-style:solid;border-width:1px;border-color:#e6e6e6;margin-bottom:1.25em;padding:1.25em;background:#fff;-webkit-border-radius:4px;border-radius:4px}
+.exampleblock>.content{border:1px solid #e6e6e6;margin-bottom:1.25em;padding:1.25em;background:#fff;border-radius:4px}
 .exampleblock>.content>:first-child{margin-top:0}
 .exampleblock>.content>:last-child{margin-bottom:0}
-.sidebarblock{border-style:solid;border-width:1px;border-color:#dbdbd6;margin-bottom:1.25em;padding:1.25em;background:#f3f3f2;-webkit-border-radius:4px;border-radius:4px}
+.sidebarblock{border:1px solid #dbdbd6;margin-bottom:1.25em;padding:1.25em;background:#f3f3f2;border-radius:4px}
 .sidebarblock>:first-child{margin-top:0}
 .sidebarblock>:last-child{margin-bottom:0}
 .sidebarblock>.content>.title{color:#7a2518;margin-top:0;text-align:center}
 .exampleblock>.content>:last-child>:last-child,.exampleblock>.content .olist>ol>li:last-child>:last-child,.exampleblock>.content .ulist>ul>li:last-child>:last-child,.exampleblock>.content .qlist>ol>li:last-child>:last-child,.sidebarblock>.content>:last-child>:last-child,.sidebarblock>.content .olist>ol>li:last-child>:last-child,.sidebarblock>.content .ulist>ul>li:last-child>:last-child,.sidebarblock>.content .qlist>ol>li:last-child>:last-child{margin-bottom:0}
-.literalblock pre,.listingblock>.content>pre{-webkit-border-radius:4px;border-radius:4px;word-wrap:break-word;overflow-x:auto;padding:1em;font-size:.8125em}
+.literalblock pre,.listingblock>.content>pre{border-radius:4px;overflow-x:auto;padding:1em;font-size:.8125em}
 @media screen and (min-width:768px){.literalblock pre,.listingblock>.content>pre{font-size:.90625em}}
 @media screen and (min-width:1280px){.literalblock pre,.listingblock>.content>pre{font-size:1em}}
-.literalblock pre,.listingblock>.content>pre:not(.highlight),.listingblock>.content>pre[class="highlight"],.listingblock>.content>pre[class^="highlight "]{background:#f7f7f8}
+.literalblock pre,.listingblock>.content>pre:not(.highlight),.listingblock>.content>pre[class=highlight],.listingblock>.content>pre[class^="highlight "]{background:#f7f7f8}
 .literalblock.output pre{color:#f7f7f8;background:rgba(0,0,0,.9)}
 .listingblock>.content{position:relative}
 .listingblock code[data-lang]::before{display:none;content:attr(data-lang);position:absolute;font-size:.75em;top:.425rem;right:.5rem;line-height:1;text-transform:uppercase;color:inherit;opacity:.5}
@@ -227,7 +227,7 @@ table.tableblock #preamble>.sectionbody>[class="paragraph"]:first-of-type p{font
 .listingblock.terminal pre .command::before{content:attr(data-prompt);padding-right:.5em;color:inherit;opacity:.5}
 .listingblock.terminal pre .command:not([data-prompt])::before{content:"$"}
 .listingblock pre.highlightjs{padding:0}
-.listingblock pre.highlightjs>code{padding:1em;-webkit-border-radius:4px;border-radius:4px}
+.listingblock pre.highlightjs>code{padding:1em;border-radius:4px}
 .listingblock pre.prettyprint{border-width:0}
 .prettyprint{background:#f7f7f8}
 pre.prettyprint .linenums{line-height:1.45;margin-left:2em}
@@ -237,9 +237,8 @@ pre.prettyprint li:not(:first-child) code[data-lang]::before{display:none}
 table.linenotable{border-collapse:separate;border:0;margin-bottom:0;background:none}
 table.linenotable td[class]{color:inherit;vertical-align:top;padding:0;line-height:inherit;white-space:normal}
 table.linenotable td.code{padding-left:.75em}
-table.linenotable td.linenos{border-right:1px solid currentColor;opacity:.35;padding-right:.5em}
-pre.pygments .lineno{border-right:1px solid currentColor;opacity:.35;display:inline-block;margin-right:.75em}
-pre.pygments .lineno::before{content:"";margin-right:-.125em}
+table.linenotable td.linenos,pre.pygments .linenos{border-right:1px solid;opacity:.35;padding-right:.5em;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
+pre.pygments span.linenos{display:inline-block;margin-right:.75em}
 .quoteblock{margin:0 1em 1.25em 1.5em;display:table}
 .quoteblock:not(.excerpt)>.title{margin-left:-1.5em;margin-bottom:.75em}
 .quoteblock blockquote,.quoteblock p{color:rgba(0,0,0,.85);font-size:1.15rem;line-height:1.75;word-spacing:.1em;letter-spacing:0;font-style:italic;text-align:justify}
@@ -248,7 +247,7 @@ pre.pygments .lineno::before{content:"";margin-right:-.125em}
 .quoteblock blockquote>.paragraph:last-child p{margin-bottom:0}
 .quoteblock .attribution{margin-top:.75em;margin-right:.5ex;text-align:right}
 .verseblock{margin:0 1em 1.25em}
-.verseblock pre{font-family:"Open Sans","DejaVu Sans",sans;font-size:1.15rem;color:rgba(0,0,0,.85);font-weight:300;text-rendering:optimizeLegibility}
+.verseblock pre{font-family:"Open Sans","DejaVu Sans",sans-serif;font-size:1.15rem;color:rgba(0,0,0,.85);font-weight:300;text-rendering:optimizeLegibility}
 .verseblock pre strong{font-weight:400}
 .verseblock .attribution{margin-top:1.25rem;margin-left:.5ex}
 .quoteblock .attribution,.verseblock .attribution{font-size:.9375em;line-height:1.45;font-style:italic}
@@ -261,23 +260,22 @@ pre.pygments .lineno::before{content:"";margin-right:-.125em}
 .quoteblock.excerpt>blockquote,.quoteblock .quoteblock{padding:0 0 .25em 1em;border-left:.25em solid #dddddf}
 .quoteblock.excerpt,.quoteblock .quoteblock{margin-left:0}
 .quoteblock.excerpt blockquote,.quoteblock.excerpt p,.quoteblock .quoteblock blockquote,.quoteblock .quoteblock p{color:inherit;font-size:1.0625rem}
-.quoteblock.excerpt .attribution,.quoteblock .quoteblock .attribution{color:inherit;text-align:left;margin-right:0}
-table.tableblock{max-width:100%;border-collapse:separate}
+.quoteblock.excerpt .attribution,.quoteblock .quoteblock .attribution{color:inherit;font-size:.85rem;text-align:left;margin-right:0}
 p.tableblock:last-child{margin-bottom:0}
+td.tableblock>.content{margin-bottom:1.25em;word-wrap:anywhere}
 td.tableblock>.content>:last-child{margin-bottom:-1.25em}
-td.tableblock>.content>:last-child.sidebarblock{margin-bottom:0}
 table.tableblock,th.tableblock,td.tableblock{border:0 solid #dedede}
-table.grid-all>thead>tr>.tableblock,table.grid-all>tbody>tr>.tableblock{border-width:0 1px 1px 0}
-table.grid-all>tfoot>tr>.tableblock{border-width:1px 1px 0 0}
-table.grid-cols>*>tr>.tableblock{border-width:0 1px 0 0}
-table.grid-rows>thead>tr>.tableblock,table.grid-rows>tbody>tr>.tableblock{border-width:0 0 1px}
-table.grid-rows>tfoot>tr>.tableblock{border-width:1px 0 0}
-table.grid-all>*>tr>.tableblock:last-child,table.grid-cols>*>tr>.tableblock:last-child{border-right-width:0}
-table.grid-all>tbody>tr:last-child>.tableblock,table.grid-all>thead:last-child>tr>.tableblock,table.grid-rows>tbody>tr:last-child>.tableblock,table.grid-rows>thead:last-child>tr>.tableblock{border-bottom-width:0}
+table.grid-all>*>tr>*{border-width:1px}
+table.grid-cols>*>tr>*{border-width:0 1px}
+table.grid-rows>*>tr>*{border-width:1px 0}
 table.frame-all{border-width:1px}
+table.frame-ends{border-width:1px 0}
 table.frame-sides{border-width:0 1px}
-table.frame-topbot,table.frame-ends{border-width:1px 0}
-table.stripes-all tr,table.stripes-odd tr:nth-of-type(odd),table.stripes-even tr:nth-of-type(even),table.stripes-hover tr:hover{background:#f8f8f7}
+table.frame-none>colgroup+*>:first-child>*,table.frame-sides>colgroup+*>:first-child>*{border-top-width:0}
+table.frame-none>:last-child>:last-child>*,table.frame-sides>:last-child>:last-child>*{border-bottom-width:0}
+table.frame-none>*>tr>:first-child,table.frame-ends>*>tr>:first-child{border-left-width:0}
+table.frame-none>*>tr>:last-child,table.frame-ends>*>tr>:last-child{border-right-width:0}
+table.stripes-all>*>tr,table.stripes-odd>*>tr:nth-of-type(odd),table.stripes-even>*>tr:nth-of-type(even),table.stripes-hover>*>tr:hover{background:#f8f8f7}
 th.halign-left,td.halign-left{text-align:left}
 th.halign-right,td.halign-right{text-align:right}
 th.halign-center,td.halign-center{text-align:center}
@@ -285,7 +283,7 @@ th.valign-top,td.valign-top{vertical-align:top}
 th.valign-bottom,td.valign-bottom{vertical-align:bottom}
 th.valign-middle,td.valign-middle{vertical-align:middle}
 table thead th,table tfoot th{font-weight:bold}
-tbody tr th{display:table-cell;line-height:1.6;background:#f7f8f7}
+tbody tr th{background:#f7f8f7}
 tbody tr th,tbody tr th p,tfoot tr th,tfoot tr th p{color:rgba(0,0,0,.8);font-weight:bold}
 p.tableblock>code:only-child{background:none;padding:0}
 p.tableblock{font-size:1em}
@@ -293,14 +291,15 @@ ol{margin-left:1.75em}
 ul li ol{margin-left:1.5em}
 dl dd{margin-left:1.125em}
 dl dd:last-child,dl dd:last-child>:last-child{margin-bottom:0}
-ol>li p,ul>li p,ul dd,ol dd,.olist .olist,.ulist .ulist,.ulist .olist,.olist .ulist{margin-bottom:.625em}
+li p,ul dd,ol dd,.olist .olist,.ulist .ulist,.ulist .olist,.olist .ulist{margin-bottom:.625em}
 ul.checklist,ul.none,ol.none,ul.no-bullet,ol.no-bullet,ol.unnumbered,ul.unstyled,ol.unstyled{list-style-type:none}
 ul.no-bullet,ol.no-bullet,ol.unnumbered{margin-left:.625em}
 ul.unstyled,ol.unstyled{margin-left:0}
-ul.checklist{margin-left:.625em}
-ul.checklist li>p:first-child>.fa-square-o:first-child,ul.checklist li>p:first-child>.fa-check-square-o:first-child{width:1.25em;font-size:.8em;position:relative;bottom:.125em}
-ul.checklist li>p:first-child>input[type="checkbox"]:first-child{margin-right:.25em}
-ul.inline{display:-ms-flexbox;display:-webkit-box;display:flex;-ms-flex-flow:row wrap;-webkit-flex-flow:row wrap;flex-flow:row wrap;list-style:none;margin:0 0 .625em -1.25em}
+li>p:empty:only-child::before{content:"";display:inline-block}
+ul.checklist>li>p:first-child{margin-left:-1em}
+ul.checklist>li>p:first-child>.fa-square-o:first-child,ul.checklist>li>p:first-child>.fa-check-square-o:first-child{width:1.25em;font-size:.8em;position:relative;bottom:.125em}
+ul.checklist>li>p:first-child>input[type=checkbox]:first-child{margin-right:.25em}
+ul.inline{display:flex;flex-flow:row wrap;list-style:none;margin:0 0 .625em -1.25em}
 ul.inline>li{margin-left:1.25em}
 .unstyled dl dt{font-weight:400;font-style:normal}
 ol.arabic{list-style-type:decimal}
@@ -314,11 +313,12 @@ ol.lowergreek{list-style-type:lower-greek}
 .hdlist>table>tbody>tr,.colist>table>tbody>tr{background:none}
 td.hdlist1,td.hdlist2{vertical-align:top;padding:0 .625em}
 td.hdlist1{font-weight:bold;padding-bottom:1.25em}
+td.hdlist2{word-wrap:anywhere}
 .literalblock+.colist,.listingblock+.colist{margin-top:-.5em}
 .colist td:not([class]):first-child{padding:.4em .75em 0;line-height:1;vertical-align:top}
 .colist td:not([class]):first-child img{max-width:none}
 .colist td:not([class]):last-child{padding:.25em 0}
-.thumb,.th{line-height:0;display:inline-block;border:solid 4px #fff;-webkit-box-shadow:0 0 0 1px #ddd;box-shadow:0 0 0 1px #ddd}
+.thumb,.th{line-height:0;display:inline-block;border:4px solid #fff;box-shadow:0 0 0 1px #ddd}
 .imageblock.left{margin:.25em .625em 1.25em 0}
 .imageblock.right{margin:.25em 0 1.25em .625em}
 .imageblock>.title{margin-bottom:0}
@@ -338,8 +338,6 @@ sup.footnote a:active,sup.footnoteref a:active{text-decoration:underline}
 #footnotes .footnote a:first-of-type{font-weight:bold;text-decoration:none;margin-left:-1.05em}
 #footnotes .footnote:last-of-type{margin-bottom:0}
 #content #footnotes{margin-top:-.625em;margin-bottom:0;padding:.75em 0}
-.gist .file-data>table{border:0;background:#fff;width:100%;margin-bottom:0}
-.gist .file-data>table td.line-data{width:99%}
 div.unbreakable{page-break-inside:avoid}
 .big{font-size:larger}
 .small{font-size:smaller}
@@ -386,7 +384,7 @@ a span.icon>.fa{cursor:inherit}
 .admonitionblock td.icon .icon-warning::before{content:"\f071";color:#bf6900}
 .admonitionblock td.icon .icon-caution::before{content:"\f06d";color:#bf3400}
 .admonitionblock td.icon .icon-important::before{content:"\f06a";color:#bf0000}
-.conum[data-value]{display:inline-block;color:#fff!important;background:rgba(0,0,0,.8);-webkit-border-radius:100px;border-radius:100px;text-align:center;font-size:.75em;width:1.67em;height:1.67em;line-height:1.67em;font-family:"Open Sans","DejaVu Sans",sans-serif;font-style:normal;font-weight:bold}
+.conum[data-value]{display:inline-block;color:#fff!important;background:rgba(0,0,0,.8);border-radius:50%;text-align:center;font-size:.75em;width:1.67em;height:1.67em;line-height:1.67em;font-family:"Open Sans","DejaVu Sans",sans-serif;font-style:normal;font-weight:bold}
 .conum[data-value] *{color:#fff!important}
 .conum[data-value]+b{display:none}
 .conum[data-value]::after{content:attr(data-value)}
@@ -394,25 +392,27 @@ pre .conum[data-value]{position:relative;top:-.125em}
 b.conum *{color:inherit!important}
 .conum:not([data-value]):empty{display:none}
 dt,th.tableblock,td.content,div.footnote{text-rendering:optimizeLegibility}
-h1,h2,p,td.content,span.alt{letter-spacing:-.01em}
+h1,h2,p,td.content,span.alt,summary{letter-spacing:-.01em}
 p strong,td.content strong,div.footnote strong{letter-spacing:-.005em}
-p,blockquote,dt,td.content,span.alt{font-size:1.0625rem}
+p,blockquote,dt,td.content,span.alt,summary{font-size:1.0625rem}
 p{margin-bottom:1.25rem}
 .sidebarblock p,.sidebarblock dt,.sidebarblock td.content,p.tableblock{font-size:1em}
-.exampleblock>.content{background:#fffef7;border-color:#e0e0dc;-webkit-box-shadow:0 1px 4px #e0e0dc;box-shadow:0 1px 4px #e0e0dc}
+.exampleblock>.content{background:#fffef7;border-color:#e0e0dc;box-shadow:0 1px 4px #e0e0dc}
 .print-only{display:none!important}
 @page{margin:1.25cm .75cm}
-@media print{*{-webkit-box-shadow:none!important;box-shadow:none!important;text-shadow:none!important}
+@media print{*{box-shadow:none!important;text-shadow:none!important}
 html{font-size:80%}
 a{color:inherit!important;text-decoration:underline!important}
 a.bare,a[href^="#"],a[href^="mailto:"]{text-decoration:none!important}
 a[href^="http:"]:not(.bare)::after,a[href^="https:"]:not(.bare)::after{content:"(" attr(href) ")";display:inline-block;font-size:.875em;padding-left:.25em}
+abbr[title]{border-bottom:1px dotted}
 abbr[title]::after{content:" (" attr(title) ")"}
 pre,blockquote,tr,img,object,svg{page-break-inside:avoid}
 thead{display:table-header-group}
 svg{max-width:100%}
 p,blockquote,dt,td.content{font-size:1em;orphans:3;widows:3}
 h2,h3,#toctitle,.sidebarblock>.content>.title{page-break-after:avoid}
+#header,#content,#footnotes,#footer{max-width:none}
 #toc,.sidebarblock,.exampleblock>.content{background:none!important}
 #toc{border-bottom:1px solid #dddddf!important;padding-bottom:0!important}
 body.book #header{text-align:center}
@@ -429,12 +429,101 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 .print-only{display:block!important}
 .hide-for-print{display:none!important}
 .show-for-print{display:inherit!important}}
-@media print,amzn-kf8{#header>h1:first-child{margin-top:1.25rem}
+@media amzn-kf8,print{#header>h1:first-child{margin-top:1.25rem}
 .sect1{padding:0!important}
 .sect1+.sect1{border:0}
 #footer{background:none}
 #footer-text{color:rgba(0,0,0,.6);font-size:.9em}}
 @media amzn-kf8{#header,#content,#footnotes,#footer{padding:0}}
+</style>
+<style>
+/*! Stylesheet for CodeRay to loosely match GitHub themes | MIT License */
+pre.CodeRay{background:#f7f7f8}
+.CodeRay .line-numbers{border-right:1px solid;opacity:.35;padding:0 .5em 0 0;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
+.CodeRay span.line-numbers{display:inline-block;margin-right:.75em}
+.CodeRay .line-numbers strong{color:#000}
+table.CodeRay{border-collapse:separate;border:0;margin-bottom:0;background:none}
+table.CodeRay td{vertical-align:top;line-height:inherit}
+table.CodeRay td.line-numbers{text-align:right}
+table.CodeRay td.code{padding:0 0 0 .75em}
+.CodeRay .debug{color:#fff!important;background:navy!important}
+.CodeRay .annotation{color:#007}
+.CodeRay .attribute-name{color:navy}
+.CodeRay .attribute-value{color:#700}
+.CodeRay .binary{color:#509}
+.CodeRay .comment{color:#998;font-style:italic}
+.CodeRay .char{color:#04d}
+.CodeRay .char .content{color:#04d}
+.CodeRay .char .delimiter{color:#039}
+.CodeRay .class{color:#458;font-weight:bold}
+.CodeRay .complex{color:#a08}
+.CodeRay .constant,.CodeRay .predefined-constant{color:teal}
+.CodeRay .color{color:#099}
+.CodeRay .class-variable{color:#369}
+.CodeRay .decorator{color:#b0b}
+.CodeRay .definition{color:#099}
+.CodeRay .delimiter{color:#000}
+.CodeRay .doc{color:#970}
+.CodeRay .doctype{color:#34b}
+.CodeRay .doc-string{color:#d42}
+.CodeRay .escape{color:#666}
+.CodeRay .entity{color:#800}
+.CodeRay .error{color:#808}
+.CodeRay .exception{color:inherit}
+.CodeRay .filename{color:#099}
+.CodeRay .function{color:#900;font-weight:bold}
+.CodeRay .global-variable{color:teal}
+.CodeRay .hex{color:#058}
+.CodeRay .integer,.CodeRay .float{color:#099}
+.CodeRay .include{color:#555}
+.CodeRay .inline{color:#000}
+.CodeRay .inline .inline{background:#ccc}
+.CodeRay .inline .inline .inline{background:#bbb}
+.CodeRay .inline .inline-delimiter{color:#d14}
+.CodeRay .inline-delimiter{color:#d14}
+.CodeRay .important{color:#555;font-weight:bold}
+.CodeRay .interpreted{color:#b2b}
+.CodeRay .instance-variable{color:teal}
+.CodeRay .label{color:#970}
+.CodeRay .local-variable{color:#963}
+.CodeRay .octal{color:#40e}
+.CodeRay .predefined{color:#369}
+.CodeRay .preprocessor{color:#579}
+.CodeRay .pseudo-class{color:#555}
+.CodeRay .directive{font-weight:bold}
+.CodeRay .type{font-weight:bold}
+.CodeRay .predefined-type{color:inherit}
+.CodeRay .reserved,.CodeRay .keyword{color:#000;font-weight:bold}
+.CodeRay .key{color:#808}
+.CodeRay .key .delimiter{color:#606}
+.CodeRay .key .char{color:#80f}
+.CodeRay .value{color:#088}
+.CodeRay .regexp .delimiter{color:#808}
+.CodeRay .regexp .content{color:#808}
+.CodeRay .regexp .modifier{color:#808}
+.CodeRay .regexp .char{color:#d14}
+.CodeRay .regexp .function{color:#404;font-weight:bold}
+.CodeRay .string{color:#d20}
+.CodeRay .string .string .string{background:#ffd0d0}
+.CodeRay .string .content{color:#d14}
+.CodeRay .string .char{color:#d14}
+.CodeRay .string .delimiter{color:#d14}
+.CodeRay .shell{color:#d14}
+.CodeRay .shell .delimiter{color:#d14}
+.CodeRay .symbol{color:#990073}
+.CodeRay .symbol .content{color:#a60}
+.CodeRay .symbol .delimiter{color:#630}
+.CodeRay .tag{color:teal}
+.CodeRay .tag-special{color:#d70}
+.CodeRay .variable{color:#036}
+.CodeRay .insert{background:#afa}
+.CodeRay .delete{background:#faa}
+.CodeRay .change{color:#aaf;background:#007}
+.CodeRay .head{color:#f8f;background:#505}
+.CodeRay .insert .insert{color:#080}
+.CodeRay .delete .delete{color:#800}
+.CodeRay .change .change{color:#66f}
+.CodeRay .head .head{color:#f4f}
 </style>
 </head>
 <body class="book toc2 toc-left">
@@ -447,45 +536,68 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <div id="toctitle">Table of Contents</div>
 <ul class="sectlevel1">
 <li><a href="#_getting_started">1. Getting Started</a></li>
-<li><a href="#_going_deeper">2. Going Deeper</a>
+<li><a href="#_autonomous_state_charts">2. Autonomous State Charts</a></li>
+<li><a href="#_going_deeper">3. Going Deeper</a>
 <ul class="sectlevel2">
-<li><a href="#_terminology">2.1. Terminology</a></li>
-<li><a href="#_states">2.2. States</a>
+<li><a href="#_terminology">3.1. Terminology</a></li>
+<li><a href="#_states">3.2. States</a></li>
+<li><a href="#_transitions">3.3. Transitions</a></li>
+<li><a href="#_condition_states">3.4. "Condition" States</a></li>
+<li><a href="#_event_processing">3.5. Event Processing</a>
 <ul class="sectlevel3">
-<li><a href="#_compound_states">2.2.1. Compound States</a></li>
-<li><a href="#_parallel_states">2.2.2. Parallel States</a></li>
+<li><a href="#_event_name_matching">3.5.1. Event Name Matching</a></li>
+<li><a href="#_send_targets">3.5.2. Send Targets</a></li>
+<li><a href="#_send_types">3.5.3. Send Types</a></li>
+<li><a href="#_manual_polling_queue">3.5.4. Manual Polling Queue</a></li>
 </ul>
 </li>
-<li><a href="#_transitions">2.3. Transitions</a></li>
-<li><a href="#_condition_states">2.4. "Condition" States</a></li>
-<li><a href="#_event_processing">2.5. Event Processing</a>
+<li><a href="#_data_models">3.6. Data Models</a></li>
+<li><a href="#_execution_models">3.7. Execution Models</a></li>
+<li><a href="#_working_memory_and_identity">3.8. Working Memory and Identity</a></li>
+<li><a href="#_invocations">3.9. Invocations</a>
 <ul class="sectlevel3">
-<li><a href="#_event_name_matching">2.5.1. Event Name Matching</a></li>
-<li><a href="#_send_targets">2.5.2. Send Targets</a></li>
-<li><a href="#_send_types">2.5.3. Send Types</a></li>
-<li><a href="#_manual_polling_queue">2.5.4. Manual Polling Queue</a></li>
-<li><a href="#_autonomous_state_charts">2.5.5. Autonomous State Charts</a></li>
+<li><a href="#_invoking_other_state_charts_or_futures">3.9.1. Invoking other State Charts or Futures</a></li>
+<li><a href="#_custom_invocation_processors">3.9.2. Custom Invocation Processors</a></li>
 </ul>
 </li>
-<li><a href="#_data_models">2.6. Data Models</a></li>
-<li><a href="#_execution_models">2.7. Execution Models</a></li>
-<li><a href="#_working_memory_and_identity">2.8. Working Memory and Identity</a></li>
-<li><a href="#_invocations">2.9. Invocations</a></li>
 </ul>
 </li>
-<li><a href="#_shorthand_convenience">3. Shorthand Convenience</a></li>
-<li><a href="#_custom_executable_content">4. Custom Executable Content</a></li>
-<li><a href="#_testing">5. Testing</a>
+<li><a href="#Convenience">4. Shorthand Convenience</a></li>
+<li><a href="#_custom_executable_content">5. Custom Executable Content</a></li>
+<li><a href="#_integration_with_fulcro">6. Integration with Fulcro</a>
 <ul class="sectlevel2">
-<li><a href="#_mocking">5.1. Mocking</a></li>
-<li><a href="#_event_sendscancels">5.2. Event Sends/Cancels</a></li>
-<li><a href="#_starting_in_a_specific_configuration">5.3. Starting in a Specific Configuration</a></li>
+<li><a href="#_basic_usage">6.1. Basic Usage</a></li>
+<li><a href="#_the_data_model">6.2. The Data Model</a>
+<ul class="sectlevel3">
+<li><a href="#_initializing_the_data_model">6.2.1. Initializing the Data Model</a></li>
+<li><a href="#_data_locations">6.2.2. Data Locations</a></li>
 </ul>
 </li>
-<li><a href="#_relationship_to_scxml">6. Relationship to SCXML</a>
+<li><a href="#_executable_content">6.3. Executable Content</a>
+<ul class="sectlevel3">
+<li><a href="#_operations">6.3.1. Operations</a></li>
+</ul>
+</li>
+<li><a href="#_useful_helpers">6.4. Useful Helpers</a>
+<ul class="sectlevel3">
+<li><a href="#_functions">6.4.1. Functions</a></li>
+<li><a href="#_content_of_data_in_executable_content">6.4.2. Content of <code>data</code> in Executable Content</a></li>
+<li><a href="#_runtime_env_of_executable_content">6.4.3. Runtime <code>env</code> of Executable Content</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_testing">7. Testing</a>
 <ul class="sectlevel2">
-<li><a href="#_related_work">6.1. Related Work</a></li>
-<li><a href="#_conformance">6.2. Conformance</a></li>
+<li><a href="#_mocking">7.1. Mocking</a></li>
+<li><a href="#_event_sendscancels">7.2. Event Sends/Cancels</a></li>
+<li><a href="#_starting_in_a_specific_configuration">7.3. Starting in a Specific Configuration</a></li>
+</ul>
+</li>
+<li><a href="#_relationship_to_scxml">8. Relationship to SCXML</a>
+<ul class="sectlevel2">
+<li><a href="#_related_work">8.1. Related Work</a></li>
+<li><a href="#_conformance">8.2. Conformance</a></li>
 </ul>
 </li>
 </ul>
@@ -497,7 +609,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <div class="sectionbody">
 <div class="paragraph">
 <p>A statechart is defined as a (nested) map. Some of this content&#8217;s behavior is <a href="#Goals">configurable</a>.
-The simplest setup is to use Clojure for the executable code and a simple flat data model that scopes all state machine
+The simplest setup is to use Clojure for the executable code and a simple flat data model that scopes all state charts
 to the session (running instance of state chart).</p>
 </div>
 <div class="admonitionblock note">
@@ -522,8 +634,8 @@ script node.
 them validate their parameters and children.</p>
 </div>
 <div class="paragraph">
-<p>Once you have a machine definition you need to create a session, which is just a running instance of the
-machine.</p>
+<p>Once you have a state chart definition you need to create a session, which is just a running instance of the
+chart.</p>
 </div>
 <div class="paragraph">
 <p>Once you have a session, you can send events to it, and look at the content of the session (or store it, etc).</p>
@@ -537,11 +649,11 @@ leverages parallel and compound states to simulate traffic lights with pedestria
 <pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">traffic-light</span>
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition raise on-entry assign data-model]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
-    [com.fulcrologic.statecharts.simple <span class="symbol">:refer</span> [new-simple-machine]]
     [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
+    [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
     [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]))
 
 (<span class="keyword">def</span> <span class="function">nk</span>
@@ -579,7 +691,7 @@ leverages parallel and compound states to simulate traffic lights with pedestria
         (transition {<span class="symbol">:event</span> <span class="symbol">:warn-pedestrians</span> <span class="symbol">:target</span> flashing-white})))))
 
 (<span class="keyword">def</span> <span class="function">traffic-lights</span>
-  (machine {}
+  (statechart {}
     (parallel {}
       (traffic-signal <span class="symbol">:east-west</span> <span class="symbol">:green</span>)
       (traffic-signal <span class="symbol">:north-south</span> <span class="symbol">:red</span>)
@@ -588,33 +700,38 @@ leverages parallel and compound states to simulate traffic lights with pedestria
       (ped-signal <span class="symbol">:cross-ns</span> <span class="symbol">:white</span>))))
 
 (<span class="keyword">defn</span> <span class="function">show-states</span> [wmem]
-  (<span class="keyword">println</span> (<span class="keyword">sort</span> (<span class="keyword">filter</span> #{<span class="symbol">:north-south/red</span>
-                           <span class="symbol">:north-south/yellow</span>
-                           <span class="symbol">:north-south/green</span>
-                           <span class="symbol">:east-west/red</span>
-                           <span class="symbol">:east-west/yellow</span>
-                           <span class="symbol">:east-west/green</span>
-                           <span class="symbol">:cross-ns/red</span>
-                           <span class="symbol">:cross-ns/white</span>
-                           <span class="symbol">:cross-ns/flashing-white</span>
-                           <span class="symbol">:cross-ew/red</span>
-                           <span class="symbol">:cross-ew/white</span>
-                           <span class="symbol">:cross-ew/flashing-white</span>} (<span class="symbol">::sc/configuration</span> wmem)))))
+  (<span class="keyword">println</span>
+    (<span class="keyword">sort</span>
+      (<span class="keyword">filter</span> #{<span class="symbol">:north-south/red</span>
+                <span class="symbol">:north-south/yellow</span>
+                <span class="symbol">:north-south/green</span>
+                <span class="symbol">:east-west/red</span>
+                <span class="symbol">:east-west/yellow</span>
+                <span class="symbol">:east-west/green</span>
+                <span class="symbol">:cross-ns/red</span>
+                <span class="symbol">:cross-ns/white</span>
+                <span class="symbol">:cross-ns/flashing-white</span>
+                <span class="symbol">:cross-ew/red</span>
+                <span class="symbol">:cross-ew/white</span>
+                <span class="symbol">:cross-ew/flashing-white</span>}
+        (<span class="symbol">::sc/configuration</span> wmem)))))
 
-(<span class="keyword">def</span> <span class="function">processor</span> (new-simple-machine traffic-lights {}))
-(<span class="keyword">def</span> <span class="function">s0</span> (sp/start! processor <span class="integer">1</span>))
+(<span class="keyword">def</span> <span class="function">env</span> (simple/simple-env))
+(simple/register! env <span class="symbol">::lights</span> traffic-lights)
+(<span class="keyword">def</span> <span class="function">processor</span> (<span class="symbol">::sc/processor</span> env))
+(<span class="keyword">def</span> <span class="function">s0</span> (sp/start! processor env <span class="symbol">::lights</span> {<span class="symbol">::sc/session-id</span> <span class="integer">1</span>}))
 (show-states s0)
-(<span class="keyword">def</span> <span class="function">s1</span> (sp/process-event! processor s0 (new-event <span class="symbol">:warn-pedestrians</span>)))
+(<span class="keyword">def</span> <span class="function">s1</span> (sp/process-event! processor env s0 (new-event <span class="symbol">:warn-pedestrians</span>)))
 (show-states s1)
-(<span class="keyword">def</span> <span class="function">s2</span> (sp/process-event! processor s1 (new-event <span class="symbol">:warn-traffic</span>)))
+(<span class="keyword">def</span> <span class="function">s2</span> (sp/process-event! processor env s1 (new-event <span class="symbol">:warn-traffic</span>)))
 (show-states s2)
-(<span class="keyword">def</span> <span class="function">s3</span> (sp/process-event! processor s2 (new-event <span class="symbol">:swap-flow</span>)))
+(<span class="keyword">def</span> <span class="function">s3</span> (sp/process-event! processor env s2 (new-event <span class="symbol">:swap-flow</span>)))
 (show-states s3)
-(<span class="keyword">def</span> <span class="function">s4</span> (sp/process-event! processor s3 (new-event <span class="symbol">:warn-pedestrians</span>)))
+(<span class="keyword">def</span> <span class="function">s4</span> (sp/process-event! processor env s3 (new-event <span class="symbol">:warn-pedestrians</span>)))
 (show-states s4)
-(<span class="keyword">def</span> <span class="function">s5</span> (sp/process-event! processor s4 (new-event <span class="symbol">:warn-traffic</span>)))
+(<span class="keyword">def</span> <span class="function">s5</span> (sp/process-event! processor env s4 (new-event <span class="symbol">:warn-traffic</span>)))
 (show-states s5)
-(<span class="keyword">def</span> <span class="function">s6</span> (sp/process-event! processor s5 (new-event <span class="symbol">:swap-flow</span>)))
+(<span class="keyword">def</span> <span class="function">s6</span> (sp/process-event! processor env s5 (new-event <span class="symbol">:swap-flow</span>)))
 (show-states s6)</code></pre>
 </div>
 </div>
@@ -639,16 +756,15 @@ leverages parallel and compound states to simulate traffic lights with pedestria
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">history-sample</span>
   (<span class="symbol">:require</span>
-    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition on-entry final done-data
-                                                  data-model log on-exit script history]]
+    [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state transition history]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
-    [com.fulcrologic.statecharts.simple <span class="symbol">:refer</span> [new-simple-machine]]
     [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
-    [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]))
+    [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]))
 
 (<span class="keyword">def</span> <span class="function">sample</span>
-  (machine {}
+  (statechart {}
     (state {<span class="symbol">:id</span> <span class="symbol">:TOP</span>}
       (state {<span class="symbol">:id</span> <span class="symbol">:A</span>}
         (transition {<span class="symbol">:event</span> <span class="symbol">:top</span> <span class="symbol">:target</span> <span class="symbol">:B</span>}))
@@ -668,27 +784,37 @@ leverages parallel and compound states to simulate traffic lights with pedestria
         (state {<span class="symbol">:id</span> <span class="symbol">:C2</span>}
           (transition {<span class="symbol">:event</span> <span class="symbol">:sub</span> <span class="symbol">:target</span> <span class="symbol">:C1</span>}))))))
 
-(<span class="keyword">def</span> <span class="function">processor</span> (new-simple-machine sample {}))
+(<span class="keyword">defn</span> <span class="function">show-states</span> [wmem] (<span class="keyword">println</span> (<span class="keyword">sort</span> (<span class="symbol">::sc/configuration</span> wmem))))
+(<span class="keyword">def</span> <span class="function">env</span> (simple/simple-env))
+(simple/register! env `sample sample)
+(<span class="keyword">def</span> <span class="function">processor</span> (<span class="symbol">::sc/processor</span> env))
 
-(<span class="keyword">def</span> <span class="function">s0</span> (sp/start! processor <span class="integer">1</span>))
+(<span class="keyword">def</span> <span class="function">s0</span> (sp/start! processor env `sample {<span class="symbol">::sc/session-id</span> <span class="integer">1</span>}))
+(show-states s0)
 <span class="comment">;; :TOP :A</span>
 
-(<span class="keyword">def</span> <span class="function">s1</span> (sp/process-event! processor s0 (new-event <span class="symbol">:top</span>)))
+(<span class="keyword">def</span> <span class="function">s1</span> (sp/process-event! processor env s0 (new-event <span class="symbol">:top</span>)))
+(show-states s1)
 <span class="comment">;; :TOP :B</span>
 
-(<span class="keyword">def</span> <span class="function">s2</span> (sp/process-event! processor s1 (new-event <span class="symbol">:top</span>)))
+(<span class="keyword">def</span> <span class="function">s2</span> (sp/process-event! processor env s1 (new-event <span class="symbol">:top</span>)))
+(show-states s2)
 <span class="comment">;; :TOP :C :C1</span>
 
-(<span class="keyword">def</span> <span class="function">s3</span> (sp/process-event! processor s2 (new-event <span class="symbol">:sub</span>)))
+(<span class="keyword">def</span> <span class="function">s3</span> (sp/process-event! processor env s2 (new-event <span class="symbol">:sub</span>)))
+(show-states s3)
 <span class="comment">;; :TOP :C :C2</span>
 
-(<span class="keyword">def</span> <span class="function">s4</span> (sp/process-event! processor s3 (new-event <span class="symbol">:top</span>)))
+(<span class="keyword">def</span> <span class="function">s4</span> (sp/process-event! processor env s3 (new-event <span class="symbol">:top</span>)))
+(show-states s4)
 <span class="comment">;; :TOP :A</span>
 
-(<span class="keyword">def</span> <span class="function">s5</span> (sp/process-event! processor s4 (new-event <span class="symbol">:top</span>)))
+(<span class="keyword">def</span> <span class="function">s5</span> (sp/process-event! processor env s4 (new-event <span class="symbol">:top</span>)))
+(show-states s5)
 <span class="comment">;; :TOP :B</span>
 
-(<span class="keyword">def</span> <span class="function">s6</span> (sp/process-event! processor s5 (new-event <span class="symbol">:top</span>)))
+(<span class="keyword">def</span> <span class="function">s6</span> (sp/process-event! processor env s5 (new-event <span class="symbol">:top</span>)))
+(show-states s6)
 <span class="comment">;; :TOP :C :C2 (history remembered)</span></code></pre>
 </div>
 </div>
@@ -699,338 +825,64 @@ cross-referencing with its documentation.</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_going_deeper"><a class="anchor" href="#_going_deeper"></a><a class="link" href="#_going_deeper">2. Going Deeper</a></h2>
+<h2 id="_autonomous_state_charts"><a class="anchor" href="#_autonomous_state_charts"></a><a class="link" href="#_autonomous_state_charts">2. Autonomous State Charts</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>You can use the <a href="http://www.w3.org/TR/2015/REC-scxml-20150901/">SCXML guide</a> which has examples as a pretty
-good reference for documentation. The document structure in XML is nearly identical to the data structure
-of this library:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="xml"><span class="tag">&lt;scxml&gt;</span>
-  <span class="tag">&lt;state</span> <span class="attribute-name">id</span>=<span class="string"><span class="delimiter">&quot;</span><span class="content">A</span><span class="delimiter">&quot;</span></span><span class="tag">/&gt;</span>
-  ...
-  <span class="tag">&lt;/scxml&gt;</span></code></pre>
-</div>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure">(machine {} <span class="comment">; `machine` is an alias for scxml, which also exists in this library</span>
-  (state {<span class="symbol">:id</span> <span class="symbol">:A</span>})
-  <span class="keyword">..</span><span class="keyword">.</span>)</code></pre>
-</div>
+<p>The pure functional form for the charts is interesting and useful as a building-block, but if you want
+a fully-function SCXML-compatible system, you needs something that can run, deliver delayed events, send
+events from one statechart session to another, start/stop nested statecharts, etc.</p>
 </div>
 <div class="paragraph">
-<p>See the docstrings on the <code>machine</code> and various elements for details of differences.</p>
-</div>
-<div class="sect2">
-<h3 id="_terminology"><a class="anchor" href="#_terminology"></a><a class="link" href="#_terminology">2.1. Terminology</a></h3>
-<div class="dlist">
-<dl>
-<dt class="hdlist1">Atomic State</dt>
-<dd>
-<p>A state that does not have substates.</p>
-</dd>
-<dt class="hdlist1">Compound State</dt>
-<dd>
-<p>A state that has child <strong>states</strong>, where at most <strong>one</strong> child is active at any given time.</p>
-</dd>
-<dt class="hdlist1">Parallel State</dt>
-<dd>
-<p>A state that has more than one compound substate, all of which is active at the same time, and
-thus have a child state that is active.</p>
-</dd>
-<dt class="hdlist1">Configuration</dt>
-<dd>
-<p>When used in the context of a state chart, the configuration is the list of all active states. A
-state is active if it or ANY of its children are active. Thus, a parallel machine with hierarchical states may
-have a rather large set of IDs in its current configuration.</p>
-</dd>
-<dt class="hdlist1">Working Memory</dt>
-<dd>
-<p>A map of data that contains the current configuration of the state machine, and other information
-necessary to know its current full state (which states have had their data model initialized, possible data model
-tracking, etc.).</p>
-</dd>
-<dt class="hdlist1">DataModel</dt>
-<dd>
-<p>An implementation of the data model protocol defines how the data model of your chart works. The simple
-implementation places the data in Working Memory, and treats lookups as paths into a single top-level map scoped
-to the session (running chart instance).</p>
-</dd>
-<dt class="hdlist1">ExecutionModel</dt>
-<dd>
-<p>An implementation of this protocol is handed the expressions that are included on the state chart, and
-chooses how to run them. A default implementation requires that they be Clojure <code>(fn [env data])</code>, and simply calls them
-with the contextual data for their location.</p>
-</dd>
-<dt class="hdlist1">External Event</dt>
-<dd>
-<p>An event that came from the external API, either by you calling <code>process-event</code> or some other
-actor code doing so (invocations, sends from external machines, etc.).</p>
-</dd>
-<dt class="hdlist1">Internal Event</dt>
-<dd>
-<p>An event that came from the session that will process it. These come from the
-machine implementation itself (e.g. done evens) and from you using the <code>raise</code> element in an
-executable content position.</p>
-</dd>
-<dt class="hdlist1">EventQueue</dt>
-<dd>
-<p>A FIFO queue for external event delivery. The event queue is responsible for holding onto pending
-External Events to "self", possibly other statechart sessions (instances of other machines),
-remote services (e.g. send an email), and for delayed delivery. The default implementation is a "manually polled" queue
-that does <strong>not</strong> support most of
-these features, and the delayed event delivery is manual (e.g. you have to poll it, or ask it when the next one should
-happen and start a timer/thread). Creating a system that runs the loop and does the timed delivery is typically
-how you would use these in a more serious/production environment.</p>
-</dd>
-<dt class="hdlist1">Processor</dt>
-<dd>
-<p>An implementation of the statechart algorithm. This library comes with an implementation that follows
-(as closely as possible) the SCXML recommended standard from 2015. You may provide your own.</p>
-</dd>
-<dt class="hdlist1">Session</dt>
-<dd>
-<p>The combination of the content of the DataModel and Working Memory. I.e. all of the data you&#8217;d need in order
-to resume working from where you last left off. Sessions typically have a unique ID, which could be used to store
-sessions into durable storage when they are "idle", and are used for cross-session events.</p>
-</dd>
-<dt class="hdlist1">Conditional Element</dt>
-<dd>
-<p>In statecharts there is a node type (represented as a diamond) that represents a state in which the machine
-never "rests", but instead immediately transitions to another node based on predicate expressions. In this
-library (and SCXML) this is modelled with a state that has more than one transition, NONE of which have
-and <code>:event</code> qualifier (meaning they are exited as soon as they are entered, assuming there is a valid transition).</p>
-</dd>
-</dl>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_states"><a class="anchor" href="#_states"></a><a class="link" href="#_states">2.2. States</a></h3>
-<div class="paragraph">
-<p>States may be atomic, compound (hierarchical), or parallel. The first two are generated with the <code>state</code> element, and
-the latter with <code>parallel</code>.</p>
-</div>
-<div class="sect3">
-<h4 id="_compound_states"><a class="anchor" href="#_compound_states"></a><a class="link" href="#_compound_states">2.2.1. Compound States</a></h4>
-
-</div>
-<div class="sect3">
-<h4 id="_parallel_states"><a class="anchor" href="#_parallel_states"></a><a class="link" href="#_parallel_states">2.2.2. Parallel States</a></h4>
-
-</div>
-</div>
-<div class="sect2">
-<h3 id="_transitions"><a class="anchor" href="#_transitions"></a><a class="link" href="#_transitions">2.3. Transitions</a></h3>
-<div class="paragraph">
-<p>Transitions are the consumers of events. Their "source" is their parent. Transitions can be <strong>eventless</strong>, and
-they can also have no <strong>target</strong> (indicating they do not change the active states, and are only for executing
-their content).</p>
+<p>In order for this to work you must have a number of things: an event queue, invocation processor(s),
+a data/execution model, a working memory storage facility, a statechart registry, and an event loop.</p>
 </div>
 <div class="paragraph">
-<p>A state can have any number of transition elements. These are tested <strong>in order</strong> of appearance, and the
-first transition that matches the current circumstance is taken. Transitions are <strong>enabled</strong> when:</p>
+<p>That&#8217;s a lot of different things to set up!</p>
 </div>
-<div class="ulist">
-<ul>
+<div class="paragraph">
+<p>The <code>com.fulcrologic.statecharts.simple</code> namespace can set up all of these things for you, as long
+as you simple want to run statecharts all in the same JVM in RAM. That namespace also includes helper
+functions for starting a new session on a chart, and sending events to arbitrary sessions.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The design of this library is meant to accomplish much more complex distributed and long-lived systems, but you
+have to implement the various protocols for each of the above elements to build such a thing.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>The basic steps for using <code>simple</code> are:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
 <li>
-<p>Their <code>cond</code> (if present) evaluates to true AND</p>
+<p>Create a <code>(simple/simple-env)</code></p>
 </li>
 <li>
-<p>Their <code>event</code> (if present) matches the current event&#8217;s name (See event name matching)</p>
+<p>Register your charts with the statechart registry in that env with <code>(simple/register! env k chart)</code></p>
 </li>
 <li>
-<p>OR neither are present.</p>
+<p>Run an event loop. The <code>com.fulcrologic.statecharts.event-queue.core-async-event-loop/run-event-loop!</code>
+uses <code>core.async</code> to run such a loop for you.</p>
 </li>
-</ul>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_condition_states"><a class="anchor" href="#_condition_states"></a><a class="link" href="#_condition_states">2.4. "Condition" States</a></h3>
-<div class="paragraph">
-<p>Condition states from classic state charts
-(shown as a diamond in UML state chart notation) can be modelled using eventless transitions.</p>
-</div>
-<div class="paragraph">
-<p>An "eventless" transition without a <code>:cond</code> is always enabled.</p>
+<li>
+<p>Start one or more state charts, via the <code>k</code> you registered them under.</p>
+</li>
+<li>
+<p>(optionally) Send events <code>(simple/send! env {:event :evt :target sessionid})</code></p>
+</li>
+</ol>
 </div>
 <div class="paragraph">
-<p>Below is a conditional state that when entered will immediately transition to either state :X or :Y, depending
-on the result of the first transition&#8217;s condition expression:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> <span class="symbol">:Z</span>}
-  (transition {<span class="symbol">:cond</span> positive-balance? <span class="symbol">:target</span> <span class="symbol">:X</span>})
-  (transition {<span class="symbol">:target</span> <span class="symbol">:Y</span>}))</code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_event_processing"><a class="anchor" href="#_event_processing"></a><a class="link" href="#_event_processing">2.5. Event Processing</a></h3>
-<div class="paragraph">
-<p>In a fully-fleshed system your event queue would have a corresponding runtime story, where <code>process-event</code> was
-automatically called on the correct machine/session/invocation/service when an event is available. As such,
-and event queue might be distributed and durable (e.g. using Kafka or the like), or might simply be something
-that runs in-core (a core.async <code>go-loop</code>).</p>
-</div>
-<div class="sect3">
-<h4 id="_event_name_matching"><a class="anchor" href="#_event_name_matching"></a><a class="link" href="#_event_name_matching">2.5.1. Event Name Matching</a></h4>
-<div class="paragraph">
-<p>The SCXML standard describes a name matching algorithm for event names that allows for wildcard pattern matching.
-Event names are dot-separated, and are prefix-matched. In this library keywords are used for event names, but
-other than that the interpretation is as specified in the standard. For example,
-the event name <code>:a.b.c</code> is matched by <code>:a.b.c.*</code>, <code>:a.b.c</code>, <code>:a.b.*</code>, <code>:a.b</code>, etc. That is to say that
-a transition with <code>:event :a.b</code> would be enabled by event <code>:a.b.c</code>.</p>
-</div>
-<div class="paragraph">
-<p>The wildcard is always implied, but can be specified on a transition for clarity. Transitions are enabled and
-matched "in order", so you can model narrowed and catch-all behavior:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> A}
-  (transition {<span class="symbol">:event</span> <span class="symbol">:error.communication</span>} <span class="keyword">..</span><span class="keyword">.</span>)
-  (transition {<span class="symbol">:event</span> <span class="symbol">:error</span>} <span class="keyword">..</span><span class="keyword">.</span>))</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p>where the first transition will be enabled only if the error is a communication one, and all errors will enable
-the second.</p>
-</div>
-<div class="paragraph">
-<p>See the SCXML standard for the rules on transition preemption regarding conflicting transitions that
-match at the same time.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_send_targets"><a class="anchor" href="#_send_targets"></a><a class="link" href="#_send_targets">2.5.2. Send Targets</a></h4>
-<div class="paragraph">
-<p>The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that
-these are often URLs. The default implementation of the event queue in this library only supports
-targeting other statecharts (see Send Types below), and when using the default send type, the target is
-expected to simply be a <code>session-id</code>, where <code>session-id</code>  is a unique identifier, such as a GUUID.</p>
-</div>
-<div class="paragraph">
-<p>Other implementations of the EventQueue protocol may choose to define further refinements.</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_send_types"><a class="anchor" href="#_send_types"></a><a class="link" href="#_send_types">2.5.3. Send Types</a></h4>
-<div class="paragraph">
-<p>The SCXML standard (section 6.2.5) defines types as a URI as well. The internal implementations in this library
-do not enforce this, but this library <strong>does</strong> recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
-as a desire to talk to another statechart session (and is the only/default predefined value).</p>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_manual_polling_queue"><a class="anchor" href="#_manual_polling_queue"></a><a class="link" href="#_manual_polling_queue">2.5.4. Manual Polling Queue</a></h4>
-<div class="paragraph">
-<p>There is a manually polled queue implementation in this library, with <strong>no</strong> automatic processing
-at all. If you want to support events that come from outside of the machine via the queue, then you have
-to create a loop that polls the queue and calls <code>process-event!</code>.  If you do this, then event the
-delayed event delivery will work, as long as your code watches for the delayed events to appear on the queue.</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">traffic-light</span>
-  (<span class="symbol">:require</span>
-    [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition raise on-entry assign data-model]]
-    [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
-    [com.fulcrologic.statecharts.simple <span class="symbol">:refer</span> [new-simple-machine]]
-    [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
-    [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]))
-
-(<span class="keyword">def</span> <span class="function">nk</span>
-  <span class="string"><span class="delimiter">&quot;</span><span class="content">(nk :a </span><span class="content">\&quot;</span><span class="content">b</span><span class="content">\&quot;</span><span class="content">) =&gt; :a/b
-   (nk :a/b </span><span class="content">\&quot;</span><span class="content">c</span><span class="content">\&quot;</span><span class="content">) =&gt; :a.b/c</span><span class="delimiter">&quot;</span></span>
-  extend-key)
-
-(<span class="keyword">defn</span> <span class="function">traffic-signal</span> [id initial]
-  (<span class="keyword">let</span> [red     (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">red</span><span class="delimiter">&quot;</span></span>)
-        yellow  (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">yellow</span><span class="delimiter">&quot;</span></span>)
-        green   (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">green</span><span class="delimiter">&quot;</span></span>)
-        initial (nk id (<span class="keyword">name</span> initial))]
-    (state {<span class="symbol">:id</span>      id
-            <span class="symbol">:initial</span> initial}
-      (state {<span class="symbol">:id</span> red}
-        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> green}))
-      (state {<span class="symbol">:id</span> yellow}
-        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> red}))
-      (state {<span class="symbol">:id</span> green}
-        (transition {<span class="symbol">:event</span>  <span class="symbol">:warn-traffic</span>
-                     <span class="symbol">:target</span> yellow})))))
-
-(<span class="keyword">defn</span> <span class="function">ped-signal</span> [id initial]
-  (<span class="keyword">let</span> [red            (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">red</span><span class="delimiter">&quot;</span></span>)
-        flashing-white (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">flashing-white</span><span class="delimiter">&quot;</span></span>)
-        white          (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">white</span><span class="delimiter">&quot;</span></span>)
-        initial        (nk id (<span class="keyword">name</span> initial))]
-    (state {<span class="symbol">:id</span>      id
-            <span class="symbol">:initial</span> initial}
-      (state {<span class="symbol">:id</span> red}
-        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> white}))
-      (state {<span class="symbol">:id</span> flashing-white}
-        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> red}))
-      (state {<span class="symbol">:id</span> white}
-        (transition {<span class="symbol">:event</span> <span class="symbol">:warn-pedestrians</span> <span class="symbol">:target</span> flashing-white})))))
-
-(<span class="keyword">def</span> <span class="function">traffic-lights</span>
-  (machine {}
-    (parallel {}
-      (traffic-signal <span class="symbol">:east-west</span> <span class="symbol">:green</span>)
-      (traffic-signal <span class="symbol">:north-south</span> <span class="symbol">:red</span>)
-
-      (ped-signal <span class="symbol">:cross-ew</span> <span class="symbol">:red</span>)
-      (ped-signal <span class="symbol">:cross-ns</span> <span class="symbol">:white</span>))))
-
-(<span class="keyword">defn</span> <span class="function">show-states</span> [wmem]
-  (<span class="keyword">println</span> (<span class="keyword">sort</span> (<span class="keyword">filter</span> #{<span class="symbol">:north-south/red</span>
-                           <span class="symbol">:north-south/yellow</span>
-                           <span class="symbol">:north-south/green</span>
-                           <span class="symbol">:east-west/red</span>
-                           <span class="symbol">:east-west/yellow</span>
-                           <span class="symbol">:east-west/green</span>
-                           <span class="symbol">:cross-ns/red</span>
-                           <span class="symbol">:cross-ns/white</span>
-                           <span class="symbol">:cross-ns/flashing-white</span>
-                           <span class="symbol">:cross-ew/red</span>
-                           <span class="symbol">:cross-ew/white</span>
-                           <span class="symbol">:cross-ew/flashing-white</span>} (<span class="symbol">::sc/configuration</span> wmem)))))
-
-(<span class="keyword">def</span> <span class="function">processor</span> (new-simple-machine traffic-lights {}))
-(<span class="keyword">def</span> <span class="function">s0</span> (sp/start! processor <span class="integer">1</span>))
-(show-states s0)
-(<span class="keyword">def</span> <span class="function">s1</span> (sp/process-event! processor s0 (new-event <span class="symbol">:warn-pedestrians</span>)))
-(show-states s1)
-(<span class="keyword">def</span> <span class="function">s2</span> (sp/process-event! processor s1 (new-event <span class="symbol">:warn-traffic</span>)))
-(show-states s2)
-(<span class="keyword">def</span> <span class="function">s3</span> (sp/process-event! processor s2 (new-event <span class="symbol">:swap-flow</span>)))
-(show-states s3)
-(<span class="keyword">def</span> <span class="function">s4</span> (sp/process-event! processor s3 (new-event <span class="symbol">:warn-pedestrians</span>)))
-(show-states s4)
-(<span class="keyword">def</span> <span class="function">s5</span> (sp/process-event! processor s4 (new-event <span class="symbol">:warn-traffic</span>)))
-(show-states s5)
-(<span class="keyword">def</span> <span class="function">s6</span> (sp/process-event! processor s5 (new-event <span class="symbol">:swap-flow</span>)))
-(show-states s6)</code></pre>
-</div>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_autonomous_state_charts"><a class="anchor" href="#_autonomous_state_charts"></a><a class="link" href="#_autonomous_state_charts">2.5.5. Autonomous State Charts</a></h4>
-<div class="paragraph">
-<p>You can, of course, write your own "event loop". The library comes with a core.async event queue that works
-in conjunction with the simple model to provide an event loop that will automatically process events as they come
-in, and will allow the machine to send itself external events (usually done in order to get a delay). Note that the
-<code>raise</code> element does not use the external queue, but also does not provide delays.</p>
-</div>
-<div class="paragraph">
-<p>Below is an example of using the core.async queue to run a traffic light that
-automatically changes over time:</p>
+<p>Below is an example that uses these steps, but also overrides one of the components in the env
+(the working memory store) so it can output messages as the statechart changes state:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1039,17 +891,13 @@ automatically changes over time:</p>
    sent events and mutates in place (and handles timers in CLJC) via core.async.</span><span class="delimiter">&quot;</span></span>
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition raise on-entry assign data-model
-                                                  Send]]
-    [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
-    [com.fulcrologic.statecharts.simple <span class="symbol">:refer</span> [new-simple-machine]]
-    [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
-    [com.fulcrologic.statecharts.event-queue.manually-polled-queue <span class="symbol">:as</span> mpq]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition on-entry Send]]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop <span class="symbol">:as</span> <span class="keyword">loop</span>]
+    [com.fulcrologic.statecharts.events <span class="symbol">:as</span> evts]
+    [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
     [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
-    [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]
-    [com.fulcrologic.statecharts.events <span class="symbol">:as</span> evts]))
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
+    [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]))
 
 (<span class="keyword">def</span> <span class="function">nk</span>
   <span class="string"><span class="delimiter">&quot;</span><span class="content">(nk :a </span><span class="content">\&quot;</span><span class="content">b</span><span class="content">\&quot;</span><span class="content">) =&gt; :a/b
@@ -1111,7 +959,7 @@ automatically changes over time:</p>
         (transition {<span class="symbol">:event</span> <span class="symbol">:warn-pedestrians</span> <span class="symbol">:target</span> flashing-white})))))
 
 (<span class="keyword">def</span> <span class="function">traffic-lights</span>
-  (machine {}
+  (statechart {}
     (parallel {}
       (timer)
 
@@ -1135,17 +983,36 @@ automatically changes over time:</p>
                            <span class="symbol">:cross-ew/white</span>
                            <span class="symbol">:cross-ew/flashing-white</span>} (<span class="symbol">::sc/configuration</span> wmem)))))
 
-(<span class="keyword">comment</span>
 
-  (<span class="keyword">def</span> <span class="function">session-id</span> <span class="integer">1</span>)
-  (<span class="keyword">def</span> <span class="function">queue</span> (mpq/new-queue))
-  (<span class="keyword">def</span> <span class="function">processor</span> (simple/new-simple-machine traffic-lights {<span class="symbol">::sc/event-queue</span> queue}))
-  (<span class="keyword">def</span> <span class="function">wmem</span> (<span class="keyword">let</span> [a (<span class="keyword">atom</span> {})] (<span class="keyword">add-watch</span> a <span class="symbol">:printer</span> (<span class="keyword">fn</span> [_ _ _ n] (show-states n))) a))
-  (loop/run-event-loop! processor wmem session-id <span class="integer">100</span>)      <span class="comment">; should see the state changing with the timers</span>
+(<span class="keyword">comment</span>
+  <span class="comment">;; Setup steps</span>
+  (<span class="keyword">do</span>
+    (<span class="keyword">def</span> <span class="function">session-id</span> <span class="integer">1</span>)
+    <span class="comment">;; Override the working memory store so we can watch our working memory change</span>
+    (<span class="keyword">def</span> <span class="function">wmem</span> (<span class="keyword">let</span> [a (<span class="keyword">atom</span> {})] (<span class="keyword">add-watch</span> a <span class="symbol">:printer</span> (<span class="keyword">fn</span> [_ _ _ n] (show-states n))) a))
+    <span class="comment">;; Create an env that has all the components needed, but override the working memory store</span>
+    (<span class="keyword">def</span> <span class="function">env</span> (simple/simple-env
+               {<span class="symbol">::sc/working-memory-store</span>
+                (<span class="keyword">reify</span> sp/WorkingMemoryStore
+                  (get-working-memory [_ _ _] @wmem)
+                  (save-working-memory! [_ _ _ m] (<span class="keyword">reset!</span> wmem m)))}))
+
+    <span class="comment">;; Register the chart under a well-known name</span>
+    (simple/register! env <span class="symbol">::lights</span> traffic-lights)
+
+    <span class="comment">;; Run an event loop that polls the queue every 100ms</span>
+    (<span class="keyword">def</span> <span class="function">running?</span> (loop/run-event-loop! env <span class="integer">100</span>)))
+
+  <span class="comment">;; Start takes the well-known ID of a chart that should be started. The working memory is tracked internally.</span>
+  <span class="comment">;; You should see the tracking installed above emit the traffic signal pattern</span>
+  (simple/start! env <span class="symbol">::lights</span> session-id)
 
   <span class="comment">;; Tell the state machine to exit abruptly</span>
-  (sp/send! queue {<span class="symbol">:target</span> session-id
-                   <span class="symbol">:event</span>  evts/cancel-event}))</code></pre>
+  (simple/send! env {<span class="symbol">:target</span> session-id
+                     <span class="symbol">:event</span>  evts/cancel-event})
+
+  <span class="comment">;; Stop event loop</span>
+  (<span class="keyword">reset!</span> running? <span class="predefined-constant">false</span>))</code></pre>
 </div>
 </div>
 <div class="admonitionblock note">
@@ -1155,15 +1022,381 @@ automatically changes over time:</p>
 <div class="title">Note</div>
 </td>
 <td class="content">
-The <code>send</code> element has a <code>Send</code> (capital S) alias so you can avoid shadowing the Clojure function.
+The <code>send</code> element has a <code>Send</code> (capital S) alias so you can avoid shadowing the predefined Clojure function.
 </td>
 </tr>
 </table>
 </div>
 </div>
 </div>
+<div class="sect1">
+<h2 id="_going_deeper"><a class="anchor" href="#_going_deeper"></a><a class="link" href="#_going_deeper">3. Going Deeper</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>You can use the <a href="http://www.w3.org/TR/2015/REC-scxml-20150901/">SCXML guide</a> which has examples as a pretty
+good reference for documentation. The document structure in XML is nearly identical to the data structure
+of this library:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="xml"><span class="tag">&lt;scxml&gt;</span>
+  <span class="tag">&lt;state</span> <span class="attribute-name">id</span>=<span class="string"><span class="delimiter">&quot;</span><span class="content">A</span><span class="delimiter">&quot;</span></span><span class="tag">/&gt;</span>
+  ...
+  <span class="tag">&lt;/scxml&gt;</span></code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(statechart {}
+  (state {<span class="symbol">:id</span> <span class="symbol">:A</span>})
+  <span class="keyword">..</span><span class="keyword">.</span>)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>See the docstrings on the <code>statechart</code> and various elements for details of differences.</p>
+</div>
 <div class="sect2">
-<h3 id="_data_models"><a class="anchor" href="#_data_models"></a><a class="link" href="#_data_models">2.6. Data Models</a></h3>
+<h3 id="_terminology"><a class="anchor" href="#_terminology"></a><a class="link" href="#_terminology">3.1. Terminology</a></h3>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Atomic State</dt>
+<dd>
+<p>A state that does not have substates.</p>
+</dd>
+<dt class="hdlist1">Compound State</dt>
+<dd>
+<p>A state that has child <strong>states</strong>, where at most <strong>one</strong> child is active at any given time.</p>
+</dd>
+<dt class="hdlist1">Parallel State</dt>
+<dd>
+<p>A state that has more than one compound substate, all of which is active at the same time, and
+thus have a child state that is active.</p>
+</dd>
+<dt class="hdlist1">Configuration</dt>
+<dd>
+<p>When used in the context of a state chart, the configuration is the list of all active states. A
+state is active if it or ANY of its children are active. Thus, a parallel statechart with hierarchical states may
+have a rather large set of IDs in its current configuration.</p>
+</dd>
+<dt class="hdlist1">Working Memory</dt>
+<dd>
+<p>A map of data that contains the current configuration of the state chart, and other information
+necessary to know its current full state (which states have had their data model initialized, possible data model
+tracking, etc.).</p>
+</dd>
+<dt class="hdlist1">DataModel</dt>
+<dd>
+<p>An implementation of the data model protocol defines how the data model of your chart works. The simple
+implementation places the data in Working Memory, and treats lookups as paths into a single top-level map scoped
+to the session (running chart instance).</p>
+</dd>
+<dt class="hdlist1">ExecutionModel</dt>
+<dd>
+<p>An implementation of this protocol is handed the expressions that are included on the state chart, and
+chooses how to run them. A default implementation requires that they be Clojure <code>(fn [env data])</code>, and simply calls them
+with the contextual data for their location.</p>
+</dd>
+<dt class="hdlist1">External Event</dt>
+<dd>
+<p>An event that came from the external API, either by you calling <code>process-event</code> or some other
+actor code doing so (invocations, sends from external charts, etc.).</p>
+</dd>
+<dt class="hdlist1">Internal Event</dt>
+<dd>
+<p>An event that came from the session that will process it. These come from the
+chart implementation itself (e.g. done evens) and from you using the <code>raise</code> element in an
+executable content position.</p>
+</dd>
+<dt class="hdlist1">EventQueue</dt>
+<dd>
+<p>A FIFO queue for external event delivery. The event queue is responsible for holding onto pending
+External Events to "self", possibly other statechart sessions (instances of other charts),
+remote services (e.g. send an email), and for delayed delivery. The default implementation is a "manually polled" queue
+that does <strong>not</strong> support most of
+these features, and the delayed event delivery is manual (e.g. you have to poll it, or ask it when the next one should
+happen and start a timer/thread). Creating a system that runs the loop and does the timed delivery is typically
+how you would use these in a more serious/production environment.</p>
+</dd>
+<dt class="hdlist1">Processor</dt>
+<dd>
+<p>An implementation of the statechart algorithm. This library comes with an implementation that follows
+(as closely as possible) the SCXML recommended standard from 2015. You may provide your own.</p>
+</dd>
+<dt class="hdlist1">InvocationProcessor</dt>
+<dd>
+<p>A protocol representing things that can be invoked while
+in a state. Implementations are provided for statechart invocations, and
+(in CLJ) futures. It is a simple matter to expand the list of supported types.</p>
+</dd>
+<dt class="hdlist1">WorkingMemoryStore</dt>
+<dd>
+<p>A protocol that represents a place to put the working
+memory of a statechart. This is used when you want an autonomous system that
+can "freeze" and "thaw" running sessions as events are received. Such a store
+could be in RAM (implementation provided) or in something more durable
+(Redis, SQL, Datomic, Filesystem).</p>
+</dd>
+<dt class="hdlist1">StatechartRegistry</dt>
+<dd>
+<p>A protocol that allows a statechart to be saved/retrieved
+by a well-known name. An implementation is provided for tracking them
+in RAM, but you could also choose an execution model that allows your charts
+to be serializable, and then store the charts in something more durable.</p>
+</dd>
+<dt class="hdlist1">Session</dt>
+<dd>
+<p>The combination of the content of the DataModel and Working Memory. I.e. all of the data you&#8217;d need in order
+to resume working from where you last left off. Sessions typically have a unique ID, which could be used to store
+sessions into durable storage when they are "idle", and are used for cross-session events.</p>
+</dd>
+<dt class="hdlist1">Conditional Element</dt>
+<dd>
+<p>In statecharts there is a node type (represented as a diamond) that represents a state in which the chart
+never "rests", but instead immediately transitions to another node based on predicate expressions. In this
+library (and SCXML) this is modelled with a state that has more than one transition, NONE of which have
+and <code>:event</code> qualifier (meaning they are exited as soon as they are entered, assuming there is a valid transition).</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_states"><a class="anchor" href="#_states"></a><a class="link" href="#_states">3.2. States</a></h3>
+<div class="paragraph">
+<p>States may be atomic, compound (hierarchical), or parallel. The first two are generated with the <code>state</code> element, and
+the latter with <code>parallel</code>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_transitions"><a class="anchor" href="#_transitions"></a><a class="link" href="#_transitions">3.3. Transitions</a></h3>
+<div class="paragraph">
+<p>Transitions are the consumers of events. Their "source" is their parent. Transitions can be <strong>eventless</strong>, and
+they can also have no <strong>target</strong> (indicating they do not change the active states, and are only for executing
+their content).</p>
+</div>
+<div class="paragraph">
+<p>A state can have any number of transition elements. These are tested <strong>in order</strong> of appearance, and the
+first transition that matches the current circumstance is taken. Transitions are <strong>enabled</strong> when:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Their <code>cond</code> (if present) evaluates to true AND</p>
+</li>
+<li>
+<p>Their <code>event</code> (if present) matches the current event&#8217;s name (See event name matching)</p>
+</li>
+<li>
+<p>OR neither are present.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>A transition that is marked external and targets its enclosing state will cause the exit/entry handlers to fire. An internal
+transition (that has no target at all) will not.</p>
+</div>
+<div class="paragraph">
+<p>See the SCXML standard for other behaviors of <code>transition</code>.</p>
+</div>
+<div class="paragraph">
+<p>See <a href="#Convenience">Shorthand Convenience</a> for some alternative ways to represent transitions that are easier to read.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_condition_states"><a class="anchor" href="#_condition_states"></a><a class="link" href="#_condition_states">3.4. "Condition" States</a></h3>
+<div class="paragraph">
+<p>Condition states from classic state charts
+(shown as a diamond in UML state chart notation) can be modelled using eventless transitions.</p>
+</div>
+<div class="paragraph">
+<p>An "eventless" transition without a <code>:cond</code> is always enabled.</p>
+</div>
+<div class="paragraph">
+<p>Below is a conditional state that when entered will immediately transition to either state :X or :Y, depending
+on the result of the first transition&#8217;s condition expression:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> <span class="symbol">:Z</span>}
+  (transition {<span class="symbol">:cond</span> positive-balance? <span class="symbol">:target</span> <span class="symbol">:X</span>})
+  (transition {<span class="symbol">:target</span> <span class="symbol">:Y</span>}))</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+See <a href="#Convenience">Shorthand Convenience</a> for a nicer-looking version of this.
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_event_processing"><a class="anchor" href="#_event_processing"></a><a class="link" href="#_event_processing">3.5. Event Processing</a></h3>
+<div class="paragraph">
+<p>In a fully-fleshed system your event queue would have a corresponding runtime story, where <code>process-event</code> was
+automatically called on the correct chart/session/invocation/service when an event is available. As such,
+and event queue might be distributed and durable (e.g. using Kafka or the like), or might simply be something
+that runs in-core (a core.async <code>go-loop</code>).</p>
+</div>
+<div class="paragraph">
+<p>The library includes a fully-functional system for simple applications in the <code>simple</code> namespace.</p>
+</div>
+<div class="sect3">
+<h4 id="_event_name_matching"><a class="anchor" href="#_event_name_matching"></a><a class="link" href="#_event_name_matching">3.5.1. Event Name Matching</a></h4>
+<div class="paragraph">
+<p>The SCXML standard describes a name matching algorithm for event names that allows for wildcard pattern matching.
+Event names are dot-separated, and are prefix-matched. In this library keywords are used for event names, but
+other than that the interpretation is as specified in the standard. For example,
+the event name <code>:a.b.c</code> is matched by <code>:a.b.c.*</code>, <code>:a.b.c</code>, <code>:a.b.*</code>, <code>:a.b</code>, etc. That is to say that
+a transition with <code>:event :a.b</code> would be enabled by event <code>:a.b.c</code>.</p>
+</div>
+<div class="paragraph">
+<p>The wildcard is always implied, but can be specified on a transition for clarity. Transitions are enabled and
+matched "in order", so you can model narrowed and catch-all behavior:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> A}
+  (transition {<span class="symbol">:event</span> <span class="symbol">:error.communication</span>} <span class="keyword">..</span><span class="keyword">.</span>)
+  (transition {<span class="symbol">:event</span> <span class="symbol">:error</span>} <span class="keyword">..</span><span class="keyword">.</span>))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>where the first transition will be enabled only if the error is a communication one, and all errors will enable
+the second.</p>
+</div>
+<div class="paragraph">
+<p>See the SCXML standard for the rules on transition preemption regarding conflicting transitions that
+match at the same time.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_send_targets"><a class="anchor" href="#_send_targets"></a><a class="link" href="#_send_targets">3.5.2. Send Targets</a></h4>
+<div class="paragraph">
+<p>The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that
+these are often URLs. The default implementation of the event queue in this library only supports
+targeting other statecharts (see Send Types below), and when using the default send type, the target is
+expected to simply be a <code>session-id</code>, where <code>session-id</code>  is a unique identifier, such as a GUUID.</p>
+</div>
+<div class="paragraph">
+<p>Other implementations of the EventQueue protocol may choose to define further refinements.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_send_types"><a class="anchor" href="#_send_types"></a><a class="link" href="#_send_types">3.5.3. Send Types</a></h4>
+<div class="paragraph">
+<p>The SCXML standard (section 6.2.5) defines types as a URI as well. The internal implementations in this library
+do not enforce this, but this library <strong>does</strong> recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
+as a desire to talk to another statechart session (and is the only/default predefined value).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_manual_polling_queue"><a class="anchor" href="#_manual_polling_queue"></a><a class="link" href="#_manual_polling_queue">3.5.4. Manual Polling Queue</a></h4>
+<div class="paragraph">
+<p>There is a manually polled queue implementation in this library, with <strong>no</strong> automatic processing
+at all. If you want to support events that come from outside of the chart via the queue, then you have
+to create a loop that polls the queue and calls <code>process-event!</code>.  If you do this, then event the
+delayed event delivery will work, as long as your code watches for the delayed events to appear on the queue.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">traffic-light</span>
+  (<span class="symbol">:require</span>
+    [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition]]
+    [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
+    [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
+    [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
+    [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]))
+
+(<span class="keyword">def</span> <span class="function">nk</span>
+  <span class="string"><span class="delimiter">&quot;</span><span class="content">(nk :a </span><span class="content">\&quot;</span><span class="content">b</span><span class="content">\&quot;</span><span class="content">) =&gt; :a/b
+   (nk :a/b </span><span class="content">\&quot;</span><span class="content">c</span><span class="content">\&quot;</span><span class="content">) =&gt; :a.b/c</span><span class="delimiter">&quot;</span></span>
+  extend-key)
+
+(<span class="keyword">defn</span> <span class="function">traffic-signal</span> [id initial]
+  (<span class="keyword">let</span> [red     (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">red</span><span class="delimiter">&quot;</span></span>)
+        yellow  (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">yellow</span><span class="delimiter">&quot;</span></span>)
+        green   (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">green</span><span class="delimiter">&quot;</span></span>)
+        initial (nk id (<span class="keyword">name</span> initial))]
+    (state {<span class="symbol">:id</span>      id
+            <span class="symbol">:initial</span> initial}
+      (state {<span class="symbol">:id</span> red}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> green}))
+      (state {<span class="symbol">:id</span> yellow}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> red}))
+      (state {<span class="symbol">:id</span> green}
+        (transition {<span class="symbol">:event</span>  <span class="symbol">:warn-traffic</span>
+                     <span class="symbol">:target</span> yellow})))))
+
+(<span class="keyword">defn</span> <span class="function">ped-signal</span> [id initial]
+  (<span class="keyword">let</span> [red            (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">red</span><span class="delimiter">&quot;</span></span>)
+        flashing-white (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">flashing-white</span><span class="delimiter">&quot;</span></span>)
+        white          (nk id <span class="string"><span class="delimiter">&quot;</span><span class="content">white</span><span class="delimiter">&quot;</span></span>)
+        initial        (nk id (<span class="keyword">name</span> initial))]
+    (state {<span class="symbol">:id</span>      id
+            <span class="symbol">:initial</span> initial}
+      (state {<span class="symbol">:id</span> red}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> white}))
+      (state {<span class="symbol">:id</span> flashing-white}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:swap-flow</span> <span class="symbol">:target</span> red}))
+      (state {<span class="symbol">:id</span> white}
+        (transition {<span class="symbol">:event</span> <span class="symbol">:warn-pedestrians</span> <span class="symbol">:target</span> flashing-white})))))
+
+(<span class="keyword">def</span> <span class="function">traffic-lights</span>
+  (statechart {}
+    (parallel {}
+      (traffic-signal <span class="symbol">:east-west</span> <span class="symbol">:green</span>)
+      (traffic-signal <span class="symbol">:north-south</span> <span class="symbol">:red</span>)
+
+      (ped-signal <span class="symbol">:cross-ew</span> <span class="symbol">:red</span>)
+      (ped-signal <span class="symbol">:cross-ns</span> <span class="symbol">:white</span>))))
+
+(<span class="keyword">defn</span> <span class="function">show-states</span> [wmem]
+  (<span class="keyword">println</span>
+    (<span class="keyword">sort</span>
+      (<span class="keyword">filter</span> #{<span class="symbol">:north-south/red</span>
+                <span class="symbol">:north-south/yellow</span>
+                <span class="symbol">:north-south/green</span>
+                <span class="symbol">:east-west/red</span>
+                <span class="symbol">:east-west/yellow</span>
+                <span class="symbol">:east-west/green</span>
+                <span class="symbol">:cross-ns/red</span>
+                <span class="symbol">:cross-ns/white</span>
+                <span class="symbol">:cross-ns/flashing-white</span>
+                <span class="symbol">:cross-ew/red</span>
+                <span class="symbol">:cross-ew/white</span>
+                <span class="symbol">:cross-ew/flashing-white</span>}
+        (<span class="symbol">::sc/configuration</span> wmem)))))
+
+(<span class="keyword">def</span> <span class="function">env</span> (simple/simple-env))
+(simple/register! env <span class="symbol">::lights</span> traffic-lights)
+(<span class="keyword">def</span> <span class="function">processor</span> (<span class="symbol">::sc/processor</span> env))
+(<span class="keyword">def</span> <span class="function">s0</span> (sp/start! processor env <span class="symbol">::lights</span> {<span class="symbol">::sc/session-id</span> <span class="integer">1</span>}))
+(show-states s0)
+(<span class="keyword">def</span> <span class="function">s1</span> (sp/process-event! processor env s0 (new-event <span class="symbol">:warn-pedestrians</span>)))
+(show-states s1)
+(<span class="keyword">def</span> <span class="function">s2</span> (sp/process-event! processor env s1 (new-event <span class="symbol">:warn-traffic</span>)))
+(show-states s2)
+(<span class="keyword">def</span> <span class="function">s3</span> (sp/process-event! processor env s2 (new-event <span class="symbol">:swap-flow</span>)))
+(show-states s3)
+(<span class="keyword">def</span> <span class="function">s4</span> (sp/process-event! processor env s3 (new-event <span class="symbol">:warn-pedestrians</span>)))
+(show-states s4)
+(<span class="keyword">def</span> <span class="function">s5</span> (sp/process-event! processor env s4 (new-event <span class="symbol">:warn-traffic</span>)))
+(show-states s5)
+(<span class="keyword">def</span> <span class="function">s6</span> (sp/process-event! processor env s5 (new-event <span class="symbol">:swap-flow</span>)))
+(show-states s6)</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_data_models"><a class="anchor" href="#_data_models"></a><a class="link" href="#_data_models">3.6. Data Models</a></h3>
 <div class="paragraph">
 <p>A data model is a component of the system that holds data for a given state chart&#8217;s session.
 The SCXML specification allows the implementation quite a bit of latitude in the interpretation of the chart&#8217;s
@@ -1186,7 +1419,7 @@ a running session when pausing it for later revival.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_execution_models"><a class="anchor" href="#_execution_models"></a><a class="link" href="#_execution_models">2.7. Execution Models</a></h3>
+<h3 id="_execution_models"><a class="anchor" href="#_execution_models"></a><a class="link" href="#_execution_models">3.7. Execution Models</a></h3>
 <div class="paragraph">
 <p>Most people will probably just use the CLJCExecutionModel, which lets you write executable content
 in CLJC as lambdas:</p>
@@ -1213,76 +1446,251 @@ script elements:</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_working_memory_and_identity"><a class="anchor" href="#_working_memory_and_identity"></a><a class="link" href="#_working_memory_and_identity">2.8. Working Memory and Identity</a></h3>
+<h3 id="_working_memory_and_identity"><a class="anchor" href="#_working_memory_and_identity"></a><a class="link" href="#_working_memory_and_identity">3.8. Working Memory and Identity</a></h3>
 <div class="paragraph">
-<p>The working memory of the state machine is plain EDN and contains no code.
+<p>The working memory of the state chart is plain EDN and contains no code.
 It is serializable by nippy, transit, etc. Therefore, you can easily save
-an active state machine by value into any data store. The value
+an active state chart by value into any data store. The value
 is intended to be as small as possible so that storage can be efficient.</p>
 </div>
 <div class="paragraph">
-<p>Every active state machine is assigned a ID on creation (which you
+<p>Every active state chart is assigned a ID on creation (which you
 can override via <code>initialize</code>). This is intended as part of the story to
 allow you to coordinate external event sources with working with
-instances of machines that are archived in durable storage while idle.</p>
+instances of chart that are archived in durable storage while idle.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_invocations"><a class="anchor" href="#_invocations"></a><a class="link" href="#_invocations">2.9. Invocations</a></h3>
+<h3 id="_invocations"><a class="anchor" href="#_invocations"></a><a class="link" href="#_invocations">3.9. Invocations</a></h3>
 <div class="paragraph">
-<p>An invocation is an "external" service/chart/process that can be started when your state machine enters a state,
+<p>An invocation is an "external" service/chart/process that can be started when your state chart enters a state,
 exchanges events <strong>while</strong> that state is active (you can forward events and receive them). The invocation can self-terminate
 while the state is still active, but it will also be cancelled if your chart leaves the enclosing state.</p>
 </div>
 <div class="paragraph">
-<p>For example, suppose you&#8217;ve installed a service that can provide events on some interval. That service send back
-<code>:timer</code> events that include <code>sequence-number</code> in the event data. Suppose you want to use that to trigger reminder
-emails every two days while the billing system is in a Grace Period state for that user
-(one statechart session per user).</p>
+<p>Invocations can forward events to the target invocation, and can receive events back. An incoming event will be
+pre-processed by <code>finalize</code> elements and can update the data model before the event is further propagated through
+the chart. See the SCXML standard for a full description of how invocations work.</p>
+</div>
+<div class="sect3">
+<h4 id="_invoking_other_state_charts_or_futures"><a class="anchor" href="#_invoking_other_state_charts_or_futures"></a><a class="link" href="#_invoking_other_state_charts_or_futures">3.9.1. Invoking other State Charts or Futures</a></h4>
+<div class="paragraph">
+<p>The library has a built-in <code>InvocationProcessor</code> that knows how to start other statecharts via an <code>invoke</code>, and in CLJ
+there is also support for futures (which are cancelled if the state containing the invoke is exited).</p>
 </div>
 <div class="paragraph">
-<p>You might end up with something like:</p>
+<p>The <code>src/examples</code> of the repository includes an example, shown below:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> <span class="symbol">:BillingGracePeriod</span>}
-  (transition {<span class="symbol">:event</span> <span class="symbol">:timer</span>}
-    (<span class="keyword">send</span> {<span class="symbol">:type</span> <span class="symbol">:email</span>
-           <span class="symbol">:event</span> <span class="symbol">:billing-reminder</span>
-           <span class="symbol">:namelist</span> {<span class="symbol">:to</span> [<span class="symbol">:ROOT</span> <span class="symbol">:user/email</span>]
-                      <span class="symbol">:reminder</span> [<span class="symbol">:ROOT</span> <span class="symbol">:reminders</span>]}}))
-  (invoke {<span class="symbol">:type</span> <span class="symbol">:interval-timer</span>
-           <span class="symbol">:finalize</span> (<span class="keyword">fn</span> [env {<span class="symbol">:keys</span> [sequence-number]}] [(ops/assign [<span class="symbol">:ROOT</span> <span class="symbol">:reminders</span>] sequence-number)])
-           <span class="symbol">:params</span> {<span class="symbol">:period</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">2 days</span><span class="delimiter">&quot;</span></span>}}))</code></pre>
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">invocations</span>
+  (<span class="symbol">:require</span>
+    [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state transition log on-exit data-model invoke Send on-entry]]
+    [com.fulcrologic.statecharts.event-queue.core-async-event-loop <span class="symbol">:as</span> <span class="keyword">loop</span>]
+    [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
+    [com.fulcrologic.statecharts.algorithms.v20150901-validation <span class="symbol">:as</span> v]
+    [taoensso.timbre <span class="symbol">:as</span> log]))
+
+(<span class="keyword">def</span> <span class="function">child-chart</span>
+  (statechart {}
+    (data-model {<span class="symbol">:x</span> <span class="integer">1</span>})
+    (state {}                                               <span class="comment">; top-level state so we can log an exit from the overall machine</span>
+      (on-exit {}
+        (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">CHILD CHART EXIT</span><span class="delimiter">&quot;</span></span>}))
+
+      (state {<span class="symbol">:id</span> <span class="symbol">:X</span>}
+        (on-entry {}
+          (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child X</span><span class="delimiter">&quot;</span></span> <span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ {<span class="symbol">:keys</span> [x]}] x)}))
+        <span class="comment">;; NOTE: The future invocation processor is only coded for CLJ, so this invocation is ignored in CLJS</span>
+        (invoke {<span class="symbol">:id</span>     <span class="symbol">:child/future</span>
+                 <span class="symbol">:type</span>   <span class="symbol">:future</span>
+                 <span class="symbol">:params</span> {<span class="symbol">:time</span> (<span class="keyword">fn</span> [_ {<span class="symbol">:keys</span> [x]}] x)}
+                 <span class="symbol">:src</span>    (<span class="keyword">fn</span> [{<span class="symbol">:keys</span> [<span class="keyword">time</span>]}]
+                           (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Invocation running for</span><span class="delimiter">&quot;</span></span> <span class="keyword">time</span>)
+                           <span class="error">#</span>?(<span class="symbol">:clj</span> (<span class="keyword">try</span>
+                                     (Thread/sleep (<span class="keyword">*</span> <span class="integer">1000</span> <span class="keyword">time</span>))
+                                     (<span class="keyword">catch</span> InterruptedException e
+                                       (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Future cancelled!</span><span class="delimiter">&quot;</span></span>)
+                                       (<span class="keyword">throw</span> e))))
+                           (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Future function completed</span><span class="delimiter">&quot;</span></span>)
+                           {<span class="symbol">:future-result</span> <span class="symbol">:DONE</span>})})
+        (transition {<span class="symbol">:event</span> <span class="symbol">:child/swap</span> <span class="symbol">:target</span> <span class="symbol">:Y</span>}))
+      (state {<span class="symbol">:id</span> <span class="symbol">:Y</span>}
+        (on-entry {}
+          (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child Y</span><span class="delimiter">&quot;</span></span>}))
+        (on-exit {}
+          (Send {<span class="symbol">:event</span>      <span class="symbol">:child.left-y</span>
+                 <span class="symbol">:type</span>       <span class="symbol">::sc/chart</span>
+                 <span class="symbol">:targetexpr</span> (<span class="keyword">fn</span> [env _] (<span class="symbol">::sc/parent-session-id</span> env))}))
+        (transition {<span class="symbol">:event</span> <span class="symbol">:child/swap</span> <span class="symbol">:target</span> <span class="symbol">:X</span>})))))
+
+(<span class="keyword">comment</span>
+  (v/problems child-chart))
+
+(<span class="keyword">def</span> <span class="function">main-chart</span>
+  (statechart {}
+    (state {<span class="symbol">:id</span> <span class="symbol">:A</span>}
+      (on-entry {}
+        (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Main A</span><span class="delimiter">&quot;</span></span>}))
+      (transition {<span class="symbol">:event</span> <span class="symbol">:swap</span> <span class="symbol">:target</span> <span class="symbol">:B</span>}))
+    (state {<span class="symbol">:id</span> <span class="symbol">:B</span>}
+      (on-entry {}
+        (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Main B</span><span class="delimiter">&quot;</span></span>}))
+      (transition {<span class="symbol">:event</span> <span class="symbol">:swap</span> <span class="symbol">:target</span> <span class="symbol">:A</span>})
+      (transition {<span class="symbol">:event</span> <span class="symbol">:child.*</span>}
+        (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child event</span><span class="delimiter">&quot;</span></span> <span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ data] data)}))
+      (invoke {<span class="symbol">:id</span>          <span class="symbol">:main/child</span>
+               <span class="symbol">:autoforward</span> <span class="predefined-constant">true</span>                            <span class="comment">; be careful, sends all events through, but it is possible to cause infinite loops if child sends events in response</span>
+               <span class="symbol">:type</span>        <span class="symbol">:statechart</span>
+               <span class="symbol">:src</span>         `child-chart
+               <span class="symbol">:params</span>      {<span class="symbol">:x</span> <span class="integer">10</span>}
+               <span class="symbol">:finalize</span>    (<span class="keyword">fn</span> [env data]
+                              (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Finalize: </span><span class="delimiter">&quot;</span></span> data))}))))
+
+(<span class="keyword">comment</span>
+  (<span class="keyword">do</span>
+    (log/set-level! <span class="symbol">:debug</span>)                                 <span class="comment">; so we can see log elements</span>
+    (<span class="keyword">def</span> <span class="function">session-id</span> <span class="integer">42</span>)
+    (<span class="keyword">def</span> <span class="function">env</span> (simple/simple-env))
+    (simple/register! env `main-chart main-chart)
+    (simple/register! env `child-chart child-chart)
+    (<span class="keyword">def</span> <span class="function">running?</span> (loop/run-event-loop! env <span class="integer">100</span>))
+    (simple/start! env `main-chart session-id))
+
+  <span class="comment">;; Sending this multiple times with swap main chart states. When in B, a child chart will start.</span>
+  (simple/send! env {<span class="symbol">:target</span> session-id
+                     <span class="symbol">:event</span>  <span class="symbol">:swap</span>})
+
+  <span class="comment">;; With autoforard on, we can ferry events though to the child</span>
+  (simple/send! env {<span class="symbol">:target</span> session-id
+                     <span class="symbol">:event</span>  <span class="symbol">:child/swap</span>})
+
+  <span class="comment">;; When the child chart is running (top chart is in :B), can send it events</span>
+  <span class="comment">;; The session ID of a child session will be the string of &lt;parent-session-ID `.` &lt;id | invokeid&gt;&gt;</span>
+  (simple/send! env {<span class="symbol">:target</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">42.:main/child</span><span class="delimiter">&quot;</span></span>
+                     <span class="symbol">:event</span>  <span class="symbol">:child/swap</span>})
+
+  <span class="comment">;; terminate the event loop</span>
+  (<span class="keyword">reset!</span> running? <span class="predefined-constant">false</span>))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_custom_invocation_processors"><a class="anchor" href="#_custom_invocation_processors"></a><a class="link" href="#_custom_invocation_processors">3.9.2. Custom Invocation Processors</a></h4>
+<div class="paragraph">
+<p>For example, suppose you want to install an invocation processor that can provide timer events on some interval.
+You could do something like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">custom-invocation</span>
+  (<span class="symbol">:require</span>
+    [clojure.core.async <span class="symbol">:as</span> async]
+    [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
+    [com.fulcrologic.statecharts.data-model.operations <span class="symbol">:as</span> ops]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state transition script-fn invoke]]
+    [com.fulcrologic.statecharts.environment <span class="symbol">:as</span> env]
+    [com.fulcrologic.statecharts.event-queue.core-async-event-loop <span class="symbol">:as</span> <span class="keyword">loop</span>]
+    [com.fulcrologic.statecharts.events <span class="symbol">:as</span> evts]
+    [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
+    [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
+    [taoensso.timbre <span class="symbol">:as</span> log]))
+
+(<span class="keyword">deftype</span> Timer [active-invocations]
+  sp/InvocationProcessor
+  (supports-invocation-type? [_this typ] (<span class="keyword">=</span> typ <span class="symbol">:timer</span>))
+  (start-invocation! [_this {<span class="symbol">::sc/keys</span> [event-queue]
+                             <span class="symbol">:as</span>       env} {<span class="symbol">:keys</span> [invokeid params]}]
+    (<span class="keyword">let</span> [source-session-id (env/session-id env)
+          {<span class="symbol">:keys</span> [interval]
+           <span class="symbol">:or</span>   {interval <span class="integer">1000</span>}} params
+          time-id           (<span class="keyword">str</span> source-session-id <span class="string"><span class="delimiter">&quot;</span><span class="content">.</span><span class="delimiter">&quot;</span></span> invokeid)
+          notify!           (<span class="keyword">fn</span> []
+                              (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">sending notification</span><span class="delimiter">&quot;</span></span>)
+                              (sp/send! event-queue env
+                                {<span class="symbol">:target</span>            source-session-id
+                                 <span class="symbol">:send-id</span>           time-id
+                                 <span class="comment">;; IMPORTANT: If you don't include the invokeid, then it won't register in finalize</span>
+                                 <span class="symbol">:invoke-id</span>         invokeid
+                                 <span class="symbol">:source-session-id</span> time-id
+                                 <span class="symbol">:event</span>             <span class="symbol">:interval-timer/timeout</span>}))]
+      (<span class="keyword">swap!</span> active-invocations <span class="keyword">assoc</span> time-id <span class="predefined-constant">true</span>)
+      (async/go-loop []
+        (async/&lt;! (async/timeout interval))
+        (<span class="keyword">if</span> (<span class="keyword">get</span> @active-invocations time-id)
+          (<span class="keyword">do</span>
+            (notify!)
+            (<span class="keyword">recur</span>))
+          (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Timer loop exited</span><span class="delimiter">&quot;</span></span>)))
+      <span class="predefined-constant">true</span>))
+  (stop-invocation! [_ env {<span class="symbol">:keys</span> [invokeid] <span class="symbol">:as</span> data}]
+    (log/spy <span class="symbol">:info</span> data)
+    (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Invocation</span><span class="delimiter">&quot;</span></span> invokeid <span class="string"><span class="delimiter">&quot;</span><span class="content">asked to stop</span><span class="delimiter">&quot;</span></span>)
+    (<span class="keyword">let</span> [source-session-id (env/session-id env)
+          time-id           (<span class="keyword">str</span> source-session-id <span class="string"><span class="delimiter">&quot;</span><span class="content">.</span><span class="delimiter">&quot;</span></span> invokeid)]
+      (<span class="keyword">swap!</span> active-invocations <span class="keyword">dissoc</span> time-id)
+      <span class="predefined-constant">true</span>))
+  (forward-event! [_this _env _event] <span class="predefined-constant">nil</span>))
+
+(<span class="keyword">defn</span> <span class="function">new-timer-service</span>
+  <span class="string"><span class="delimiter">&quot;</span><span class="content">Create a new time service that can be invoked from a state chart.</span><span class="delimiter">&quot;</span></span>
+  [] (-&gt;Timer (<span class="keyword">atom</span> {})))
+
+(<span class="keyword">def</span> <span class="function">demo-chart</span>
+  (statechart {}
+    (state {<span class="symbol">:id</span> <span class="symbol">:A</span>}
+      (transition {<span class="symbol">:event</span> <span class="symbol">:swap</span> <span class="symbol">:target</span> <span class="symbol">:B</span>}))
+    (state {<span class="symbol">:id</span> <span class="symbol">:B</span>}
+      (transition {<span class="symbol">:event</span> <span class="symbol">:swap</span> <span class="symbol">:target</span> <span class="symbol">:A</span>})
+      (transition {<span class="symbol">:event</span> <span class="symbol">:interval-timer/timeout</span>}
+        (script-fn [_ data] (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Main transition got data</span><span class="delimiter">&quot;</span></span> (<span class="keyword">select-keys</span> data [<span class="symbol">:B</span> <span class="symbol">:timer-calls</span>]))))
+
+      (invoke {<span class="symbol">:idlocation</span> [<span class="symbol">:B</span> <span class="symbol">:invocation-id</span>]
+               <span class="symbol">:type</span>       <span class="symbol">:timer</span>
+               <span class="symbol">:params</span>     {<span class="symbol">:interval</span> <span class="integer">500</span>}
+               <span class="symbol">:finalize</span>   (<span class="keyword">fn</span> [_env {<span class="symbol">:keys</span> [_event timer-calls]}]
+                             (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Finalize got timer calls data: </span><span class="delimiter">&quot;</span></span> [timer-calls _event])
+                             <span class="comment">;; Finalize gets to update the model before the event is delivered...</span>
+                             [(ops/assign <span class="symbol">:timer-calls</span> (<span class="keyword">inc</span> (<span class="keyword">or</span> timer-calls <span class="integer">0</span>)))])}))))
+
+(<span class="keyword">comment</span>
+  (<span class="keyword">do</span>
+    (<span class="keyword">def</span> <span class="function">env</span> (simple/simple-env {<span class="symbol">::sc/invocation-processors</span> [(new-timer-service)]}))
+    (simple/register! env `demo-chart demo-chart)
+    (<span class="keyword">def</span> <span class="function">queue</span> (<span class="symbol">::sc/event-queue</span> env))
+    (<span class="keyword">def</span> <span class="function">processor</span> (<span class="symbol">::sc/processor</span> env))
+    (<span class="keyword">def</span> <span class="function">session-id</span> <span class="integer">42</span>)
+    (<span class="keyword">def</span> <span class="function">wmem</span> (<span class="keyword">atom</span> {}))
+    (<span class="keyword">def</span> <span class="function">running?</span> (loop/run-event-loop! env <span class="integer">100</span>)))
+
+  (simple/start! env `demo-chart session-id)
+
+  <span class="comment">;; Send this one multiple times</span>
+  (simple/send! env {<span class="symbol">:target</span> session-id
+                     <span class="symbol">:event</span>  <span class="symbol">:swap</span>})
+
+  <span class="comment">;; Send this one to exit the top level machine</span>
+  (simple/send! env {<span class="symbol">:target</span> session-id
+                     <span class="symbol">:event</span>  evts/cancel-event})
+
+  <span class="comment">;; stop the event loop</span>
+  (<span class="keyword">reset!</span> running? <span class="predefined-constant">false</span>)
+  )</code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>The <code>transition</code> element responds to the events received by the state chart, and <code>invoke</code> can send such events. So,
-the timer service here is sending <code>:timer</code> events, and then the <code>send</code> element is pulling data from the DataModel
-to construct the correct parameters to send to an email service that uses the event type (:billing-reminder) and
-the parameter data (generated in this case with <code>namelist</code>) to fill out some kind of email template.</p>
+<p>The <code>transition</code> element responds to the events received by the state chart, and the invocation processor for
+an <code>invoke</code> can send such events. So, the timer service here is sending <code>:interval-timer/timeout</code> events.</p>
 </div>
-<div class="admonitionblock note">
-<table>
-<tr>
-<td class="icon">
-<div class="title">Note</div>
-</td>
-<td class="content">
-The implementation of the invocation subsystem will define how these services are written and installed. It is
-still under construction at the time of this writing. Consult the source in case the docs are out of date).
-</td>
-</tr>
-</table>
-</div>
-<div class="paragraph">
-<p>Exiting the <code>:BillingGracePeriod</code> state will cancel the timer so that no further <code>:timer</code> events are sent.</p>
 </div>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_shorthand_convenience"><a class="anchor" href="#_shorthand_convenience"></a><a class="link" href="#_shorthand_convenience">3. Shorthand Convenience</a></h2>
+<h2 id="Convenience"><a class="anchor" href="#Convenience"></a><a class="link" href="#Convenience">4. Shorthand Convenience</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>Making your statechart definition cleaner is a simple matter, since it
@@ -1325,10 +1733,29 @@ looks like this:</p>
 </div>
 </div>
 <div class="paragraph">
+<p>There are also some simple ones (as functions) that clean up readability for common cases:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(transition {<span class="symbol">:event</span> <span class="symbol">:E</span> <span class="symbol">:target</span> <span class="symbol">:target-state</span>}
+  optional-executable-elements <span class="keyword">..</span><span class="keyword">.</span>)
+
+<span class="comment">;; has a convenience version:</span>
+(on <span class="symbol">:E</span> <span class="symbol">:target-state</span>
+  optional-executable-elements.<span class="keyword">..</span>)
+
+<span class="comment">;; or if there is just a script and no target (just an event handler that stays in the same state):</span>
+(handle <span class="symbol">:E</span> expr)
+<span class="comment">;; means:</span>
+(transition {<span class="symbol">:event</span> <span class="symbol">:E</span>}
+  (script {<span class="symbol">:expr</span> expr}))</code></pre>
+</div>
+</div>
+<div class="paragraph">
 <p>A good use-case for a macro comes up when you want to emit nodes that might
 be better suited for a diagram tool. The UML state chart system defines a choice node which is a node that
-makes a decision about where to transition to. In the SCXML standard they are coded as a state that includes nothing
-but event-less transitions with conditions:</p>
+makes a decision about where to transition to. In the SCXML standard they are coded as a state that includes
+nothing but event-less transitions with conditions:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1339,9 +1766,12 @@ but event-less transitions with conditions:</p>
 </div>
 </div>
 <div class="paragraph">
-<p>This is a bit noisy, isn&#8217;t immediately obvious to the reader, and the predicates are code, so there is no way
-for them to easily be emitted to a diagram. So there is a macro version of <code>choice</code>
-in the <code>convenience-macros</code> namespaces:</p>
+<p>Which is not only a bit noisy, but it isn&#8217;t immediately obvious to the reader that this is a node that
+merely makes a choice. Additionally, with the lambda execution model the predicates are code,
+so there is no way for them to easily be emitted to a diagram.</p>
+</div>
+<div class="paragraph">
+<p>So there is a macro version of this called <code>choice</code> in the <code>convenience-macros</code> namespace:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1365,7 +1795,7 @@ to the reader.</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_custom_executable_content"><a class="anchor" href="#_custom_executable_content"></a><a class="link" href="#_custom_executable_content">4. Custom Executable Content</a></h2>
+<h2 id="_custom_executable_content"><a class="anchor" href="#_custom_executable_content"></a><a class="link" href="#_custom_executable_content">5. Custom Executable Content</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>The SCXML standard defines a number of elements it terms "Executable Content", meaning child nodes that
@@ -1424,7 +1854,7 @@ executable children).</p>
 
 <span class="comment">;; ...</span>
 
-(machine {}
+(statechart {}
   (state {}
     (log-and-run
        (<span class="keyword">send</span> {})
@@ -1435,11 +1865,386 @@ executable children).</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_testing"><a class="anchor" href="#_testing"></a><a class="link" href="#_testing">5. Testing</a></h2>
+<h2 id="_integration_with_fulcro"><a class="anchor" href="#_integration_with_fulcro"></a><a class="link" href="#_integration_with_fulcro">6. Integration with Fulcro</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The Fulcro integraion for statecharts has the following general enhancements over the standard
+statecharts:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Use the Fulcro app&#8217;s state database as the DataModel</p>
+</li>
+<li>
+<p>Use core.async to automatically support an EventQueue</p>
+</li>
+<li>
+<p>Support a "local data" area for the statechart session that won&#8217;t accidentally collide
+with other database concerns.</p>
+</li>
+<li>
+<p>Allow for the use of actors (a component abstraction) and aliases (to database locations)</p>
+</li>
+<li>
+<p>Supply an extensible set of operations that executable elements can leverage:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>The ability to use Fulcro&#8217;s load to populate the state database.</p>
+</li>
+<li>
+<p>The ability to invoke remote mutations.</p>
+</li>
+<li>
+<p>The ability to leverage mutation helpers for optimistic updates.</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Namespace aliases used in this document:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">[com.fulcrologic.fulcro.application <span class="symbol">:as</span> app]
+[com.fulcrologic.fulcro.components <span class="symbol">:as</span> <span class="keyword">comp</span> <span class="symbol">:refer</span> [defsc]]
+[com.fulcrologic.statecharts.elements <span class="symbol">:as</span> ele]
+[com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
+[com.fulcrologic.statecharts.chart <span class="symbol">:as</span> chart]
+[com.fulcrologic.statecharts.data-model.working-memory-data-model <span class="symbol">:as</span> wmdm]
+[com.fulcrologic.statecharts.data-model.operations <span class="symbol">:as</span> ops]
+[com.fulcrologic.statecharts.integration.fulcro <span class="symbol">:as</span> scf]
+[com.fulcrologic.statecharts.integration.fulcro.operations <span class="symbol">:as</span> fop]
+[com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]</code></pre>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_basic_usage"><a class="anchor" href="#_basic_usage"></a><a class="link" href="#_basic_usage">6.1. Basic Usage</a></h3>
+<div class="paragraph">
+<p>There are three basic steps: install the support, register machines, and start them:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; 1. Install statecharts on the app. Should be done once at startup, but this is an idempotent operation.</span>
+(scf/install-fulcro-statecharts! app)
+
+<span class="comment">;; 2. Define your charts</span>
+(<span class="keyword">def</span> <span class="function">chart</span> (chart/statechart {}
+         <span class="keyword">..</span><span class="keyword">.</span>))
+
+<span class="comment">;; 3. Register your chart under a well-known name. NOTE: The statecharts have to be installed *before* calling register!</span>
+(scf/register-statechart! app <span class="symbol">::chart</span> chart)
+
+<span class="keyword">..</span><span class="keyword">.</span>
+
+<span class="comment">;; 4. Start some statechart. The session-id can be a unique uuid, or a well known thing like a keyword. Be careful, though,</span>
+<span class="comment">;; because starting a machine using an existing ID will overwrite the existing one.</span>
+(scf/start! app {<span class="symbol">:machine</span> <span class="symbol">::chart</span>        <span class="comment">; registered chart name</span>
+                 <span class="symbol">:session-id</span> <span class="symbol">:some-id</span>})  <span class="comment">; globally unique session id</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_the_data_model"><a class="anchor" href="#_the_data_model"></a><a class="link" href="#_the_data_model">6.2. The Data Model</a></h3>
+<div class="paragraph">
+<p>The Fulcro statecharts data model has a number of features to help you work with Fulcro applications.</p>
+</div>
+<div class="paragraph">
+<p>Two special concepts were take from Fulcro&#8217;s own UI state machines: aliases and actors. These are implemented
+purely on the data model by simply adding entries to a statechart&#8217;s local data under the special keys:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>:fulcro/aliases</code> - A map from a keyword to a path. The path itself can be any legal DataModel path (see later)
+except for another alias.</p>
+</li>
+<li>
+<p><code>:fulcro/actors</code> - A map from a keyword to an <code>scf/actor</code>, which tracks the class and ident of a UI component.
+Can be used to find the UI component (for normalization/loads) and in data paths.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Notes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Actors MUST be identified by keywords with an <code>actor</code> namespace: e.g. <code>:actor/thing</code>.</p>
+</li>
+<li>
+<p>Actor keywords may only appear as the first element of a path.</p>
+</li>
+<li>
+<p>Aliases are NOT used within paths. They define a path. Therefore arguments that would normally
+take a vector to describe a data path will usually accept an alias keyword instead.</p>
+</li>
+</ul>
+</div>
+<div class="sect3">
+<h4 id="_initializing_the_data_model"><a class="anchor" href="#_initializing_the_data_model"></a><a class="link" href="#_initializing_the_data_model">6.2.1. Initializing the Data Model</a></h4>
+<div class="paragraph">
+<p>You can use the initial data in <code>sp/start!</code> or a top-level <code>data-model</code> element to put data into the
+local storage of your statechart. This is particularly useful for specifying things like aliases
+on the chart itself, but defining actors at runtime:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">def</span> <span class="function">c</span> (chart/statechart {}
+         (data-model {<span class="symbol">:expr</span> {<span class="symbol">:fulcro/aliases</span> {<span class="symbol">:a</span> [<span class="symbol">:actor/thing</span> <span class="symbol">:thing/field</span>]}}})
+         <span class="keyword">..</span><span class="keyword">.</span>))
+(scf/register-statechart! app <span class="symbol">::c</span> c)
+
+<span class="keyword">..</span><span class="keyword">.</span>
+
+(scf/start! app {<span class="symbol">:machine</span> <span class="symbol">::c</span>
+                 <span class="symbol">:session-id</span> <span class="symbol">:some-id</span>
+                 <span class="symbol">:data</span> {<span class="symbol">:fulcro/actors</span> {<span class="symbol">:actor/this</span> (scf/actor Thing [<span class="symbol">:thing/id</span> <span class="integer">1</span>])}}})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The above code defines a chart that will have <code>:fulcro/aliases</code> on the local data model
+because of the statechart definition, and will have a runtime value for the <code>:fulcro/actors</code> based
+on data that was passed during start. Anthing initialized this way will go into the local data
+store (which is a path based on the session id in the app database).</p>
+</div>
+<div class="paragraph">
+<p>Changing aliases and actors on the fly is therefore a simple matter of doing an <code>op/assign</code> operation on
+the data model.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_data_locations"><a class="anchor" href="#_data_locations"></a><a class="link" href="#_data_locations">6.2.2. Data Locations</a></h4>
+<div class="paragraph">
+<p>There are four primary ways to address data in the data model, and
+the standard statechart operations such as <code>op/assign</code> already support these abstract paths:</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">A keyword (not in a vector)</dt>
+<dd>
+<p>IF this keyword exists in the <code>:fulcro/aliases</code> map, then the value
+of that alias (which can be a path that contains any of the other things in this list) is used
+to find the location; otherwise the keyword is relative in the root of the LOCAL data for the statechart.</p>
+</dd>
+<dt class="hdlist1">A vector starting with <code>:ROOT</code> (or a keyword that doesn&#8217;t match the other cases)</dt>
+<dd>
+<p>A path in the
+local data of the statechart. Same as using a path without <code>:ROOT</code>. Included to be
+compatible with the standard location support.</p>
+</dd>
+<dt class="hdlist1">A vector starting with <code>:fulco/state</code> or <code>:fulcro/state-map</code></dt>
+<dd>
+<p>Indicates an absolute path in the
+Fulcro app database.</p>
+</dd>
+<dt class="hdlist1">A vector starting with an actor name</dt>
+<dd>
+<p>If the first element of the vector matches an entry in the local
+statecharts <code>:fulcro/actors</code> then <code>:fulcro/state</code> and the ident of that actor are spliced together
+ in place of that keyword and the resulting path is treated as above.</p>
+</dd>
+</dl>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_executable_content"><a class="anchor" href="#_executable_content"></a><a class="link" href="#_executable_content">6.3. Executable Content</a></h3>
+<div class="paragraph">
+<p>The executable content nodes (predicates and other expressions) in the statechart can be functions of
+two arguments: <code>env</code> (the processing environment) and <code>data</code>.</p>
+</div>
+<div class="paragraph">
+<p>You can get the current statechart session ID using the processing environment, and you can also
+pull the various components of the statechart system from there (e.g. <code>(::sc/event-queue env)</code>). The
+<code>data</code> argument includes ALL of the statechart local data (including the special <code>:fulcro/aliases</code>
+and <code>:fulcro/actors</code>, which have special meaning but are really just normal local data). The <code>data</code>
+will also include the standard <code>:_event</code> (which is a map that has things like <code>:target</code>) and
+an extended key for <code>:fulcro/state-map</code> which has the current value of the Fulcro state database.</p>
+</div>
+<div class="sect3">
+<h4 id="_operations"><a class="anchor" href="#_operations"></a><a class="link" href="#_operations">6.3.1. Operations</a></h4>
+<div class="paragraph">
+<p>Non-predicate executable content (e.g. <code>script</code>) functions can return a vector of operations to
+run. The standard set (assign and delete) are supported, and use the extended path support
+described for the DataModel.</p>
+</div>
+<div class="paragraph">
+<p>There are some additional operations for doing I/O:</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><code>(fop/invoke-remote txn options)</code></dt>
+<dd>
+<p>Run a single-mutation txn (e.g. <code>[(f {:x 1})]</code>) on a remote.
+The options allow you to specify events to trigger on the results. See <code>scf/mutation-result</code>. You can, of course
+use data <code>:target</code> and <code>:returning</code> to auto-merge graph data return values. The <code>:target</code> option can use an
+actor keyword as a convenience. <code>:target</code> Can be a normal Fulcro state-map path, a defined alias, or a path
+that can include actors (which will splice the actor&#8217;s ident into the target path).</p>
+</dd>
+<dt class="hdlist1"><code>(fop/load query-root component-or-actor options)</code></dt>
+<dd>
+<p>Issue a Fulcro load with an EQL query. <code>options</code>
+supposed the normal data fetch arguments, and additionally let&#8217;s you indicate what events to send when done/failed.</p>
+</dd>
+</dl>
+</div>
+<div class="paragraph">
+<p>When using <code>invoke-remote</code> you will often <strong>not</strong> have a local Fulcro CLJS mutation. This means that you&#8217;d normally
+need to syntax-quote the transaction; however, remember that the Fulcro mutations namespace includes a
+<code>declare-mutation</code> helper that will make a "callable" function-like object that just returns itself as data.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(m/declare-mutation login app.authentication.session/login)
+
+<span class="keyword">..</span><span class="keyword">.</span>
+
+(<span class="keyword">def</span> <span class="function">statechart</span>
+<span class="keyword">..</span><span class="keyword">.</span>
+   (script {<span class="symbol">:expr</span> [(fop/invoke-remote [(login {<span class="keyword">..</span><span class="keyword">.</span>})] {<span class="symbol">:ok-event</span> <span class="symbol">:event/success</span> <span class="symbol">:error-event</span> <span class="symbol">:event/failed</span>)]}))</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_useful_helpers"><a class="anchor" href="#_useful_helpers"></a><a class="link" href="#_useful_helpers">6.4. Useful Helpers</a></h3>
+<div class="sect3">
+<h4 id="_functions"><a class="anchor" href="#_functions"></a><a class="link" href="#_functions">6.4.1. Functions</a></h4>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><code>(scf/local-data-path session-id)</code></dt>
+<dd>
+<p>Get the path of the local data for a given session. This
+is useful for adding a lookup ref to a UI component whose rendering depends on changes to this local state.</p>
+</dd>
+<dt class="hdlist1"><code>(scf/statechart-session-ident session-id)</code></dt>
+<dd>
+<p>Get the ident of the statechart session itself. This
+is useful for adding a lookup ref to a UI component whose rendering depends on changes to the
+statechart&#8217;s configuration.</p>
+</dd>
+<dt class="hdlist1"><code>(resolve-aliases data)</code></dt>
+<dd>
+<p>Used in executable content to return a map for all aliases. It looks up every
+alias from <code>:fulcro/aliases</code> and returns a map with them as keys, and their extracted data as values.</p>
+</dd>
+<dt class="hdlist1"><code>(resolve-actors data :actor/thing :actor/other &#8230;&#8203;)</code></dt>
+<dd>
+<p>Resolves the UI props of multiple named actors. The
+return value is a map from actor name to the UI props (tree).</p>
+</dd>
+<dt class="hdlist1"><code>(resolve-actors data :actor/thing)</code></dt>
+<dd>
+<p>Resolves the UI props of a single actor, and returns them.</p>
+</dd>
+<dt class="hdlist1"><code>(resolve-actor-class data actor-key)</code></dt>
+<dd>
+<p>Returns the Fulcro component that is currently acting as the UI
+counterpart of the named actor, if known.</p>
+</dd>
+<dt class="hdlist1"><code>(scf/send! app-ish session-id event optional-data)</code></dt>
+<dd>
+<p>Send an event to a running statechart.</p>
+</dd>
+<dt class="hdlist1"><code>(scf/current-configuration app-ish session-id)</code></dt>
+<dd>
+<p>Returns the current configuration (active states) of the given
+statechart instance. Useful in the UI when you need to render content based on state, but remember to add
+<code>(scf/statechart-session-ident session-id)</code> to any component query where that is necessary (to ensure render updates).</p>
+</dd>
+<dt class="hdlist1"><code>(scf/mutation-result data)</code></dt>
+<dd>
+<p>Extracts the raw return value of a remote mutation when the event being processed
+is the result of a mutation result that was originally triggered by a <code>fops/invoke-remote</code>.</p>
+</dd>
+<dt class="hdlist1"><code>(m/declare-mutation)</code></dt>
+<dd>
+<p>Makes a function-like object that can be used to generate remote mutation calls
+in transactions for <code>invoke-remote</code>.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_content_of_data_in_executable_content"><a class="anchor" href="#_content_of_data_in_executable_content"></a><a class="link" href="#_content_of_data_in_executable_content">6.4.2. Content of <code>data</code> in Executable Content</a></h4>
+<div class="paragraph">
+<p>The <code>data</code> parameter of runtime content (e.g. script nodes) contains:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The local data of the statechart (at the top level).</p>
+</li>
+<li>
+<p>The special standard (from SCXML) <code>:_event</code> that is the event that is being processed, which in turn has:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>:data</code> that contains any data sent <strong>with</strong> the event.</p>
+</li>
+<li>
+<p><code>:target</code> The session ID of the statechart</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>A special <code>:fulcro/state-map</code> key that is the current <strong>value</strong> of the Fulcro application state.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_runtime_env_of_executable_content"><a class="anchor" href="#_runtime_env_of_executable_content"></a><a class="link" href="#_runtime_env_of_executable_content">6.4.3. Runtime <code>env</code> of Executable Content</a></h4>
+<div class="paragraph">
+<p>The runtime <code>env</code> in executable elements includes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Any data passed via the <code>extra-env</code> argument to <code>install-fulcro-statecharts!</code></p>
+</li>
+<li>
+<p><code>:fulcro/app</code>                - The Fucro app itself.</p>
+</li>
+<li>
+<p><code>::sc/statechart-registry</code>   - The statechart Registry instance</p>
+</li>
+<li>
+<p><code>::sc/data-model</code>            - The statechart DataModel instance</p>
+</li>
+<li>
+<p><code>::sc/event-queue</code>           - The statechart EventQueue instance</p>
+</li>
+<li>
+<p><code>::sc/working-memory-store</code>  - The statechart working memory store</p>
+</li>
+<li>
+<p><code>::sc/processor</code>             - The statechart processing algorithm</p>
+</li>
+<li>
+<p><code>::sc/invocation-processors</code> - The supported invocation processors</p>
+</li>
+<li>
+<p><code>::sc/execution-model</code>       - The CLJC statechart ExecutionModel</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_testing"><a class="anchor" href="#_testing"></a><a class="link" href="#_testing">7. Testing</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>The main interface to this library is pure and functional, which makes the general job of testing easier in some cases,
-but the fact is that you often need to walk a state machine through several steps in order to get it <strong>into</strong> the
+but the fact is that you often need to walk a state chart through several steps in order to get it <strong>into</strong> the
 starting configuration to test.</p>
 </div>
 <div class="paragraph">
@@ -1448,11 +2253,11 @@ eliminate these side effects through some kind of stubbing mechanism.</p>
 </div>
 <div class="paragraph">
 <p>Fortunately the design of the library makes it trivial to plug in a mock execution model, mock event queue,
-and a test data model, which allows you to easily exercise a state machine in tests in ways that do not
+and a test data model, which allows you to easily exercise a state chart in tests in ways that do not
 side effect in an uncontrolled fashion.</p>
 </div>
 <div class="paragraph">
-<p>The <code>com.fulcrologic.statecharts.testing</code> namespace includes mocks for all of the protocols, allows for
+<p>The <code>com.fulcrologic.statecharts.testing</code> namespace includes mocks for the necessary protocols, allows for
 a pluggable data model (defaults to flat working memory), and has pre-written helpers and predicates.</p>
 </div>
 <div class="paragraph">
@@ -1464,47 +2269,47 @@ would normally be run.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">statecharts-spec</span>
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">com.fulcrologic.statecharts.testing-spec</span>
   (<span class="symbol">:require</span>
-    [app.my-machine <span class="symbol">:refer</span> [some-statechart]]
-    [com.fulcrologic.statecharts.algorithms.v20150901 <span class="symbol">:refer</span> [new-processor]]
-    [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [machine]]
-    [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state on-entry]
-    [com.fulcrologic.statecharts.execution-model.lambda <span class="symbol">:refer</span> [new-execution-model]]
-    [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
-    [com.fulcrologic.statecharts.testing <span class="symbol">:as</span> testing <span class="symbol">:refer</span> [in? ran? will-send configuration-for-states]]
-    [fulcro-spec.core <span class="symbol">:refer</span> [specification assertions component provided when-mocking! =&gt;]]
-    [clojure.set <span class="symbol">:as</span> <span class="keyword">set</span>]))
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state transition]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:as</span> chart]
+    [fulcro-spec.core <span class="symbol">:refer</span> [specification assertions component =&gt;]]
+    [com.fulcrologic.statecharts.testing <span class="symbol">:as</span> testing]))
 
-(<span class="keyword">defn</span> <span class="function">is-tuesday?</span> [env data] <span class="keyword">..</span><span class="keyword">.</span>)
+(<span class="keyword">defn</span> <span class="function">is-tuesday?</span> [env data] <span class="predefined-constant">false</span>)
+
 (<span class="keyword">def</span> <span class="function">some-statechart</span>
-  (machine {}
+  (chart/statechart {}
     (state {<span class="symbol">:id</span> <span class="symbol">:state/start</span>}
-      (transition {<span class="symbol">:cond</span> is-tuesday?
-                   <span class="symbol">:event</span> <span class="symbol">:event/trigger</span>
+      (transition {<span class="symbol">:cond</span>   is-tuesday?
+                   <span class="symbol">:event</span>  <span class="symbol">:event/trigger</span>
                    <span class="symbol">:target</span> <span class="symbol">:state/next</span>}))
     (state {<span class="symbol">:id</span> <span class="symbol">:state/next</span>})))
 
-(<span class="keyword">defn</span> <span class="function">config</span> [] {<span class="symbol">:machine</span> some-statechart})
+(<span class="keyword">defn</span> <span class="function">config</span> [] {<span class="symbol">:statechart</span> some-statechart})
 
 (specification <span class="string"><span class="delimiter">&quot;</span><span class="content">My Machine</span><span class="delimiter">&quot;</span></span>
   (component <span class="string"><span class="delimiter">&quot;</span><span class="content">When it is tuesday</span><span class="delimiter">&quot;</span></span>
     (<span class="keyword">let</span> [env (testing/new-testing-env (config) {is-tuesday? <span class="predefined-constant">true</span>})]
 
-      (testing/start! env session-id)
+      (testing/start! env)
       (testing/run-events! env <span class="symbol">:event/trigger</span>)
 
       (assertions
         <span class="string"><span class="delimiter">&quot;</span><span class="content">Checks to see that it is tuesday</span><span class="delimiter">&quot;</span></span>
         (testing/ran? env is-tuesday?) =&gt; <span class="predefined-constant">true</span>
         <span class="string"><span class="delimiter">&quot;</span><span class="content">Goes to the next state</span><span class="delimiter">&quot;</span></span>
-        (testing/in? env <span class="symbol">:state/next</span>) =&gt; <span class="predefined-constant">true</span>))))</code></pre>
+        (testing/in? env <span class="symbol">:state/next</span>) =&gt; <span class="predefined-constant">true</span>)
+
+      (testing/goto-configuration! env [] #{<span class="symbol">:state/start</span>})
+
+      (assertions
+        <span class="string"><span class="delimiter">&quot;</span><span class="content">Can be forced into a state</span><span class="delimiter">&quot;</span></span>
+        (testing/in? env <span class="symbol">:state/start</span>) =&gt; <span class="predefined-constant">true</span>))))</code></pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_mocking"><a class="anchor" href="#_mocking"></a><a class="link" href="#_mocking">5.1. Mocking</a></h3>
+<h3 id="_mocking"><a class="anchor" href="#_mocking"></a><a class="link" href="#_mocking">7.1. Mocking</a></h3>
 <div class="paragraph">
 <p>The mocking (set when creating the testing env) is a simple map (e.g. <code>{is-tuesday? true}</code>). The keys of the map
 must exactly match the expression in question (e.g. use <code>defn</code> to make them (as shown above), and then use those as the
@@ -1514,15 +2319,15 @@ the number of times that expression has run since the test env was created.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_event_sendscancels"><a class="anchor" href="#_event_sendscancels"></a><a class="link" href="#_event_sendscancels">5.2. Event Sends/Cancels</a></h3>
+<h3 id="_event_sendscancels"><a class="anchor" href="#_event_sendscancels"></a><a class="link" href="#_event_sendscancels">7.2. Event Sends/Cancels</a></h3>
 <div class="paragraph">
 <p>The sends and cancels will also be auto-recorded. See the docstrings in the testing namespace for more information.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_starting_in_a_specific_configuration"><a class="anchor" href="#_starting_in_a_specific_configuration"></a><a class="link" href="#_starting_in_a_specific_configuration">5.3. Starting in a Specific Configuration</a></h3>
+<h3 id="_starting_in_a_specific_configuration"><a class="anchor" href="#_starting_in_a_specific_configuration"></a><a class="link" href="#_starting_in_a_specific_configuration">7.3. Starting in a Specific Configuration</a></h3>
 <div class="paragraph">
-<p>Most of your tests will need the machine to be in some particular state as part of your setup. You <strong>could</strong> get there
+<p>Most of your tests will need the chart to be in some particular state as part of your setup. You <strong>could</strong> get there
 by triggering a sequence of events while having all of the mocks in perfect condition, but this creates a fragile
 test where changes to the structure of the chart break a bunch of tests. The testing helpers include
 <code>(testing/goto-configuration! env data-ops config)</code> that allows you to set up the data model and configuration.</p>
@@ -1531,7 +2336,7 @@ test where changes to the structure of the chart break a bunch of tests. The tes
 <p>The <code>data-ops</code> is a vector of Data Model operations (e.g. ops/assign) to run on the data model. and <code>config</code> is
 a valid configuration (set of active states) for the chart.
 Unfortunately, the configuration of a statechart is non-trivial (it must include all active states in a complex
-hierarchy) and will change when you refactor the machine. So, another helper <code>testing/configuration-for-states</code> allows you
+hierarchy) and will change when you refactor the chart. So, another helper <code>testing/configuration-for-states</code> allows you
 to get a list of <strong>all</strong> of the states that would be active <strong>given</strong> the deepest desired leaf state(s).</p>
 </div>
 <div class="paragraph">
@@ -1543,14 +2348,14 @@ list a valid leaf from each region.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">defn</span> <span class="function">config</span> [] {<span class="symbol">:machine</span> some-statechart})
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">defn</span> <span class="function">config</span> [] {<span class="symbol">:statechart</span> some-statechart})
 
 (specification <span class="string"><span class="delimiter">&quot;</span><span class="content">Starting in Some State</span><span class="delimiter">&quot;</span></span>
   (<span class="keyword">let</span> [env (testing/new-testing-env (config) {})]
 
-    <span class="comment">;; assume a top-level parallel node, with two sub-regions. `configuration-for-states` will populate all of the necessary</span>
-    <span class="comment">;; ancestor states</span>
-    (testing/goto-configuration! env [] (configuration-for-states env #{<span class="symbol">:state.region1/leaf</span> <span class="symbol">:state.region2/leaf</span>}))
+    <span class="comment">;; assume a top-level parallel node, with two sub-regions. An internal call to `configuration-for-states`</span>
+    <span class="comment">;; will populate all of the necessary ancestor states from these leaves.</span>
+    (testing/goto-configuration! env [] #{<span class="symbol">:state.region1/leaf</span> <span class="symbol">:state.region2/leaf</span>})
     (testing/run-events! env <span class="symbol">:event/expired</span>)
 
     <span class="comment">;; assertions</span>
@@ -1561,7 +2366,7 @@ list a valid leaf from each region.</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">6. Relationship to SCXML</a></h2>
+<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">8. Relationship to SCXML</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>This library&#8217;s internal implementation follows (as closely as possible) the official
@@ -1570,7 +2375,7 @@ much of the implementation uses internal volatiles in order to match the imperat
 comparison and avoidance of bugs.</p>
 </div>
 <div class="paragraph">
-<p>The actual structure of the live CLJC data used to represent machines also closely mimics
+<p>The actual structure of the live CLJC data used to represent charts also closely mimics
 the structure described there, but with some differences for convenient use in CLJC.</p>
 </div>
 <div class="paragraph">
@@ -1626,11 +2431,11 @@ values in the data and excution model):</p>
 </div>
 </div>
 <div class="paragraph">
-<p>If you&#8217;re using XML tools to generate you machines, though, it&#8217;s probably easiest to use
+<p>If you&#8217;re using XML tools to generate your charts, though, it&#8217;s probably easiest to use
 <code>script</code> tags to begin with.</p>
 </div>
 <div class="sect2">
-<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">6.1. Related Work</a></h3>
+<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">8.1. Related Work</a></h3>
 <div class="paragraph">
 <p>The primary alternative to this library is <a href="https://github.com/lucywang000/clj-statecharts">clj-statecharts</a>,
 which is a fine library modelled after xstate.</p>
@@ -1682,11 +2487,11 @@ Fulcro UI and I/O).</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">6.2. Conformance</a></h3>
+<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">8.2. Conformance</a></h3>
 <div class="paragraph">
 <p>This library was written using the reference implementation described in
 the <a href="https://www.w3.org/TR/scxml">SCXML standard</a>, but without the requirement
-that the machine be written in XML.</p>
+that the chart be written in XML.</p>
 </div>
 <div class="paragraph">
 <p>Any deviation from the standard (as far as general operation of state transitions, order
@@ -1706,97 +2511,8 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-01-13 13:46:43 -0800
+Last updated 2023-02-28 11:22:19 -0800
 </div>
 </div>
-<style>
-/* Stylesheet for CodeRay to match GitHub theme | MIT License | http://foundation.zurb.com */
-pre.CodeRay{background:#f7f7f8}
-.CodeRay .line-numbers{border-right:1px solid currentColor;opacity:.35;padding:0 .5em 0 0}
-.CodeRay span.line-numbers{display:inline-block;margin-right:.75em}
-.CodeRay .line-numbers strong{color:#000}
-table.CodeRay{border-collapse:separate;border:0;margin-bottom:0;background:none}
-table.CodeRay td{vertical-align:top;line-height:inherit}
-table.CodeRay td.line-numbers{text-align:right}
-table.CodeRay td.code{padding:0 0 0 .75em}
-.CodeRay .debug{color:#fff !important;background:#000080 !important}
-.CodeRay .annotation{color:#007}
-.CodeRay .attribute-name{color:#000080}
-.CodeRay .attribute-value{color:#700}
-.CodeRay .binary{color:#509}
-.CodeRay .comment{color:#998;font-style:italic}
-.CodeRay .char{color:#04d}
-.CodeRay .char .content{color:#04d}
-.CodeRay .char .delimiter{color:#039}
-.CodeRay .class{color:#458;font-weight:bold}
-.CodeRay .complex{color:#a08}
-.CodeRay .constant,.CodeRay .predefined-constant{color:#008080}
-.CodeRay .color{color:#099}
-.CodeRay .class-variable{color:#369}
-.CodeRay .decorator{color:#b0b}
-.CodeRay .definition{color:#099}
-.CodeRay .delimiter{color:#000}
-.CodeRay .doc{color:#970}
-.CodeRay .doctype{color:#34b}
-.CodeRay .doc-string{color:#d42}
-.CodeRay .escape{color:#666}
-.CodeRay .entity{color:#800}
-.CodeRay .error{color:#808}
-.CodeRay .exception{color:inherit}
-.CodeRay .filename{color:#099}
-.CodeRay .function{color:#900;font-weight:bold}
-.CodeRay .global-variable{color:#008080}
-.CodeRay .hex{color:#058}
-.CodeRay .integer,.CodeRay .float{color:#099}
-.CodeRay .include{color:#555}
-.CodeRay .inline{color:#000}
-.CodeRay .inline .inline{background:#ccc}
-.CodeRay .inline .inline .inline{background:#bbb}
-.CodeRay .inline .inline-delimiter{color:#d14}
-.CodeRay .inline-delimiter{color:#d14}
-.CodeRay .important{color:#555;font-weight:bold}
-.CodeRay .interpreted{color:#b2b}
-.CodeRay .instance-variable{color:#008080}
-.CodeRay .label{color:#970}
-.CodeRay .local-variable{color:#963}
-.CodeRay .octal{color:#40e}
-.CodeRay .predefined{color:#369}
-.CodeRay .preprocessor{color:#579}
-.CodeRay .pseudo-class{color:#555}
-.CodeRay .directive{font-weight:bold}
-.CodeRay .type{font-weight:bold}
-.CodeRay .predefined-type{color:inherit}
-.CodeRay .reserved,.CodeRay .keyword {color:#000;font-weight:bold}
-.CodeRay .key{color:#808}
-.CodeRay .key .delimiter{color:#606}
-.CodeRay .key .char{color:#80f}
-.CodeRay .value{color:#088}
-.CodeRay .regexp .delimiter{color:#808}
-.CodeRay .regexp .content{color:#808}
-.CodeRay .regexp .modifier{color:#808}
-.CodeRay .regexp .char{color:#d14}
-.CodeRay .regexp .function{color:#404;font-weight:bold}
-.CodeRay .string{color:#d20}
-.CodeRay .string .string .string{background:#ffd0d0}
-.CodeRay .string .content{color:#d14}
-.CodeRay .string .char{color:#d14}
-.CodeRay .string .delimiter{color:#d14}
-.CodeRay .shell{color:#d14}
-.CodeRay .shell .delimiter{color:#d14}
-.CodeRay .symbol{color:#990073}
-.CodeRay .symbol .content{color:#a60}
-.CodeRay .symbol .delimiter{color:#630}
-.CodeRay .tag{color:#008080}
-.CodeRay .tag-special{color:#d70}
-.CodeRay .variable{color:#036}
-.CodeRay .insert{background:#afa}
-.CodeRay .delete{background:#faa}
-.CodeRay .change{color:#aaf;background:#007}
-.CodeRay .head{color:#f8f;background:#505}
-.CodeRay .insert .insert{color:#080}
-.CodeRay .delete .delete{color:#800}
-.CodeRay .change .change{color:#66f}
-.CodeRay .head .head{color:#f4f}
-</style>
 </body>
 </html>

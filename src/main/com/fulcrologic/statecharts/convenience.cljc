@@ -97,7 +97,7 @@
    ```
    "
   [{:keys [id delay delayexpr] :as send-props}]
-  (when-not id (throw (IllegalArgumentException. "send-after's props MUST include an :id.")))
+  (when-not id (throw (ex-info "send-after's props MUST include an :id." {})))
   [(on-entry {}
      (Send send-props))
    (on-exit {}

@@ -553,6 +553,219 @@ executable children).
        (raise {}))))
 -----
 
+= Integration with Fulcro
+
+The Fulcro integraion for statecharts has the following general enhancements over the standard
+statecharts:
+
+* Use the Fulcro app's state database as the DataModel
+* Use core.async to automatically support an EventQueue
+* Support a "local data" area for the statechart session that won't accidentally collide
+  with other database concerns.
+* Allow for the use of actors (a component abstraction) and aliases (to database locations)
+* Supply an extensible set of operations that executable elements can leverage:
+** The ability to use Fulcro's load to populate the state database.
+** The ability to invoke remote mutations.
+** The ability to leverage mutation helpers for optimistic updates.
+
+Namespace aliases used in this document:
+
+[source]
+-----
+[com.fulcrologic.fulcro.application :as app]
+[com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+[com.fulcrologic.statecharts.elements :as ele]
+[com.fulcrologic.statecharts :as sc]
+[com.fulcrologic.statecharts.chart :as chart]
+[com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
+[com.fulcrologic.statecharts.data-model.operations :as ops]
+[com.fulcrologic.statecharts.integration.fulcro :as scf]
+[com.fulcrologic.statecharts.integration.fulcro.operations :as fop]
+[com.fulcrologic.statecharts.protocols :as sp]
+-----
+
+== Basic Usage
+
+There are three basic steps: install the support, register machines, and start them:
+
+[source]
+-----
+;; 1. Install statecharts on the app. Should be done once at startup, but this is an idempotent operation.
+(scf/install-fulcro-statecharts! app)
+
+;; 2. Define your charts
+(def chart (chart/statechart {}
+         ...))
+
+;; 3. Register your chart under a well-known name. NOTE: The statecharts have to be installed *before* calling register!
+(scf/register-statechart! app ::chart chart)
+
+...
+
+;; 4. Start some statechart. The session-id can be a unique uuid, or a well known thing like a keyword. Be careful, though,
+;; because starting a machine using an existing ID will overwrite the existing one.
+(scf/start! app {:machine ::chart        ; registered chart name
+                 :session-id :some-id})  ; globally unique session id
+-----
+
+== The Data Model
+
+The Fulcro statecharts data model has a number of features to help you work with Fulcro applications.
+
+Two special concepts were take from Fulcro's own UI state machines: aliases and actors. These are implemented
+purely on the data model by simply adding entries to a statechart's local data under the special keys:
+
+* `:fulcro/aliases` - A map from a keyword to a path. The path itself can be any legal DataModel path (see later)
+ except for another alias.
+* `:fulcro/actors` - A map from a keyword to an `scf/actor`, which tracks the class and ident of a UI component.
+Can be used to find the UI component (for normalization/loads) and in data paths.
+
+Notes:
+
+* Actors MUST be identified by keywords with an `actor` namespace: e.g. `:actor/thing`.
+* Actor keywords may only appear as the first element of a path.
+* Aliases are NOT used within paths. They define a path. Therefore arguments that would normally
+take a vector to describe a data path will usually accept an alias keyword instead.
+
+=== Initializing the Data Model
+
+You can use the initial data in `sp/start!` or a top-level `data-model` element to put data into the
+local storage of your statechart. This is particularly useful for specifying things like aliases
+on the chart itself, but defining actors at runtime:
+
+[source]
+-----
+(def c (chart/statechart {}
+         (data-model {:expr {:fulcro/aliases {:a [:actor/thing :thing/field]}}})
+         ...))
+(scf/register-statechart! app ::c c)
+
+...
+
+(scf/start! app {:machine ::c
+                 :session-id :some-id
+                 :data {:fulcro/actors {:actor/this (scf/actor Thing [:thing/id 1])}}})
+-----
+
+The above code defines a chart that will have `:fulcro/aliases` on the local data model
+because of the statechart definition, and will have a runtime value for the `:fulcro/actors` based
+on data that was passed during start. Anthing initialized this way will go into the local data
+store (which is a path based on the session id in the app database).
+
+Changing aliases and actors on the fly is therefore a simple matter of doing an `op/assign` operation on
+the data model.
+
+=== Data Locations
+
+There are four primary ways to address data in the data model, and
+the standard statechart operations such as `op/assign` already support these abstract paths:
+
+A keyword (not in a vector):: IF this keyword exists in the `:fulcro/aliases` map, then the value
+of that alias (which can be a path that contains any of the other things in this list) is used
+to find the location; otherwise the keyword is relative in the root of the LOCAL data for the statechart.
+A vector starting with `:ROOT` (or a keyword that doesn't match the other cases):: A path in the
+local data of the statechart. Same as using a path without `:ROOT`. Included to be
+compatible with the standard location support.
+A vector starting with `:fulco/state` or `:fulcro/state-map`:: Indicates an absolute path in the
+Fulcro app database.
+A vector starting with an actor name:: If the first element of the vector matches an entry in the local
+statecharts `:fulcro/actors` then `:fulcro/state` and the ident of that actor are spliced together
+ in place of that keyword and the resulting path is treated as above.
+
+== Executable Content
+
+The executable content nodes (predicates and other expressions) in the statechart can be functions of
+two arguments: `env` (the processing environment) and `data`.
+
+You can get the current statechart session ID using the processing environment, and you can also
+pull the various components of the statechart system from there (e.g. `(::sc/event-queue env)`). The
+`data` argument includes ALL of the statechart local data (including the special `:fulcro/aliases`
+and `:fulcro/actors`, which have special meaning but are really just normal local data). The `data`
+will also include the standard `:_event` (which is a map that has things like `:target`) and
+an extended key for `:fulcro/state-map` which has the current value of the Fulcro state database.
+
+=== Operations
+
+Non-predicate executable content (e.g. `script`) functions can return a vector of operations to
+run. The standard set (assign and delete) are supported, and use the extended path support
+described for the DataModel.
+
+There are some additional operations for doing I/O:
+
+`(fop/invoke-remote txn options)`:: Run a single-mutation txn (e.g. `[(f {:x 1})]`) on a remote.
+The options allow you to specify events to trigger on the results. See `scf/mutation-result`. You can, of course
+use data `:target` and `:returning` to auto-merge graph data return values. The `:target` option can use an
+actor keyword as a convenience. `:target` Can be a normal Fulcro state-map path, a defined alias, or a path
+that can include actors (which will splice the actor's ident into the target path).
+`(fop/load query-root component-or-actor options)`:: Issue a Fulcro load with an EQL query. `options`
+supposed the normal data fetch arguments, and additionally let's you indicate what events to send when done/failed.
+
+When using `invoke-remote` you will often *not* have a local Fulcro CLJS mutation. This means that you'd normally
+need to syntax-quote the transaction; however, remember that the Fulcro mutations namespace includes a
+`declare-mutation` helper that will make a "callable" function-like object that just returns itself as data.
+
+[source]
+-----
+(m/declare-mutation login app.authentication.session/login)
+
+...
+
+(def statechart
+...
+   (script {:expr [(fop/invoke-remote [(login {...})] {:ok-event :event/success :error-event :event/failed)]}))
+-----
+
+== Useful Helpers
+
+=== Functions
+
+`(scf/local-data-path session-id)`:: Get the path of the local data for a given session. This
+is useful for adding a lookup ref to a UI component whose rendering depends on changes to this local state.
+`(scf/statechart-session-ident session-id)`:: Get the ident of the statechart session itself. This
+is useful for adding a lookup ref to a UI component whose rendering depends on changes to the
+statechart's configuration.
+`(resolve-aliases data)`:: Used in executable content to return a map for all aliases. It looks up every
+alias from `:fulcro/aliases` and returns a map with them as keys, and their extracted data as values.
+`(resolve-actors data :actor/thing :actor/other ...)`:: Resolves the UI props of multiple named actors. The
+return value is a map from actor name to the UI props (tree).
+`(resolve-actors data :actor/thing)`:: Resolves the UI props of a single actor, and returns them.
+`(resolve-actor-class data actor-key)`:: Returns the Fulcro component that is currently acting as the UI
+counterpart of the named actor, if known.
+`(scf/send! app-ish session-id event optional-data)`:: Send an event to a running statechart.
+`(scf/current-configuration app-ish session-id)`:: Returns the current configuration (active states) of the given
+statechart instance. Useful in the UI when you need to render content based on state, but remember to add
+`(scf/statechart-session-ident session-id)` to any component query where that is necessary (to ensure render updates).
+`(scf/mutation-result data)`:: Extracts the raw return value of a remote mutation when the event being processed
+is the result of a mutation result that was originally triggered by a `fops/invoke-remote`.
+`(m/declare-mutation)`:: Makes a function-like object that can be used to generate remote mutation calls
+in transactions for `invoke-remote`.
+
+
+=== Content of `data` in Executable Content
+
+The `data` parameter of runtime content (e.g. script nodes) contains:
+
+* The local data of the statechart (at the top level).
+* The special standard (from SCXML) `:_event` that is the event that is being processed, which in turn has:
+** `:data` that contains any data sent *with* the event.
+** `:target` The session ID of the statechart
+* A special `:fulcro/state-map` key that is the current *value* of the Fulcro application state.
+
+=== Runtime `env` of Executable Content
+
+The runtime `env` in executable elements includes:
+
+* Any data passed via the `extra-env` argument to `install-fulcro-statecharts!`
+* `:fulcro/app`                - The Fucro app itself.
+* `::sc/statechart-registry`   - The statechart Registry instance
+* `::sc/data-model`            - The statechart DataModel instance
+* `::sc/event-queue`           - The statechart EventQueue instance
+* `::sc/working-memory-store`  - The statechart working memory store
+* `::sc/processor`             - The statechart processing algorithm
+* `::sc/invocation-processors` - The supported invocation processors
+* `::sc/execution-model`       - The CLJC statechart ExecutionModel
+
+
 = Testing
 
 The main interface to this library is pure and functional, which makes the general job of testing easier in some cases,

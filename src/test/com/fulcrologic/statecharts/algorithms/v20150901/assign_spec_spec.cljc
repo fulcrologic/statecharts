@@ -1,22 +1,16 @@
 (ns com.fulcrologic.statecharts.algorithms.v20150901.assign-spec-spec
   (:require
-    [com.fulcrologic.statecharts.elements
-     :refer [state
-             initial
-             parallel
-             final
-             transition
-             raise
-             on-entry
-             on-exit
-             data-model
-             assign
-             script]]
-    [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
+    [com.fulcrologic.statecharts.elements
+     :refer [assign
+             script
+             data-model
+             final
+             on-entry
+             state
+             transition]]
     [com.fulcrologic.statecharts.testing :as testing]
-    [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [fulcro-spec.core :refer [specification assertions =>]]))
+    [fulcro-spec.core :refer [=> assertions specification]]))
 
 ;; Not sure if this test makes sense?
 #_(specification "assign_invalid"
@@ -40,10 +34,18 @@
       (assertions
         (testing/in? env :pass) => true)))
 
+(def final-target (volatile! nil))
+
+(defn pass [& _]
+  (vreset! final-target :pass))
+
+(defn fail [& _]
+  (vreset! final-target :fail))
+
 (specification "assign_map_literal"
   (let [chart (chart/statechart {}
-                (data-model
-                  {:id :o1})
+                (data-model {:id :o1})
+
                 (state {:id :uber}
                   (transition {:event :* :target :fail})
 
@@ -52,16 +54,22 @@
                     (on-entry {}
                       (assign {:location :o1 :expr {:p1 :v1 :p2 :v2}}))))
 
-                (final {:id :pass})
-                (final {:id :fail}))
-        env   (testing/new-testing-env {:statechart chart} {})]
+                (final {:id :pass}
+                  (on-entry {}
+                    (script {:expr pass})))
+                (final {:id :fail}
+                  (on-entry {}
+                    (script {:expr fail}))))
+        env   (testing/new-testing-env {:statechart chart} {pass pass
+                                                            fail fail})]
 
     (testing/start! env)
 
     (assertions
+      "Starts in the correct initial state"
       (testing/in? env :s1) => true)
 
     (testing/run-events! env :pass)
 
     (assertions
-      (testing/in? env :pass) => true)))
+      @final-target => :pass)))

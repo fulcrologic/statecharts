@@ -37,7 +37,7 @@ image:https://circleci.com/gh/fulcrologic/statecharts/tree/main.svg?style=svg["C
 
 = Usage
 
-See the official https://fulcrologic.github.io/statecharts/[documentation].
+See the official https://fulcrologic.github.io/statecharts/[documentation] link:Guide.adoc[(raw)].
 
 = Status
 
