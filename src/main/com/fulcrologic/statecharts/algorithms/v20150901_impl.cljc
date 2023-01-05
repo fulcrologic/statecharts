@@ -638,8 +638,9 @@
 (>defn send-done-event! [env state]
   [::sc/processing-env ::sc/element-or-id => nil?]
   (in-state-context env state
-    (let [{:org.w3.scxml.event/keys [invokeid]
-           ::sc/keys                [parent-session-id event-queue]} env]
+    (let [{::sc/keys [vwmem event-queue]} env
+          {:org.w3.scxml.event/keys [invokeid]
+           ::sc/keys                [parent-session-id]} @vwmem]
       (when (and invokeid parent-session-id)
         (let [session-id (env/session-id env)]
           (log/trace "Sending done event from" session-id "to" parent-session-id "for" invokeid)
@@ -665,16 +666,17 @@
   [{::sc/keys [statechart vwmem] :as env}]
   [::sc/processing-env => nil?]
   (let [{::sc/keys [running?]} @vwmem]
-    (when running?
+    (if running?
       (loop []
         (vswap! vwmem assoc ::sc/enabled-transitions (chart/document-ordered-set statechart) ::sc/macrostep-done? false)
         (handle-eventless-transitions! env)
-        (if running?
+        (if (-> vwmem deref ::sc/running?)
           (do
             (run-invocations! env)
             (when (seq (::sc/internal-queue @vwmem))
               (recur)))
-          (exit-interpreter! statechart))))))
+          (exit-interpreter! env)))
+      (exit-interpreter! env))))
 
 (defn cancel? [event] (= :com.fulcrologic.statecharts.events/cancel (:name event)))
 

@@ -1,7 +1,7 @@
 {:paths   ["src/main"]
 
- :deps    {com.fulcrologic/guardrails {:mvn/version "1.1.10"}
-           com.taoensso/timbre        {:mvn/version "5.1.2"}
+ :deps    {com.fulcrologic/guardrails {:mvn/version "1.1.11"}
+           com.taoensso/timbre        {:mvn/version "6.0.4"}
            org.clojure/core.async     {:mvn/version "1.5.640"}}
 
  :aliases {:test      {:extra-paths ["src/test"]
@@ -13,15 +13,15 @@
                        :extra-deps  {lambdaisland/kaocha {:mvn/version "1.60.945"}}}
 
            :dev       {:extra-paths ["src/dev" "src/examples"]
-                       :extra-deps  {thheller/shadow-cljs        {:mvn/version "2.16.7"}
-                                     hickory/hickory             {:mvn/version "0.7.1"}
-                                     com.fulcrologic/fulcro      {:mvn/version "3.5.8"}
-                                     vvvvalvalval/scope-capture  {:mvn/version "0.3.2"}
-                                     djblue/portal               {:mvn/version "0.18.1"}
-                                     org.clojure/clojure         {:mvn/version "1.10.3"}
-                                     org.clojure/clojurescript   {:mvn/version "1.10.891"}
-                                     binaryage/devtools          {:mvn/version "1.0.4"}
-                                     org.clojure/tools.namespace {:mvn/version "1.1.0"}
-                                     org.clojure/data.json       {:mvn/version "2.4.0"}
-                                     zprint/zprint               {:mvn/version "1.2.2"}
+                       :extra-deps  {thheller/shadow-cljs                {:mvn/version "2.16.7"}
+                                     hickory/hickory                     {:mvn/version "0.7.1"}
+                                     com.fulcrologic/fulcro              {:mvn/version "3.6.0"}
+                                     vvvvalvalval/scope-capture          {:mvn/version "0.3.2"}
+                                     djblue/portal                       {:mvn/version "0.18.1"}
+                                     org.clojure/clojure                 {:mvn/version "1.10.3"}
+                                     org.clojure/clojurescript           {:mvn/version "1.10.891"}
+                                     binaryage/devtools                  {:mvn/version "1.0.4"}
+                                     org.clojure/tools.namespace         {:mvn/version "1.1.0"}
+                                     org.clojure/data.json               {:mvn/version "2.4.0"}
+                                     zprint/zprint                       {:mvn/version "1.2.2"}
                                      camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.2"}}}}}
