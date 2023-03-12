@@ -190,11 +190,11 @@
       (fn [M]
         (reduce-kv
           (fn [state-map k v]
-            (let [alias-path    (get-in local-data [:actor/aliases k])
+            (let [alias-path    (get-in local-data [:fulcro/aliases k])
                   expanded-path (mapcat
                                   (fn [path-key]
-                                    (if (contains? local-data path-key)
-                                      (get-in local-data [path-key :ident])
+                                    (if (get-in local-data [:fulcro/actors path-key])
+                                      (get-in local-data [:fulcro/actors path-key :ident])
                                       [path-key]))
                                   alias-path)]
               (assoc-in state-map expanded-path v)))
