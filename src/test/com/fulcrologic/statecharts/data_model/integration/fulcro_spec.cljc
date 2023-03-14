@@ -9,6 +9,7 @@
     [com.fulcrologic.statecharts.event-queue.event-processing :refer [process-events]]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
+    [com.fulcrologic.statecharts.integration.fulcro.operations :as fop]
     [fulcro-spec.core :refer [specification assertions component behavior =>]]
     [com.fulcrologic.statecharts.protocols :as sp]))
 
@@ -121,6 +122,14 @@
         "Affects the local data model"
         (get-in @state-atom (scf/local-data-path ::session :x)) => 1
         (get-in @state-atom (scf/local-data-path ::session :y)) => 2))
+
+    (component "Updating via `fop/assoc-alias`"
+      (sp/update! data-model processing-env {:ops [(fop/assoc-alias :a "A2" :field "F2")]})
+
+      (assertions
+        "Writes to the targeted alias path"
+        (get-in @state-atom [:a]) => "A2"
+        (get-in @state-atom [:thing/id 1 :thing/field]) => "F2"))
 
     (component "Current state"
       (assertions

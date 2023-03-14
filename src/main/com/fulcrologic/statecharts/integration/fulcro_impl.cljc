@@ -190,13 +190,7 @@
       (fn [M]
         (reduce-kv
           (fn [state-map k v]
-            (let [alias-path    (get-in local-data [:actor/aliases k])
-                  expanded-path (mapcat
-                                  (fn [path-key]
-                                    (if (contains? local-data path-key)
-                                      (get-in local-data [path-key :ident])
-                                      [path-key]))
-                                  alias-path)]
+            (let [expanded-path (resolve-alias-path local-data k)]
               (assoc-in state-map expanded-path v)))
           M
           data)))))
