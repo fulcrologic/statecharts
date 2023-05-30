@@ -62,16 +62,12 @@ production environment without any issues.
 for invoking other charts, and CLJ futures.
 ** Send events to arbitrary other sessions/services.
 ** A core.async event loop
+* Integration support for Fulcro.
 
 * Not implemented
 ** SCXML Flow control executable content elements (if/else/elseif/foreach). Note: the executable content is extensible
 via multi-methods, so these are easy to add.
 ** Complete test suite.
-
-* Future Work
-** Integration with Fulcro for fancy statechart-based UI systems.
-** An export to js XState machines (with placeholders for the executable content), so we can use their diagram tool :D
-** Our own graphical design/simulation tool.
 
 == Deviations from the Standard
 
