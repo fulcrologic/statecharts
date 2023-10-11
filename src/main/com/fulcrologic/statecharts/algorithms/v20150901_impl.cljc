@@ -721,8 +721,8 @@
       (if (cancel? event)
         (exit-interpreter! env)
         (do
-          (select-transitions! env event)
           (env/assign! env [:ROOT :_event] event)
+          (select-transitions! env event)
           (handle-external-invocations! env event)
           (microstep! env)
           (before-event! env)))))
