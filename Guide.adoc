@@ -765,6 +765,78 @@ The runtime `env` in executable elements includes:
 * `::sc/invocation-processors` - The supported invocation processors
 * `::sc/execution-model`       - The CLJC statechart ExecutionModel
 
+== React Hooks
+
+There is support for using a statechart as a co-located element of a hooks-based
+component.
+
+The basic idea is that the statechart will be started when the component
+uses it, and when the component leaves the screen the chart is sent
+an `:event/unmounted`. If the chart reaches a top-level final state, then
+it will be GC'd from state.
+
+The session ID of the chart is auto-assigned a random UUID, but you can specify
+a known session ID to allow for a statechart to survive the component mount/unmount
+cycle.
+
+Here is an example of using this support to create a simple traffic light that can regulate (red/yellow/green) or
+blink red:
+
+[source]
+-----
+(defsc TrafficLight [this {:ui/keys [color]}]
+  {:query         [:ui/color]
+   :initial-state {:ui/color "green"}
+   :ident         (fn [] [:component/id ::TrafficLight])
+   :statechart    (statechart {}
+                    (state {:id :state/running}
+                      (on :event/unmount :state/exit)
+                      (transition {:event :event/toggle}
+                        (script {:expr (fn [_ {:keys [blink-mode?]}]
+                                         [(ops/assign :blink-mode? (not blink-mode?))])}))
+
+                      (state {:id :state/green}
+                        (on-entry {} (script {:expr (fn [_ _] [(fops/assoc-alias :color "green")])}))
+                        (send-after {:delay 2000
+                                     :id    :gty
+                                     :event :timeout})
+                        (transition {:event  :timeout
+                                     :target :state/yellow}))
+                      (state {:id :state/yellow}
+                        (on-entry {} (script {:expr (fn [_ _] [(fops/assoc-alias :color "yellow")])}))
+                        (send-after {:delay 500
+                                     :id    :ytr
+                                     :event :timeout})
+                        (transition {:event  :timeout
+                                     :target :state/red}))
+                      (state {:id :state/red}
+                        (on-entry {} (script {:expr (fn [_ _] [(fops/assoc-alias :color "red")])}))
+                        (send-after {:delay 2000
+                                     :id    :rtg
+                                     :event :timeout})
+                        (transition {:cond   (fn [_ {:keys [blink-mode?]}]
+                                               (boolean blink-mode?))
+                                     :event  :timeout
+                                     :target :state/black})
+                        (transition {:event  :timeout
+                                     :target :state/green}))
+                      (state {:id :state/black}
+                        (on-entry {} (script {:expr (fn [_ _] [(fops/assoc-alias :color "black")])}))
+                        (send-after {:delay 500
+                                     :id    :otr
+                                     :event :timeout})
+                        (transition {:event  :timeout
+                                     :target :state/red})))
+                    (final {:id :state/exit}))
+   :use-hooks?    true}
+  (let [{:keys [send! local-data]} (sch/use-statechart this {:data {:fulcro/aliases {:color [:actor/component :ui/color]}}})]
+    (dom/div {}
+      (dom/div {:style {:backgroundColor color
+                        :width           "20px"
+                        :height          "20px"}})
+      (dom/button {:onClick (fn [] (send! :event/toggle))}
+        (if (:blink-mode? local-data) "Blink" "Regulate")))))
+-----
 
 = Testing
 
