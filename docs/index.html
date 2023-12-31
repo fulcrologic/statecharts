@@ -585,6 +585,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_runtime_env_of_executable_content">6.4.3. Runtime <code>env</code> of Executable Content</a></li>
 </ul>
 </li>
+<li><a href="#_react_hooks">6.5. React Hooks</a></li>
 </ul>
 </li>
 <li><a href="#_testing">7. Testing</a>
@@ -2237,6 +2238,84 @@ in transactions for <code>invoke-remote</code>.</p>
 </div>
 </div>
 </div>
+<div class="sect2">
+<h3 id="_react_hooks"><a class="anchor" href="#_react_hooks"></a><a class="link" href="#_react_hooks">6.5. React Hooks</a></h3>
+<div class="paragraph">
+<p>There is support for using a statechart as a co-located element of a hooks-based
+component.</p>
+</div>
+<div class="paragraph">
+<p>The basic idea is that the statechart will be started when the component
+uses it, and when the component leaves the screen the chart is sent
+an <code>:event/unmounted</code>. If the chart reaches a top-level final state, then
+it will be GC&#8217;d from state.</p>
+</div>
+<div class="paragraph">
+<p>The session ID of the chart is auto-assigned a random UUID, but you can specify
+a known session ID to allow for a statechart to survive the component mount/unmount
+cycle.</p>
+</div>
+<div class="paragraph">
+<p>Here is an example of using this support to create a simple traffic light that can regulate (red/yellow/green) or
+blink red:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(defsc TrafficLight [this {<span class="symbol">:ui/keys</span> [color]}]
+  {<span class="symbol">:query</span>         [<span class="symbol">:ui/color</span>]
+   <span class="symbol">:initial-state</span> {<span class="symbol">:ui/color</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">green</span><span class="delimiter">&quot;</span></span>}
+   <span class="symbol">:ident</span>         (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::TrafficLight</span>])
+   <span class="symbol">:statechart</span>    (statechart {}
+                    (state {<span class="symbol">:id</span> <span class="symbol">:state/running</span>}
+                      (on <span class="symbol">:event/unmount</span> <span class="symbol">:state/exit</span>)
+                      (transition {<span class="symbol">:event</span> <span class="symbol">:event/toggle</span>}
+                        (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ {<span class="symbol">:keys</span> [blink-mode?]}]
+                                         [(ops/assign <span class="symbol">:blink-mode?</span> (<span class="keyword">not</span> blink-mode?))])}))
+
+                      (state {<span class="symbol">:id</span> <span class="symbol">:state/green</span>}
+                        (on-entry {} (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ _] [(fops/assoc-alias <span class="symbol">:color</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">green</span><span class="delimiter">&quot;</span></span>)])}))
+                        (send-after {<span class="symbol">:delay</span> <span class="integer">2000</span>
+                                     <span class="symbol">:id</span>    <span class="symbol">:gty</span>
+                                     <span class="symbol">:event</span> <span class="symbol">:timeout</span>})
+                        (transition {<span class="symbol">:event</span>  <span class="symbol">:timeout</span>
+                                     <span class="symbol">:target</span> <span class="symbol">:state/yellow</span>}))
+                      (state {<span class="symbol">:id</span> <span class="symbol">:state/yellow</span>}
+                        (on-entry {} (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ _] [(fops/assoc-alias <span class="symbol">:color</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">yellow</span><span class="delimiter">&quot;</span></span>)])}))
+                        (send-after {<span class="symbol">:delay</span> <span class="integer">500</span>
+                                     <span class="symbol">:id</span>    <span class="symbol">:ytr</span>
+                                     <span class="symbol">:event</span> <span class="symbol">:timeout</span>})
+                        (transition {<span class="symbol">:event</span>  <span class="symbol">:timeout</span>
+                                     <span class="symbol">:target</span> <span class="symbol">:state/red</span>}))
+                      (state {<span class="symbol">:id</span> <span class="symbol">:state/red</span>}
+                        (on-entry {} (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ _] [(fops/assoc-alias <span class="symbol">:color</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">red</span><span class="delimiter">&quot;</span></span>)])}))
+                        (send-after {<span class="symbol">:delay</span> <span class="integer">2000</span>
+                                     <span class="symbol">:id</span>    <span class="symbol">:rtg</span>
+                                     <span class="symbol">:event</span> <span class="symbol">:timeout</span>})
+                        (transition {<span class="symbol">:cond</span>   (<span class="keyword">fn</span> [_ {<span class="symbol">:keys</span> [blink-mode?]}]
+                                               (<span class="keyword">boolean</span> blink-mode?))
+                                     <span class="symbol">:event</span>  <span class="symbol">:timeout</span>
+                                     <span class="symbol">:target</span> <span class="symbol">:state/black</span>})
+                        (transition {<span class="symbol">:event</span>  <span class="symbol">:timeout</span>
+                                     <span class="symbol">:target</span> <span class="symbol">:state/green</span>}))
+                      (state {<span class="symbol">:id</span> <span class="symbol">:state/black</span>}
+                        (on-entry {} (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ _] [(fops/assoc-alias <span class="symbol">:color</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">black</span><span class="delimiter">&quot;</span></span>)])}))
+                        (send-after {<span class="symbol">:delay</span> <span class="integer">500</span>
+                                     <span class="symbol">:id</span>    <span class="symbol">:otr</span>
+                                     <span class="symbol">:event</span> <span class="symbol">:timeout</span>})
+                        (transition {<span class="symbol">:event</span>  <span class="symbol">:timeout</span>
+                                     <span class="symbol">:target</span> <span class="symbol">:state/red</span>})))
+                    (final {<span class="symbol">:id</span> <span class="symbol">:state/exit</span>}))
+   <span class="symbol">:use-hooks?</span>    <span class="predefined-constant">true</span>}
+  (<span class="keyword">let</span> [{<span class="symbol">:keys</span> [send! local-data]} (sch/use-statechart this {<span class="symbol">:data</span> {<span class="symbol">:fulcro/aliases</span> {<span class="symbol">:color</span> [<span class="symbol">:actor/component</span> <span class="symbol">:ui/color</span>]}}})]
+    (dom/div {}
+      (dom/div {<span class="symbol">:style</span> {<span class="symbol">:backgroundColor</span> color
+                        <span class="symbol">:width</span>           <span class="string"><span class="delimiter">&quot;</span><span class="content">20px</span><span class="delimiter">&quot;</span></span>
+                        <span class="symbol">:height</span>          <span class="string"><span class="delimiter">&quot;</span><span class="content">20px</span><span class="delimiter">&quot;</span></span>}})
+      (dom/button {<span class="symbol">:onClick</span> (<span class="keyword">fn</span> [] (send! <span class="symbol">:event/toggle</span>))}
+        (<span class="keyword">if</span> (<span class="symbol">:blink-mode?</span> local-data) <span class="string"><span class="delimiter">&quot;</span><span class="content">Blink</span><span class="delimiter">&quot;</span></span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Regulate</span><span class="delimiter">&quot;</span></span>)))))</code></pre>
+</div>
+</div>
+</div>
 </div>
 </div>
 <div class="sect1">
@@ -2511,7 +2590,7 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2023-02-28 11:22:19 -0800
+Last updated 2023-12-31 00:11:09 -0800
 </div>
 </div>
 </body>
