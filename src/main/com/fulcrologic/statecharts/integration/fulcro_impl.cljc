@@ -284,7 +284,7 @@
 (def application-chart
   (chart/statechart {:initial :state/initial}
     (ele/state {:id :state/initial}
-      (ele/transition {:event :done.invoke}
+      (ele/transition {:event :done.invoke.*}
         (ele/script {:expr (fn [_env {:keys [_event]}]
                              (let [{::sc/keys [source-session-id]} _event]
                                [(op/delete [:fulcro/state-map ::sc/session-id source-session-id])
