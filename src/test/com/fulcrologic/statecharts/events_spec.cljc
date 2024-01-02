@@ -14,6 +14,9 @@
     (evts/name-match? nil nil) => false)
   (component "Keyword candidates"
     (assertions
+      "match if it contains strange characters"
+      (evts/name-match? :done.invoke :done.invoke.:child/future) => true
+      (evts/name-match? :done.invoke.* :done.invoke.:child/future) => true
       "match if its prefix matches"
       (evts/name-match? :a :a.b) => true
       (evts/name-match? :a.b :a.b) => true

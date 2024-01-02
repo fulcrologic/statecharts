@@ -15,6 +15,16 @@
   [{::sc/keys [vwmem] :as _env}]
   (some-> vwmem deref ::sc/session-id))
 
+(defn parent-session-id
+  "Returns the session ID of the parent that invoked this chart (if any)."
+  [{::sc/keys [vwmem] :as _env}]
+  (some-> vwmem deref ::sc/parent-session-id))
+
+(defn invoke-id
+  "Returns the ID of the invocation, if the `env` of the current statechart indicates it is one."
+  [{::sc/keys [vwmem] :as _env}]
+  (some-> vwmem deref :org.w3.scxml.event/invokeid))
+
 (defn is-in-state?
   "Returns true if the given `state-id` is active (in the configuration) of the state chart."
   [{::sc/keys [vwmem] :as _env} state-id]

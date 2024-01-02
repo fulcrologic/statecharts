@@ -1,11 +1,12 @@
 (ns invocations
   (:require
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.elements :refer [state transition log on-exit data-model invoke Send on-entry]]
+    [com.fulcrologic.statecharts.algorithms.v20150901-validation :as v]
+    [com.fulcrologic.statecharts.chart :refer [statechart]]
+    [com.fulcrologic.statecharts.elements :refer [Send data-model final invoke log on-entry on-exit state transition]]
+    [com.fulcrologic.statecharts.environment :as e]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as loop]
     [com.fulcrologic.statecharts.simple :as simple]
-    [com.fulcrologic.statecharts.chart :refer [statechart]]
-    [com.fulcrologic.statecharts.algorithms.v20150901-validation :as v]
     [taoensso.timbre :as log]))
 
 (def child-chart
@@ -14,6 +15,9 @@
     (state {}                                               ; top-level state so we can log an exit from the overall machine
       (on-exit {}
         (log {:label "CHILD CHART EXIT"}))
+
+      (transition {:event  :event/exit
+                   :target :state/final})
 
       (state {:id :X}
         (on-entry {}
@@ -31,6 +35,10 @@
                                        (throw e))))
                            (log/info "Future function completed")
                            {:future-result :DONE})})
+        (transition {:event :done.invoke}
+          (log {:label "Future indicated that it completed"
+                :expr  (fn [e d]
+                         (log/spy :debug d))}))
         (transition {:event :child/swap :target :Y}))
       (state {:id :Y}
         (on-entry {}
@@ -38,8 +46,10 @@
         (on-exit {}
           (Send {:event      :child.left-y
                  :type       ::sc/chart
-                 :targetexpr (fn [env _] (::sc/parent-session-id env))}))
-        (transition {:event :child/swap :target :X})))))
+                 :targetexpr (fn [env data]
+                               (e/parent-session-id env))}))
+        (transition {:event :child/swap :target :X})))
+    (final {:id :state/final})))
 
 (comment
   (v/problems child-chart))
@@ -86,6 +96,9 @@
   ;; The session ID of a child session will be the string of <parent-session-ID `.` <id | invokeid>>
   (simple/send! env {:target "42.:main/child"
                      :event  :child/swap})
+
+  (simple/send! env {:target "42.:main/child"
+                     :event  :event/exit})
 
   ;; terminate the event loop
   (reset! running? false))

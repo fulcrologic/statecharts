@@ -16,14 +16,14 @@
    as event prefixes, and are treated as-if they have `.*` on the end.
 
    If the event-name is a keyword with a namespace, then a candidate ONLY matches
-   if it has that EXACT namespace. This is an extension of the event naming
+   if it has that EXACT namespace (or the candidate has no namespace itself and prefix-matches). This is an extension of the event naming
    defined by SCXML.
 
    Returns `true` if any of the `candidates` is a prefix of `event-name` (on
    a dot-separated segment-by-segment basis)"
   [candidates event]
-
-  (let [event-name (if (map? event) (::sc/event-name event) event)]
+  (let [event-name    (if (map? event) (::sc/event-name event) event)
+        prefix-match? (fn [a b] (str/starts-with? (str b) (str/replace (str a) #"\.\*$" "")))]
     (boolean
       (and
         (not (nil? event-name))
@@ -31,13 +31,17 @@
           (nil? candidates)
           (boolean
             (if (keyword? candidates)
-              (and
-                (= (namespace candidates) (namespace event-name))
-                (let [candidate  (remove #(= "*" %) (str/split (name candidates) #"\."))
-                      event-name (str/split (name event-name) #"\.")]
-                  (and
-                    (<= (count candidate) (count event-name))
-                    (= candidate (subvec event-name 0 (count candidate))))))
+              (or
+                (and
+                  (= (namespace candidates) (namespace event-name))
+                  (let [candidate  (remove #(= "*" %) (str/split (name candidates) #"\."))
+                        event-name (str/split (name event-name) #"\.")]
+                    (and
+                      (<= (count candidate) (count event-name))
+                      (= candidate (subvec event-name 0 (count candidate))))))
+                (and
+                  (nil? (namespace candidates))
+                  (prefix-match? candidates event-name)))
               (some #(name-match? % event-name) (seq candidates)))))))))
 
 (defn new-event

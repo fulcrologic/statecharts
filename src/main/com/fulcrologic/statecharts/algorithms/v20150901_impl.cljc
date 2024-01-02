@@ -284,21 +284,24 @@
                         targetexpr
                         type
                         typeexpr] :as _send-element}]
-          (let [event-name (!? env event eventexpr)
-                id         (if idlocation (genid "send") id)
-                data       (log/spy :trace
-                             "Computed send event data"
-                             (merge
-                               (named-data env namelist)
-                               (!? env nil content)))]
+          (let [event-name        (!? env event eventexpr)
+                id                (if idlocation (genid "send") id)
+                target            (!? env target targetexpr)
+                target-is-parent? (= target (env/parent-session-id env))
+                data              (log/spy :trace
+                                    "Computed send event data"
+                                    (merge
+                                      (named-data env namelist)
+                                      (!? env nil content)))]
             (when idlocation (sp/update! data-model env {:ops [(ops/assign idlocation id)]}))
-            (sp/send! event-queue env {:send-id           id
-                                       :source-session-id (env/session-id env)
-                                       :event             event-name
-                                       :data              data
-                                       :target            (!? env target targetexpr)
-                                       :type              (or (!? env type typeexpr) ::sc/chart)
-                                       :delay             (or (!? env delay delayexpr) 0)})))]
+            (sp/send! event-queue env (cond-> {:send-id           id
+                                               :source-session-id (env/session-id env)
+                                               :event             event-name
+                                               :data              data
+                                               :target            target
+                                               :type              (or (!? env type typeexpr) ::sc/chart)
+                                               :delay             (or (!? env delay delayexpr) 0)}
+                                        target-is-parent? (assoc :invoke-id (env/invoke-id env))))))]
   (defmethod execute-element-content! :send [env element]
     (log/trace "Send event" element)
     (when-not (send! env element)
@@ -621,6 +624,7 @@
           (sp/send! event-queue env {:target            parent-session-id
                                      :sendid            session-id
                                      :source-session-id session-id
+                                     :invoke-id         invokeid
                                      :event             (keyword (str "done.invoke." invokeid))})))))
   nil)
 
@@ -660,7 +664,7 @@
                  statechart)]
     (in-state-context env parent
       (env/assign! env [:ROOT :_event] event)
-      (when-let [finalize (log/spy :info "finalizers" (chart/get-children statechart invocation :finalize))]
+      (when-let [finalize (log/spy :trace "finalizers" (chart/get-children statechart invocation :finalize))]
         (doseq [f finalize]
           (execute! (assoc env :_event event) f)))
       (env/delete! env [:ROOT :_event]))))
