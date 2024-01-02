@@ -9,7 +9,7 @@
 
 (defn new-uuid []
   #?(:clj  (UUID/randomUUID)
-     :cljs (random-uuid)) )
+     :cljs (random-uuid)))
 
 (defn queue [& args]
   (reduce conj

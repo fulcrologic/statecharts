@@ -8,7 +8,7 @@
    when rendering the chart (TODO). The `choice` macro, for example, includes the conditional expressions as
    strigified notes on the nodes."
   (:require
-    [com.fulcrologic.statecharts.elements :refer [assign transition script state on-entry on-exit Send cancel]]))
+    [com.fulcrologic.statecharts.elements :refer [Send assign cancel on-entry on-exit script state transition]]))
 
 (defn handle
   "Generate a target-less transition with an expression (script node). Basically an event handler.

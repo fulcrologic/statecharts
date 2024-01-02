@@ -6,7 +6,6 @@
    can be generated as only an alias, though an empty namespace of that name does exist."
   (:require
     [clojure.set :as set]
-    [clojure.spec.alpha :as s]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.elements :as elements]
     [com.fulcrologic.statecharts.specs]
@@ -92,7 +91,7 @@
                                                  (fn [acc {:keys [id children] :as n}]
                                                    (let [n (cond-> n
                                                              (seq children) (assoc :children
-                                                                              (mapv :id children)))]
+                                                                                   (mapv :id children)))]
                                                      (cond
                                                        (= :ROOT id) acc
                                                        (and id (contains? acc id))

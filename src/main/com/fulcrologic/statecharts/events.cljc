@@ -3,7 +3,6 @@
 
   Note that there are built-in errors and events https://www.w3.org/TR/scxml/#errorsAndEvents."
   (:require
-    [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.specs]))

@@ -11,9 +11,9 @@
   sp/ExecutionModel
   (run-expression! [_this env expr]
     (if (fn? expr)
-      (let [data       (sp/current-data data-model env)
-            result     (log/spy :trace "expr => " (expr env data))
-            update?    (vector? result)]
+      (let [data    (sp/current-data data-model env)
+            result  (log/spy :trace "expr => " (expr env data))
+            update? (vector? result)]
         (when update?
           (log/trace "trying vector result as a data model update" result)
           (sp/update! data-model env {:ops result}))

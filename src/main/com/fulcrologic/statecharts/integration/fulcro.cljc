@@ -35,19 +35,14 @@
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
-    [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.data-model.operations :as op]
-    [com.fulcrologic.statecharts.elements :as ele]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as cael]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
     [com.fulcrologic.statecharts.execution-model.lambda :as lambda]
     [com.fulcrologic.statecharts.integration.fulcro-impl :as impl]
-    [com.fulcrologic.statecharts.integration.fulcro.operations :as fops]
     [com.fulcrologic.statecharts.invocation.statechart :as i.statechart]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.registry.local-memory-registry :as lmr]
-    [com.fulcrologic.statecharts.util :refer [new-uuid]]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.statecharts.util :refer [new-uuid]]))
 
 (def local-data-path
   "[session-id & ks]
@@ -201,7 +196,7 @@
                               ::sc/execution-model       ex}
                         extra-env)]
          (swap! runtime-atom assoc ::sc/env (assoc env :events-running-atom
-                                              (cael/run-event-loop! env 16)))))
+                                                       (cael/run-event-loop! env 16)))))
      (register-statechart! app impl/master-chart-id impl/application-chart)
      (start! app {:machine    impl/master-chart-id
                   :session-id impl/master-chart-id

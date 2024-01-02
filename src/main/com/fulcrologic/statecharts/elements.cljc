@@ -87,8 +87,8 @@
 
    https://www.w3.org/TR/scxml/#transition"
   [{:keys [event cond target type] :as attrs} & children]
-  (let [t     (if (keyword? target) [target] target)
-        type  (or type :external)]
+  (let [t    (if (keyword? target) [target] target)
+        type (or type :external)]
     (new-element :transition (assoc attrs :target t :type type) children)))
 
 (defn initial

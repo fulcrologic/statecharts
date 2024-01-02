@@ -14,12 +14,12 @@
 
   The `process-next-event!` of this implementation processes all available events in a loop and then returns."
   (:require
+    [clojure.string :as str]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.util :refer [now-ms]]
-    [taoensso.timbre :as log]
-    [clojure.string :as str]))
+    [taoensso.timbre :as log]))
 
 (defn supported-type?
   "Returns true if the given type looks like a statechart type. This is tolerant of the values:

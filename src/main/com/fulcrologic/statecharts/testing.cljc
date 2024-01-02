@@ -3,14 +3,13 @@
   (:require
     [clojure.set :as set]
     [clojure.test :refer [is]]
-    [com.fulcrologic.statecharts.algorithms.v20150901-impl :refer [configuration-problems]]
     [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.algorithms.v20150901-impl :refer [configuration-problems]]
+    [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :refer [new-flat-model]]
-    [com.fulcrologic.statecharts.working-memory-store.local-memory-store :as lms]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
-    [com.fulcrologic.statecharts.chart :as chart]
     [taoensso.timbre :as log]))
 
 (defprotocol Clearable

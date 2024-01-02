@@ -41,8 +41,8 @@
 (s/def ::sc/statechart (s/and
                          (s/keys
                            :opt [::sc/id-ordinals
-                                       ::sc/ids-in-document-order
-                                       ::sc/elements-by-id]
+                                 ::sc/ids-in-document-order
+                                 ::sc/elements-by-id]
                            :opt-un [::sc/id
                                     ::sc/children])))
 

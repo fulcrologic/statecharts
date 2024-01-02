@@ -125,7 +125,7 @@
   nil)
 
 (defn add-ancestor-states-to-enter! [{::sc/keys [statechart] :as env} state ancestor
-                                      states-to-enter states-for-default-entry default-history-content]
+                                     states-to-enter states-for-default-entry default-history-content]
   (doseq [anc (chart/get-proper-ancestors statechart state ancestor)]
     (vswap! states-to-enter conj (chart/element-id statechart anc))
     (when (chart/parallel-state? statechart anc)
@@ -136,7 +136,7 @@
   nil)
 
 (defn add-descendant-states-to-enter! [{::sc/keys [statechart vwmem] :as env}
-                                        state states-to-enter states-for-default-entry default-history-content]
+                                       state states-to-enter states-for-default-entry default-history-content]
   (letfn [(add-elements! [target parent]
             (doseq [s target]
               (add-descendant-states-to-enter! env s states-to-enter
@@ -181,7 +181,7 @@
 
             (chart/history-element? statechart s)
             (let [default-transition (first (chart/transitions statechart s))] ; spec + validation. There will be exactly one
-                   (set/union targets (get-effective-target-states env default-transition)))
+              (set/union targets (get-effective-target-states env default-transition)))
 
             :else (conj targets id))))
       (chart/document-ordered-set statechart)
@@ -677,7 +677,7 @@
                                                   :event    event})))))]
 
   (defn handle-external-invocations! [{::sc/keys [statechart vwmem data-model] :as env}
-                                       {:keys [invokeid] :as external-event}]
+                                      {:keys [invokeid] :as external-event}]
     (doseq [s (::sc/configuration @vwmem)]
       (doseq [{:keys [id idlocation id-location auto-forward? autoforward] :as inv} (map (partial chart/element statechart) (chart/invocations statechart s))
               :let [id (if-let [loc (or idlocation id-location)]

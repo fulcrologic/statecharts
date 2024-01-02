@@ -2,7 +2,6 @@
   "Helper functions related to the environment that can be used in a lambda execution environment on
    `env`."
   (:require
-    [clojure.spec.alpha :as s]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.events :as evts]
