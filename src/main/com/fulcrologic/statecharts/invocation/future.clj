@@ -12,7 +12,6 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.environment :as env]
-    [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
 
@@ -29,19 +28,17 @@
         (sp/send! event-queue env {:target            source-session-id
                                    :sendid            child-session-id
                                    :source-session-id child-session-id
-                                   :event             (evts/new-event {:name :error.platform
-                                                                       :data {:message "Could not invoke future. No function supplied."
-                                                                              :target  src}})})
+                                   :event             :error.platform
+                                   :data              {:message "Could not invoke future. No function supplied."
+                                                       :target  src}})
         (let [f (future
                   (try
                     (let [result (src params)]
                       (sp/send! event-queue env {:target            source-session-id
                                                  :sendid            child-session-id
                                                  :source-session-id child-session-id
-                                                 :event             (evts/new-event {:name done-event-name
-                                                                                     :data (if (map? result)
-                                                                                             result
-                                                                                             {})})}))
+                                                 :event             done-event-name
+                                                 :data              (if (map? result) result {})}))
                     (finally
                       (swap! active-futures dissoc child-session-id))))]
           (swap! active-futures assoc child-session-id f)))
