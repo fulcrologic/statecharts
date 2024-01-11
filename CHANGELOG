@@ -1,3 +1,13 @@
+1.1.5
+-----
+
+Fulcro integration tuning:
+
+* Reduced logging noise
+* Added 4-arity version in the lambda execution model, so event-name and event-data are available in expressions as args 3 and 4 respectively.
+* Changed Fulcro integration to use the 4-arg version of lambda (default is still 2-arg in non-Fulcro, for bw compat in CLJ)
+* Added auto-expansion of fulcro aliases into the `data` arg (2) of the expressions, again for convenience. A warning will show in dev time if there are conflicts on keys.
+
 1.0.0-alpha8
 
 MAJOR REFACTORING AND CLEANUP. SEVERAL BREAKING CHANGES.
