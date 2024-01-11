@@ -172,6 +172,12 @@
            data durable across sessions.
   `:on-delete` - A `(fn [session-id])` that is called when a statechart reaches a final state and is removed.
 
+   IMPORTANT: The execution model for Fulcro calls expressions with 4 args: env, data, event-name, and event-data. The
+   last two are available in `:_event` of `data`, but are passed as addl args for convenience. If you use this
+   in CLJ the arity must match or your expression will crash.
+
+   Additionally, the data model will automatically resolve all aliases into the `data` map in expressions as well.
+
    The statecharts components are installed onto the app itself.
 
    NOTE: There is currently no way to make the event queue durable (across browser reload), so if you do add some kind
@@ -183,7 +189,7 @@
      (when-not (contains? @runtime-atom ::sc/env)
        (let [dm       (impl/new-fulcro-data-model app)
              q        (mpq/new-queue)
-             ex       (lambda/new-execution-model dm q)
+             ex       (lambda/new-execution-model dm q {:explode-event? true})
              registry (lmr/new-registry)
              wmstore  (impl/->FulcroWorkingMemoryStore app on-save on-delete)
              env      (merge {:fulcro/app                app

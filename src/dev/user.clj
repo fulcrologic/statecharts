@@ -2,13 +2,15 @@
   (:require
     [clojure.pprint :refer [pprint]]
     [clojure.spec.alpha :as s]
-    [expound.alpha :as expound]
-    [taoensso.timbre :as log]
     [clojure.string :as str]
-    [taoensso.timbre :as timbre])
+    [clojure.tools.namespace.repl :refer [set-refresh-dirs]]
+    [expound.alpha :as expound]
+    [taoensso.timbre :as log])
   (:import (clojure.lang PersistentQueue)
            (java.io Writer)))
 
+(alter-var-root (var clojure.core/*compiler-options*) assoc :disable-locals-clearing true)
+(set-refresh-dirs "src/dev" "src/main" "src/test")
 (alter-var-root #'s/*explain-out* (constantly expound/printer))
 
 (defmethod print-method PersistentQueue [v ^Writer w]

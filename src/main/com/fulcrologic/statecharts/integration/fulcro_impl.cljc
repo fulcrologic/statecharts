@@ -1,5 +1,6 @@
 (ns com.fulcrologic.statecharts.integration.fulcro-impl
   (:require
+    [clojure.set :as set]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
@@ -137,13 +138,23 @@
   (load-data [_provider processing-env src]
     (let [session-id (senv/session-id processing-env)]
       (when (and session-id src)
+        (log/trace "Initializing (overwrite) local statechart data with" src)
         (swap! (state-atom fulcro-app) assoc-in [::sc/local-data session-id] src))
       (rapp/schedule-render! fulcro-app)))
   (current-data [_provider processing-env]
     (let [session-id (senv/session-id processing-env)
           state-map  (rapp/current-state fulcro-app)
-          local-data (get-in state-map [::sc/local-data session-id])]
-      (assoc local-data :fulcro/state-map state-map)))
+          local-data (get-in state-map [::sc/local-data session-id])
+          aliases    (resolve-aliases {:_event           {:target session-id}
+                                       :fulcro/state-map state-map})]
+      #?(:cljs
+         (when goog.DEBUG
+           (let [lks (set (keys local-data))
+                 aks (set (keys aliases))]
+             (when (seq (set/intersection lks aks))
+               (log/warn
+                 "The fulcro alias names overlap your statechart's local data. The current-data will contain the alias value, not the local one.")))))
+      (assoc (merge local-data aliases) :fulcro/state-map state-map)))
   (get-at [_provider processing-env path]
     (let [state-map  (rapp/current-state fulcro-app)
           session-id (senv/session-id processing-env)

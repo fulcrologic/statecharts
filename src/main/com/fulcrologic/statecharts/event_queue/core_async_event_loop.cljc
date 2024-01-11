@@ -35,7 +35,7 @@
       (enc/catching
         (sp/receive-events! event-queue env
           (fn [env {:keys [target] :as event}]
-            (log/debug "Received event" event)
+            (log/trace "Received event" event)
             (if-not target
               (log/warn "Event did not have a session target. This queue only supports events to charts." event)
               (let [session-id target
@@ -47,5 +47,5 @@
           {}))
       (if @running?
         (recur)
-        (log/info "Event loop ended")))
+        (log/debug "Event loop ended")))
     running?))
