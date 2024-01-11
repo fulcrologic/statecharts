@@ -42,6 +42,6 @@
   ([data-model event-queue]
    (new-execution-model data-model event-queue {}))
   ([data-model event-queue {:keys [explode-event?]}]
-   (->CLJCExecutionModel data-model event-queue true)))
+   (->CLJCExecutionModel data-model event-queue explode-event?)))
 
 

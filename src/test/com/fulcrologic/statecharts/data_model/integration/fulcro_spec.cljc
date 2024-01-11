@@ -36,7 +36,7 @@
         chart          (chart/statechart {}
                          (state {:id :A}
                            (on-entry {}
-                             (script {:expr (fn [_ _]
+                             (script {:expr (fn [_ _ _ _]
                                               [(ops/assign [:fulcro/state :ui/flag?] false)
                                                (ops/assign [:actor/thing :thing/field] "bar")])}))
                            (transition {:event  :ping
