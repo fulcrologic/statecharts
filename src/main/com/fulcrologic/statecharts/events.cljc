@@ -56,20 +56,21 @@
    `type` - :internal, :external, or :platform. Defaults to :external
 
    https://www.w3.org/TR/scxml/#events"
-  [event-name-or-map]
-
-  (if (map? event-name-or-map)
-    (let [{:keys [name data] :as base-event} event-name-or-map]
-      (merge
-        {:type :external}
-        base-event
-        {:name           name
-         :data           (or data {})
-         ::sc/event-name name}))
-    {:type           :external
-     :name           event-name-or-map
-     :data           {}
-     ::sc/event-name event-name-or-map}))
+  ([nm data]
+   (new-event {:name nm :data data}))
+  ([event-name-or-map]
+   (if (map? event-name-or-map)
+     (let [{:keys [name data] :as base-event} event-name-or-map]
+       (merge
+         {:type :external}
+         base-event
+         {:name           name
+          :data           (or data {})
+          ::sc/event-name name}))
+     {:type           :external
+      :name           event-name-or-map
+      :data           {}
+      ::sc/event-name event-name-or-map})))
 
 (defn event-name [event-or-name]
   (if (keyword? event-or-name)

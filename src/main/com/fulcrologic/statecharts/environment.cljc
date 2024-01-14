@@ -56,6 +56,9 @@
 
 (defn raise
   "Place an event on the internal event queue for immediate processing. Only callable from within active runnable content"
-  [{::sc/keys [vwmem]} event]
-  (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event))
-  nil)
+  ([env event-name data]
+   {:pre [(not (map? event-name)) (map? data)]}
+   (raise env {:name event-name :data data}))
+  ([{::sc/keys [vwmem] :as env} event]
+   (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event))
+   nil))

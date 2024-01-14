@@ -25,7 +25,7 @@
                             :as       env} {:keys [invokeid src params]}]
     (log/trace "Start invocation" invokeid src params)
     (let [source-session-id (env/session-id env)
-          child-session-id  (str source-session-id "." invokeid)
+          child-session-id  invokeid
           statechart        (sp/get-statechart statechart-registry src)]
       (if-not statechart
         (do

@@ -463,10 +463,12 @@
 (defn- invocation-details
   [{::sc/keys [statechart
                invocation-processors] :as env} invocation]
-  (let [{:keys [type typeexpr] :as invocation} (chart/element statechart invocation)
-        type (!? env type typeexpr)]
+  (let [{:keys [type typeexpr src srcexpr] :as invocation} (chart/element statechart invocation)
+        type (!? env type typeexpr)
+        src  (!? env src srcexpr)]
     (assoc invocation
       :type type
+      :src src
       :processor (first (filter #(sp/supports-invocation-type? % type) invocation-processors)))))
 
 (letfn [(start-invocation!
