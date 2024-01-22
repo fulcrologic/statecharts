@@ -33,6 +33,7 @@
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
+    [com.fulcrologic.guardrails.malli.core :refer [>def >defn => ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as cael]
@@ -67,7 +68,12 @@
   "
   impl/resolve-aliases)
 
-(defn resolve-actors
+(>def ::expression-data [:map
+                         [:_event
+                          [:map [:target ::sc/id]]]
+                         [:fulcro/state-map :some]])
+
+(>defn resolve-actors
   "Resolve the UI tree(s) for the given actors in a statechart executable element. For example:
 
    ```
@@ -77,6 +83,7 @@
    ```
   "
   [{:keys [_event fulcro/state-map] :as data} & actor-names]
+  [::expression-data [:* :keyword] => [:map-of :keyword map?]]
   (let [session-id (:target _event)
         local-data (get-in state-map (local-data-path session-id))
         actors     (:fulcro/actors local-data)]
@@ -89,17 +96,26 @@
       {}
       actor-names)))
 
-(defn resolve-actor
+(>defn resolve-actor
   "Returns the UI props of a single actor"
   [data actor-name]
+  [::expression-data [:* :keyword] => (? map?)]
   (get (resolve-actors data actor-name) actor-name))
 
-(defn resolve-actor-class
+(>defn resolve-actor-class
   "Returns the current Fulcro component class that is representing `actor-key` if any."
   [data actor-key]
+  [[:map [:fulcro/actors {:optional true} map?]] :keyword => (? [:fn rc/component-class?])]
   (some-> data :fulcro/actors actor-key :component rc/registry-key->class))
 
-(defn actor
+(>def ::ident [:tuple :some :some])
+(>def ::actor [:map
+               [:component qualified-keyword?]
+               [:ident [:or :nil
+                        [:tuple some? some?]]]])
+(>def ::class [:fn rc/component-class?])
+
+(>defn actor
   "Create an actor as part of the statechart data model. Give the actor a unique key at the top level of the data model,
    e.g.:
 
@@ -117,27 +133,35 @@
 
    "
   ([component-class]
+   [::class => ::actor]
    {:component (rc/class->registry-key component-class)
     :ident     (rc/get-ident component-class {})})
   ([component-class ident]
+   [::class ::ident => ::actor]
    {:component (rc/class->registry-key component-class)
     :ident     ident}))
 
+(>def ::fulcro-app [:map [:com.fulcrologic.fulcro.application/runtime-atom :some]])
+(>def ::fulcro-appish [:or
+                       [:map [:com.fulcrologic.fulcro.application/runtime-atom :some]]
+                       [:fn rc/component?]])
 
-(defn register-statechart!
+(>defn register-statechart!
   "Register a `statechart` definition under the (unique) key `k` on the given Fulcro application. You MUST register
    a chart or you will not be able to send events to instances of it."
   [app k statechart]
+  [::fulcro-app :keyword ::sc/statechart => :any]
   (let [registry (-> app :com.fulcrologic.fulcro.application/runtime-atom
                    deref ::sc/env ::sc/statechart-registry)]
     (sp/register-statechart! registry k statechart)))
 
-(defn statechart-env
+(>defn statechart-env
   "Returns the installed statechart env. "
   [app-ish]
+  [::fulcro-appish => ::sc/env]
   (impl/statechart-env app-ish))
 
-(defn start!
+(>defn start!
   "Starts a statechart that is registered as `machine` (keyword) under the provided session-id (default is a random UUID),
    and passes it the provided invocation `data`.
 
@@ -148,6 +172,10 @@
   [app {:keys [machine session-id data]
         :or   {session-id (new-uuid)
                data       {}}}]
+  [::fulcro-appish [:map
+                    [:machine :keyword]
+                    [:session-id {:optional true} ::sc/id]
+                    [:data {:optional true} map?]] => (? ::sc/session-id)]
   (when machine
     (let [env (or
                 (statechart-env app)
@@ -161,7 +189,7 @@
       session-id)))
 
 ;; Might need to defonce this so things don't restart. One coreasync queue. Timers???
-(defn install-fulcro-statecharts!
+(>defn install-fulcro-statecharts!
   "Create a statecharts environment that is set up to work with the given Fulcro app.
 
   Options can include:
@@ -183,8 +211,14 @@
    NOTE: There is currently no way to make the event queue durable (across browser reload), so if you do add some kind
    of statechart durability realize that timed events can get lost.
    "
-  ([app] (install-fulcro-statecharts! app nil))
+  ([app]
+   [::fulcro-app => ::sc/env]
+   (install-fulcro-statecharts! app {}))
   ([app {:keys [extra-env on-save on-delete]}]
+   [::fulcro-app [:map
+                  [:extra-env {:optional true} map?]
+                  [:on-save {:optional true} fn?]
+                  [:on-delete {:optional true} fn?]] => ::sc/env]
    (let [runtime-atom (:com.fulcrologic.fulcro.application/runtime-atom app)]
      (when-not (contains? @runtime-atom ::sc/env)
        (let [dm       (impl/new-fulcro-data-model app)

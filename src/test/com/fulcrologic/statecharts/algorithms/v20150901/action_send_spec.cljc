@@ -1,18 +1,18 @@
 (ns com.fulcrologic.statecharts.algorithms.v20150901.action-send-spec
   (:require
-    [com.fulcrologic.statecharts.elements
-     :refer [state
-             initial
-             parallel
-             final
-             transition
-             raise
-             on-entry
-             on-exit]]
-    [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.guardrails.config :as grc]
     [com.fulcrologic.statecharts.chart :as chart]
+    [com.fulcrologic.statecharts.elements
+     :refer [initial
+             on-entry
+             on-exit
+             raise
+             state
+             transition]]
     [com.fulcrologic.statecharts.testing :as testing]
-    [fulcro-spec.core :refer [specification assertions =>]]))
+    [fulcro-spec.core :refer [=> assertions specification]]))
+
+(grc/clear-exclusions!)
 
 (specification "send1"
   (let [chart (chart/statechart {}

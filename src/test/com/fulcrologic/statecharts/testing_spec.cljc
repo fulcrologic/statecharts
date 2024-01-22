@@ -1,9 +1,9 @@
 (ns com.fulcrologic.statecharts.testing-spec
   (:require
-    [com.fulcrologic.statecharts.elements :refer [state transition]]
     [com.fulcrologic.statecharts.chart :as chart]
-    [fulcro-spec.core :refer [specification assertions component =>]]
-    [com.fulcrologic.statecharts.testing :as testing]))
+    [com.fulcrologic.statecharts.elements :refer [state transition]]
+    [com.fulcrologic.statecharts.testing :as testing]
+    [fulcro-spec.core :refer [=> assertions component specification]]))
 
 (defn is-tuesday? [env data] false)
 

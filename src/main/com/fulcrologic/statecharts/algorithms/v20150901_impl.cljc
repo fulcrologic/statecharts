@@ -9,13 +9,14 @@
   (:require
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
+    [com.fulcrologic.guardrails.malli.core :refer [>defn >defn- => ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.elements :as elements]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.events :as evts :refer [new-event]]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.specs]
+    [com.fulcrologic.statecharts.malli-specs]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.util :refer [genid new-uuid]]
     [taoensso.timbre :as log]))
@@ -60,9 +61,10 @@
     (not (nil? expr)) (sp/run-expression! execution-model env expr)
     :else nil))
 
-(defn- named-data
+(>defn- named-data
   "Convert a element namelist arg into a map of data from the data model."
   [{::sc/keys [data-model] :as env} namelist]
+  [[:map ::sc/data-model] map? => map?]
   (if (map? namelist)
     (reduce-kv
       (fn [acc k location]
@@ -88,8 +90,9 @@
                                    :data              {:error e}
                                    :source-session-id session-id})))))
 
-(defn condition-match
+(>defn condition-match
   [{::sc/keys [statechart] :as env} element-or-id]
+  [::sc/processing-env ::sc/element-or-id => boolean?]
   (let [{:keys [cond]} (chart/element statechart element-or-id)]
     (if (nil? cond)
       true
@@ -98,14 +101,16 @@
         (log/spy :trace
           (boolean (run-expression! env cond)))))))
 
-(defn session-id
+(>defn session-id
   "Returns the unique session id from an initialized `env`."
   [{::sc/keys [vwmem]}]
+  [::sc/processing-env => ::sc/session-id]
   (::sc/session-id @vwmem))
 
-(defn in-final-state?
+(>defn in-final-state?
   "Returns true if `non-atomic-state` is completely done."
   [{::sc/keys [statechart vwmem] :as env} non-atomic-state]
+  [::sc/processing-env (? ::sc/element-or-id) => boolean?]
   (boolean
     (cond
       (chart/compound-state? statechart non-atomic-state) (some
@@ -118,14 +123,16 @@
 
 (declare add-descendant-states-to-enter!)
 
-(defn raise
+(>defn raise
   "Add an event to the internal (working memory) event queue."
   [{::sc/keys [vwmem]} event]
+  [::sc/processing-env ::sc/event-or-name => nil?]
   (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event))
   nil)
 
-(defn add-ancestor-states-to-enter! [{::sc/keys [statechart] :as env} state ancestor
-                                     states-to-enter states-for-default-entry default-history-content]
+(>defn add-ancestor-states-to-enter! [{::sc/keys [statechart] :as env} state ancestor
+                                      states-to-enter states-for-default-entry default-history-content]
+  [::sc/processing-env ::sc/element-or-id ::sc/element-or-id [:fn volatile?] [:fn volatile?] [:fn volatile?] => nil?]
   (doseq [anc (chart/get-proper-ancestors statechart state ancestor)]
     (vswap! states-to-enter conj (chart/element-id statechart anc))
     (when (chart/parallel-state? statechart anc)
@@ -135,8 +142,9 @@
             states-for-default-entry default-history-content)))))
   nil)
 
-(defn add-descendant-states-to-enter! [{::sc/keys [statechart vwmem] :as env}
-                                       state states-to-enter states-for-default-entry default-history-content]
+(>defn add-descendant-states-to-enter! [{::sc/keys [statechart vwmem] :as env}
+                                        state states-to-enter states-for-default-entry default-history-content]
+  [::sc/processing-env ::sc/element-or-id [:fn volatile?] [:fn volatile?] [:fn volatile?] => nil?]
   (letfn [(add-elements! [target parent]
             (doseq [s target]
               (add-descendant-states-to-enter! env s states-to-enter
@@ -165,8 +173,9 @@
                     states-for-default-entry default-history-content))))))))
     nil))
 
-(defn get-effective-target-states
+(>defn get-effective-target-states
   [{::sc/keys [statechart vwmem] :as env} t]
+  [::sc/processing-env ::sc/element-or-id => [:set ::sc/element-or-id]]
   (let [{::sc/keys [history-value]} @vwmem]
     (reduce
       (fn [targets s]
@@ -188,8 +197,9 @@
       (log/spy :trace "target(s)"
         (:target (chart/element statechart t))))))
 
-(defn get-transition-domain
+(>defn get-transition-domain
   [{::sc/keys [statechart] :as env} t]
+  [::sc/processing-env ::sc/element-or-id => (? ::sc/id)]
   (let [tstates (log/spy :trace (get-effective-target-states env t))
         tsource (log/spy :trace (chart/nearest-ancestor-state statechart t))]
     (cond
@@ -200,9 +210,10 @@
         (every? (fn [s] (chart/descendant? statechart s tsource)) tstates)) tsource
       :else (log/spy :trace (:id (chart/find-least-common-compound-ancestor statechart (into (if tsource [tsource] []) tstates)))))))
 
-(defn compute-entry-set!
+(>defn compute-entry-set!
   "Returns [states-to-enter states-for-default-entry default-history-content]."
   [{::sc/keys [vwmem statechart] :as env}]
+  [::sc/processing-env => [:tuple set? set? map?]]
   (let [states-to-enter          (volatile! #{})
         states-for-default-entry (volatile! #{})
         default-history-content  (volatile! {})
@@ -220,9 +231,10 @@
             states-for-default-entry default-history-content))))
     [@states-to-enter @states-for-default-entry @default-history-content]))
 
-(defn initialize-data-model!
+(>defn initialize-data-model!
   "Initialize the data models in volatile working memory `wmem` for the given states, if necessary."
   [{::sc/keys [statechart data-model] :as env} state]
+  [::sc/processing-env ::sc/element-or-id => nil?]
   (log/trace "Initializing data model for" state)
   (let [dm-eles (chart/get-children statechart state :data-model)
         {:keys [src expr]} (chart/element statechart (first dm-eles))]
@@ -315,9 +327,10 @@
   (let [id (!? env sendid sendidexpr)]
     (sp/cancel! event-queue env (env/session-id env) id)))
 
-(defn execute!
+(>defn execute!
   "Run the executable content (immediate children) of s."
   [{::sc/keys [statechart] :as env} s]
+  [::sc/processing-env ::sc/element-or-id => nil?]
   (log/trace "Execute content of" s)
   (let [{:keys [children]} (chart/element statechart s)]
     (doseq [n children]
@@ -329,7 +342,8 @@
           (log/error t "Unexpected exception in content")))))
   nil)
 
-(defn compute-done-data! [{::sc/keys [statechart] :as env} final-state]
+(>defn compute-done-data! [{::sc/keys [statechart] :as env} final-state]
+  [::sc/processing-env ::sc/element-or-id => any?]
   (let [done-element (some->> (chart/get-children statechart final-state :done-data)
                        first
                        (chart/element statechart))]
@@ -337,10 +351,11 @@
       (log/spy :trace "computed done data" (execute-element-content! env done-element))
       {})))
 
-(defn enter-states!
+(>defn enter-states!
   "Enters states, triggers actions, tracks long-running invocations, and
    returns updated working memory."
   [{::sc/keys [statechart vwmem] :as env}]
+  [::sc/processing-env => nil?]
   (let [[states-to-enter
          ;; TODO: Verify states-for-default-entry is kept around correct amount of time!
          states-for-default-entry
@@ -383,14 +398,18 @@
   (log/spy :trace "after enter states: " (::sc/configuration @vwmem))
   nil)
 
-(defn execute-transition-content!
+(>defn execute-transition-content!
   [{::sc/keys [vwmem] :as env}]
+  [::sc/processing-env => nil?]
   (doseq [t (::sc/enabled-transitions @vwmem)]
     (execute! env t))
   nil)
 
-(defn compute-exit-set
+(>defn compute-exit-set
   [{::sc/keys [statechart vwmem] :as env} transitions]
+  [::sc/processing-env [:or
+                        [:set ::sc/element-or-id]
+                        [:sequential ::sc/element-or-id]] => [:set ::sc/id]]
   (let [states-to-exit (volatile! (chart/document-ordered-set statechart))]
     (doseq [t (map #(chart/element statechart %) transitions)]
       (when (contains? t :target)
@@ -400,9 +419,12 @@
               (vswap! states-to-exit conj s))))))
     @states-to-exit))
 
-(defn remove-conflicting-transitions
+(>defn remove-conflicting-transitions
   "Updates working-mem so that enabled-transitions no longer includes any conflicting ones."
   [{::sc/keys [statechart] :as env} enabled-transitions]
+  [::sc/processing-env [:or
+                        [:sequential ::sc/id]
+                        [:set ::sc/id]] => [:set ::sc/id]]
   (log/spy :trace "conflicting?" enabled-transitions)
   (let [filtered-transitions (volatile! (chart/document-ordered-set statechart))]
     (doseq [t1 enabled-transitions
@@ -423,7 +445,8 @@
           (vswap! filtered-transitions conj t1))))
     @filtered-transitions))
 
-(defn select-transitions* [machine configuration predicate]
+(>defn select-transitions* [machine configuration predicate]
+  [::sc/statechart ::sc/configuration ifn? => ::sc/enabled-transitions]
   (let [enabled-transitions (volatile! (chart/document-ordered-set machine))
         looping?            (volatile! true)
         start-loop!         #(vreset! looping? true)
@@ -439,18 +462,20 @@
           (break!))))
     @enabled-transitions))
 
-(defn select-eventless-transitions!
+(>defn select-eventless-transitions!
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [{::sc/keys [statechart vwmem] :as env}]
+  [::sc/processing-env => nil?]
   (let [tns (remove-conflicting-transitions env
               (select-transitions* statechart (::sc/configuration @vwmem)
                 (fn [t] (and (not (:event t)) (condition-match env t)))))]
     (vswap! vwmem assoc ::sc/enabled-transitions tns))
   nil)
 
-(defn select-transitions!
+(>defn select-transitions!
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [{::sc/keys [statechart vwmem] :as env} event]
+  [::sc/processing-env ::sc/event-or-name => ::sc/working-memory]
   (let [tns (log/spy :trace "enabled transitions"
               (remove-conflicting-transitions env
                 (select-transitions* statechart (::sc/configuration @vwmem)
@@ -511,7 +536,8 @@
                                            :source-session-id (session-id env)
                                            :target            (session-id env)})))))]
 
-  (defn run-invocations! [{::sc/keys [statechart vwmem] :as env}]
+  (>defn run-invocations! [{::sc/keys [statechart vwmem] :as env}]
+    [::sc/processing-env => nil?]
     (let [{::sc/keys [states-to-invoke]} @vwmem]
       (doseq [state-to-invoke (chart/in-entry-order statechart states-to-invoke)]
         (in-state-context env state-to-invoke
@@ -521,9 +547,10 @@
       (vswap! vwmem assoc ::sc/states-to-invoke (chart/document-ordered-set statechart)))
     nil))
 
-(defn run-many!
+(>defn run-many!
   "Run the code associated with the given nodes. Does NOT set context id of the nodes run."
   [{::sc/keys [statechart] :as env} nodes]
+  [::sc/processing-env [:sequential ::sc/element-or-id] => nil?]
   (doseq [n nodes]
     (try
       (execute-element-content! env (chart/element statechart n))
@@ -546,16 +573,18 @@
                 (log/trace "Stopping invocation" invokeid)
                 (sp/stop-invocation! processor env {:invokeid invokeid
                                                     :type     type})))))]
-  (defn cancel-active-invocations!
+  (>defn cancel-active-invocations!
     [{::sc/keys [statechart] :as env} state]
+    [::sc/processing-env ::sc/element-or-id => nil?]
     (log/spy :trace "Stopping invocations for " state)
     (doseq [i (chart/invocations statechart state)]
       (stop-invocation! env i))
     nil))
 
-(defn exit-states!
+(>defn exit-states!
   "Does all of the processing for exiting states. Returns new working memory."
   [{::sc/keys [statechart vwmem] :as env}]
+  [::sc/processing-env => nil?]
   (let [{::sc/keys [enabled-transitions
                     states-to-invoke
                     configuration]} @vwmem
@@ -580,16 +609,18 @@
           (vswap! vwmem update ::sc/configuration disj s)))))
   nil)
 
-(defn microstep!
+(>defn microstep!
   [env]
+  [::sc/processing-env => nil?]
   (exit-states! env)
   (execute-transition-content! env)
   (enter-states! env)
   nil)
 
-(defn handle-eventless-transitions!
+(>defn handle-eventless-transitions!
   "Work through eventless transitions, returning the updated working memory"
   [{::sc/keys [vwmem] :as env}]
+  [::sc/processing-env => nil?]
   (let [macrostep-done? (volatile! false)]
     (while (and (::sc/running? @vwmem) (not @macrostep-done?))
       (select-eventless-transitions! env)
@@ -607,15 +638,17 @@
           (microstep! env)))))
   nil)
 
-(defn run-exit-handlers!
+(>defn run-exit-handlers!
   "Run the exit handlers of `state`."
   [{::sc/keys [statechart] :as env} state]
+  [::sc/processing-env ::sc/element-or-id => nil?]
   (in-state-context env state
     (let [nodes (chart/in-document-order statechart (chart/exit-handlers statechart state))]
       (run-many! env nodes)))
   nil)
 
-(defn send-done-event! [env state]
+(>defn send-done-event! [env state]
+  [::sc/processing-env ::sc/element-or-id => nil?]
   (in-state-context env state
     (let [{::sc/keys [vwmem event-queue]} env
           {:org.w3.scxml.event/keys [invokeid]
@@ -630,8 +663,9 @@
                                      :event             (keyword (str "done.invoke." invokeid))})))))
   nil)
 
-(defn exit-interpreter!
+(>defn exit-interpreter!
   [{::sc/keys [statechart vwmem] :as env}]
+  [::sc/processing-env => nil?]
   (let [states-to-exit (chart/in-exit-order statechart (::sc/configuration @vwmem))]
     (doseq [state states-to-exit]
       (run-exit-handlers! env state)
@@ -640,9 +674,10 @@
       (when (and (chart/final-state? statechart state) (= :ROOT (chart/get-parent statechart state)))
         (send-done-event! env state)))))
 
-(defn before-event!
+(>defn before-event!
   "Steps that are run before processing the next event."
   [{::sc/keys [statechart vwmem] :as env}]
+  [::sc/processing-env => nil?]
   (let [{::sc/keys [running?]} @vwmem]
     (if running?
       (loop []
@@ -682,8 +717,9 @@
                                                   :type     type
                                                   :event    event})))))]
 
-  (defn handle-external-invocations! [{::sc/keys [statechart vwmem data-model] :as env}
-                                      {:keys [invokeid] :as external-event}]
+  (>defn handle-external-invocations! [{::sc/keys [statechart vwmem data-model] :as env}
+                                       {:keys [invokeid] :as external-event}]
+    [::sc/processing-env ::sc/event => nil?]
     (doseq [s (::sc/configuration @vwmem)]
       (doseq [{:keys [id idlocation id-location auto-forward? autoforward] :as inv} (map (partial chart/element statechart) (chart/invocations statechart s))
               :let [id (if-let [loc (or idlocation id-location)]
@@ -695,11 +731,15 @@
           (forward-event! env inv external-event))))
     nil))
 
-(defn processing-env
+(>defn processing-env
   "Set up `env` to track live data that is needed during the algorithm."
-  [{::sc/keys [statechart-registry] :as env} statechart-src {:sc/keys                 [session-id
+  [{::sc/keys [statechart-registry] :as env} statechart-src {::sc/keys                [session-id
                                                                                        parent-session-id]
                                                              :org.w3.scxml.event/keys [invokeid] :as wmem}]
+  [::sc/env ::sc/statechart-src [:map
+                                 [::sc/session-id {:optional true}]
+                                 [::sc/parent-session-id {:optional true}]
+                                 [:org.w3.scxml.event/invokeid {:optional true}]] => ::sc/processing-env]
   (if-let [statechart (sp/get-statechart statechart-registry statechart-src)]
     (do
       (log/spy :trace "Processing event on statechart" statechart-src)
@@ -716,11 +756,12 @@
                                 wmem))))
     (throw (ex-info "Statechart not found" {:src statechart-src}))))
 
-(defn process-event!
+(>defn process-event!
   "Process the given `external-event` given a state `machine` with the `working-memory` as its current status/state.
    Returns the new version of working memory which you should save to pass into the next call.  Typically this function
    is called by an overall processing system instead of directly."
   [env external-event]
+  [::sc/processing-env ::sc/event-or-name => ::sc/working-memory]
   (log/spy :trace external-event)
   (let [event (new-event external-event)]
     (with-processing-context env
@@ -735,7 +776,7 @@
   (env/assign! env [:ROOT :_event] nil)
   (some-> env ::sc/vwmem deref))
 
-(defn initialize!
+(>defn initialize!
   "Initializes the state machine and creates an initial working memory for a new machine env.
    Auto-assigns a unique UUID for session ID.
 
@@ -743,6 +784,9 @@
   [{::sc/keys [statechart data-model parent-session-id vwmem] :as env}
    {::sc/keys                [invocation-data statechart-src]
     :org.w3.scxml.event/keys [invokeid]}]
+  [::sc/processing-env [:map
+                        [::sc/invocation-data {:optional true} map?]
+                        [:org.w3.scxml.event/invokeid {:optional true}]] => ::sc/working-memory]
   (let [{:keys [binding script]} statechart
         early? (not= binding :late)
         t      (some->> statechart

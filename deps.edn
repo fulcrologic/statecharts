@@ -1,7 +1,9 @@
 {:paths   ["src/main"]
 
- :deps    {com.taoensso/timbre    {:mvn/version "6.0.4"}
-           org.clojure/core.async {:mvn/version "1.5.640"}}
+ :deps    {com.taoensso/timbre        {:mvn/version "6.0.4"}
+           metosin/malli              {:mvn/version "0.13.0"}
+           com.fulcrologic/guardrails {:mvn/version "1.2.0-SNAPSHOT"}
+           org.clojure/core.async     {:mvn/version "1.6.681"}}
 
  :aliases {:test      {:extra-paths ["src/test"]
                        :extra-deps  {org.clojure/test.check  {:mvn/version "1.1.0"}
@@ -9,7 +11,7 @@
 
            :clj-tests {:extra-paths ["src/test"]
                        :main-opts   ["-m" "kaocha.runner"]
-                       :extra-deps  {lambdaisland/kaocha {:mvn/version "1.60.945"}}}
+                       :extra-deps  {lambdaisland/kaocha {:mvn/version "1.77.1236"}}}
 
            :dev       {:extra-paths ["src/dev" "src/examples"]
                        :extra-deps  {thheller/shadow-cljs                {:mvn/version "2.16.7"}

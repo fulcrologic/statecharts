@@ -1,5 +1,6 @@
-{:defn-macro nil
- :throw?     true
- :emit-spec? true
- :expound    {:show-valid-values? false
-              :print-specs?       false}}
+{:defn-macro          nil
+ :throw?              true
+ :emit-spec?          true
+ :disable-exclusions? true
+ :expound             {:show-valid-values? false
+                       :print-specs?       false}}

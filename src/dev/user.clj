@@ -49,3 +49,8 @@
                    {:min-level :info
                     :output-fn output-fn #_log/default-output-fn}))
 
+
+(comment
+  (require '[kaocha.repl :as k])
+  (k/run-all {:fail-fast? true})
+  )

@@ -1,7 +1,7 @@
 (ns com.fulcrologic.statecharts.util-spec
   (:require
     [com.fulcrologic.statecharts.util :refer [queue]]
-    [fulcro-spec.core :refer [specification assertions =>]]))
+    [fulcro-spec.core :refer [=> assertions specification]]))
 
 (specification "A queue"
   (assertions

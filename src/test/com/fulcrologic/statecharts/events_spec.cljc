@@ -1,7 +1,7 @@
 (ns com.fulcrologic.statecharts.events-spec
   (:require
     [com.fulcrologic.statecharts.events :as evts]
-    [fulcro-spec.core :refer [specification component assertions =>]]))
+    [fulcro-spec.core :refer [=> assertions component specification]]))
 
 (specification "name-match?"
   (assertions

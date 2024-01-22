@@ -17,7 +17,7 @@
     [clojure.set :as set]
     [clojure.string :as str]
     com.fulcrologic.statecharts.specs
-    [clojure.spec.alpha :as s]
+    [com.fulcrologic.guardrails.malli.core :refer [>defn =>]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [genid]]))
 
@@ -91,13 +91,14 @@
         type (or type :external)]
     (new-element :transition (assoc attrs :target t :type type) children)))
 
-(defn initial
+(>defn initial
   "Alias for `(state {:initial? true} (transition-or-target ...))`.
 
    `id` The (optional) ID of this state
 
    https://www.w3.org/TR/scxml/#initial"
   [{:keys [id] :as attrs} transition-or-target]
+  [map? [:or keyword? ::sc/transition-element] => ::sc/state-element]
   (state (merge {:id       (genid "initial")
                  :initial? true} attrs)
     (if (keyword? transition-or-target)

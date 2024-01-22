@@ -1,9 +1,9 @@
 (ns com.fulcrologic.statecharts.chart-spec
   (:require
-    [com.fulcrologic.statecharts.elements :refer [state initial parallel final transition]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [fulcro-spec.core :refer [specification assertions =>]]))
+    [com.fulcrologic.statecharts.elements :refer [final initial parallel state transition]]
+    [fulcro-spec.core :refer [=> assertions specification]]))
 
 
 (let [substates [(initial {:id :I}

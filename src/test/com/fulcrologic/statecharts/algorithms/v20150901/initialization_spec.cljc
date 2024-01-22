@@ -2,15 +2,15 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901-impl :as impl]
+    [com.fulcrologic.statecharts.algorithms.v20150901.setup :refer [test-env]]
+    [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
-    [com.fulcrologic.statecharts.elements :refer [state parallel script
-                                                  initial data-model transition]]
+    [com.fulcrologic.statecharts.elements :refer [data-model initial parallel
+                                                  script state transition]]
     [com.fulcrologic.statecharts.events :as evts]
-    [com.fulcrologic.statecharts.algorithms.v20150901.setup :refer [test-env]]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.chart :as chart]
-    [fulcro-spec.core :refer [specification assertions component =>]]
+    [fulcro-spec.core :refer [=> assertions component specification]]
     [taoensso.timbre :as log]))
 
 (specification "Root parallel state"

@@ -1,9 +1,9 @@
 (ns com.fulcrologic.statecharts.event-queue.manually-polled-queue-spec
   (:require
-    [com.fulcrologic.statecharts.util :refer [now-ms]]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
-    [fulcro-spec.core :refer [specification assertions component behavior => when-mocking]]
-    [com.fulcrologic.statecharts.protocols :as sp]))
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [com.fulcrologic.statecharts.util :refer [now-ms]]
+    [fulcro-spec.core :refer [=> assertions behavior component specification when-mocking]]))
 
 (specification "Manually Polled Queue"
   (let [queue         (mpq/new-queue)

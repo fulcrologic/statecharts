@@ -3,9 +3,8 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901.setup :refer [test-env]]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.elements :refer [state parallel script on-entry
-                                                  Send on-exit final log
-                                                  initial data-model transition]]
+    [com.fulcrologic.statecharts.elements :refer [Send final log on-entry on-exit parallel
+                                                  script state transition]]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.event-queue.event-processing :refer [standard-statechart-event-handler]]
     [com.fulcrologic.statecharts.events :as evts]
@@ -13,9 +12,9 @@
     [com.fulcrologic.statecharts.simple :as simple]
     [com.fulcrologic.statecharts.testing :as testing]
     [com.fulcrologic.statecharts.util :refer [new-uuid]]
-    [fulcro-spec.core :refer [specification assertions component =>]]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.statecharts.working-memory-store.local-memory-store :as lms]))
+    [com.fulcrologic.statecharts.working-memory-store.local-memory-store :as lms]
+    [fulcro-spec.core :refer [=> assertions specification]]
+    [taoensso.timbre :as log]))
 
 (def env (simple/simple-env))
 

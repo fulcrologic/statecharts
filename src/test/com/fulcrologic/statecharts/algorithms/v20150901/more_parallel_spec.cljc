@@ -2,10 +2,10 @@
   (:require
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer
-     [state initial parallel final transition raise on-entry on-exit
-      data-model assign script history log]]
+     [assign data-model on-entry on-exit
+      parallel state transition]]
     [com.fulcrologic.statecharts.testing :as testing]
-    [fulcro-spec.core :refer [specification assertions =>]]
+    [fulcro-spec.core :refer [=> assertions specification]]
     [taoensso.timbre :as log]))
 
 (defn inc-x-expr [_ {:keys [x]}]

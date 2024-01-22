@@ -2,16 +2,15 @@
   (:require
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
-    [com.fulcrologic.statecharts.elements :as ele :refer [state script transition on-entry]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
-    [com.fulcrologic.statecharts.event-queue.event-processing :refer [process-events]]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
+    [com.fulcrologic.statecharts.elements :refer [on-entry script state transition]]
+    [com.fulcrologic.statecharts.event-queue.event-processing :refer [process-events]]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
     [com.fulcrologic.statecharts.integration.fulcro.operations :as fop]
-    [fulcro-spec.core :refer [specification assertions component behavior =>]]
-    [com.fulcrologic.statecharts.protocols :as sp]))
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [fulcro-spec.core :refer [=> assertions component specification]]))
 
 (defsc Thing [this props]
   {:query         [:thing/id :thing/field]

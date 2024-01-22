@@ -6,9 +6,11 @@
    can be generated as only an alias, though an empty namespace of that name does exist."
   (:require
     [clojure.set :as set]
+    [clojure.spec.alpha :as s]
+    [com.fulcrologic.guardrails.malli.core :refer [>defn => ? >defn-]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.elements :as elements]
-    [com.fulcrologic.statecharts.specs]
+    [com.fulcrologic.statecharts.malli-specs]
     [taoensso.timbre :as log]))
 
 ;; I did try to translate all that imperative code to something more functional...got really tiring, and generated
@@ -17,13 +19,15 @@
 ;; The main event loop from the spec is split into `before-event` and `process-event` so it can be
 ;; used in a non-imperative way.
 
-(defn ids-in-document-order
+(>defn ids-in-document-order
   "Returns the IDs of the states in the given node, in document order (not including the node itself).
    You can specify `::sc/document-order :breadth-first` on the top-level chart definition to get a
    depth-first interpretation vs. breadth."
   ([chart]
+   [::sc/statechart => [:vector :keyword]]
    (ids-in-document-order chart chart))
   ([{desired-order ::sc/document-order :as chart} {:keys [id] :as node}]
+   [::sc/statechart ::sc/element => [:vector keyword?]]
    (if (= :breadth-first desired-order)
      (let [states     (:children node)
            base-order (mapv :id states)]
@@ -35,10 +39,11 @@
          id (conj id)
          (seq children) (into (mapcat #(ids-in-document-order chart %) children)))))))
 
-(defn- with-default-initial-state
+(>defn- with-default-initial-state
   "Scans children for an initial state. If no such state is found then it creates one and sets the target to the
    first child that is a state."
   [{:keys [id initial] :as parent} children]
+  [(? ::sc/element) [:sequential ::sc/element] => [:sequential ::sc/element]]
   (let [states (filter #(#{:state :parallel} (:node-type %)) children)]
     (when (and initial (some :initial? states))
       (log/warn "You specified BOTH an :initial attribute and state in element. Preferring the element." id))
@@ -48,10 +53,11 @@
       :else (conj children (elements/initial {}
                              (elements/transition {:target (or initial (:id (first states)))}))))))
 
-(defn- assign-parents
+(>defn- assign-parents
   [{parent-id :id
     initial   :initial
     :as       parent} nodes]
+  [::sc/element [:sequential ::sc/element] => [:vector ::sc/element]]
   (if nodes
     (let [nodes (if (or (nil? parent) (= :ROOT parent-id) (= :state (:node-type parent)))
                   (with-default-initial-state parent nodes)
@@ -65,7 +71,7 @@
         nodes))
     []))
 
-(defn statechart
+(>defn statechart
   "Create a new state chart definition that mimics the structure and semantics of SCXML.
 
   Attributes:
@@ -77,6 +83,11 @@
   :binding - :late or :early (default is :early)
   "
   [{:keys [initial name binding] :as attrs} & children]
+  [[:map
+    [:initial {:optional true} [:or ::sc/id ::sc/ids]]
+    [:name {:optional true} [:or ::sc/id ::sc/ids]]
+    [:binding {:optional true} [:enum :late :early]]]
+   [:* ::sc/element] => ::sc/statechart]
   (let [node             (assoc attrs
                            :id :ROOT
                            :binding (or binding :early)
@@ -116,9 +127,10 @@
   "See `chart`. SCXML-compliant name for top-level element."
   statechart)
 
-(defn element
+(>defn element
   "Find the node in the chart that has the given ID (of any type)"
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => (? ::sc/element)]
   (cond
     (= element-or-id :ROOT) chart
     (and (map? element-or-id)
@@ -131,14 +143,16 @@
     :else
     (get-in chart [::sc/elements-by-id element-or-id])))
 
-(defn element-id
+(>defn element-id
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => (? ::sc/id)]
   (:id (element chart element-or-id)))
 
-(defn get-parent
+(>defn get-parent
   "Get the immediate parent (id) of the given element-or-id. Returns :ROOT if the parent is the root,
    and nil if the element queried is already the root."
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => (? ::sc/id)]
   (cond
     (nil? element-or-id) nil
     (= :ROOT (element-id chart element-or-id)) nil
@@ -146,67 +160,79 @@
             (:parent (element chart element-or-id))
             :ROOT)))
 
-(defn get-children
+(>defn get-children
   "Returns the ID of the child nodes of the given `element-or-id` which
   have the given type."
   [chart element-or-id type]
+  [::sc/statechart (? ::sc/element-or-id) ::sc/node-type => [:vector ::sc/id]]
   (filterv #(= (:node-type (element chart %)) type)
     (:children (element chart element-or-id))))
 
-(defn invocations
+(>defn invocations
   "Returns the IDs of the nodes that are invocations within `element-or-id`"
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => [:vector ::sc/id]]
   (get-children chart element-or-id :invoke))
 
-(defn transitions [chart element-or-id]
+(>defn transitions [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => [:vector ::sc/id]]
   (get-children chart element-or-id :transition))
 
-(defn transition-element
+(>defn transition-element
   "Returns the element that represents the first transition of element-or-id.
    This should only be used on nodes that have a single required transition, such as
    <initial> and <history> nodes."
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => (? ::sc/transition-element)]
   (log/spy :trace "transition element"
     (some->> (transitions chart element-or-id) first (element chart))))
 
-(defn exit-handlers
+(>defn exit-handlers
   "Returns the immediate child elements that are on-exit."
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => [:vector ::sc/on-exit-element]]
   (mapv (partial element chart) (get-children chart element-or-id :on-exit)))
 
-(defn entry-handlers [chart element-or-id]
+(>defn entry-handlers [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => [:vector ::sc/on-entry-element]]
   (mapv (partial element chart) (get-children chart element-or-id :on-entry)))
 
-(defn history-elements [chart element-or-id]
+(>defn history-elements [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => [:vector ::sc/history-element]]
   (mapv #(element chart %) (get-children chart element-or-id :history)))
 
-(defn history-element? [chart element-or-id]
+(>defn history-element? [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => boolean?]
   (boolean
     (= :history (:node-type (element chart element-or-id)))))
 
-(defn final-state? [chart element-or-id]
+(>defn final-state? [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => boolean?]
   (boolean
     (= :final (:node-type (element chart element-or-id)))))
 
-(defn state? [chart element-or-id]
+(>defn state? [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => boolean?]
   (let [n (element chart element-or-id)]
     (boolean
       (and (map? n) (#{:final :state :parallel} (:node-type n))))))
 
-(defn child-states
+(>defn child-states
   "Find all of the immediate children (IDs) of `element-or-id` that are states
    (final, element-or-id, or parallel)"
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => [:vector ::sc/id]]
   (into []
     (concat
       (get-children chart element-or-id :final)
       (get-children chart element-or-id :state)
       (get-children chart element-or-id :parallel))))
 
-(defn initial-element
+(>defn initial-element
   "Returns the element that represents the <initial> element of a compound state element-or-id.
    Returns nil if the element isn't a compound state."
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => (? ::sc/initial-element)]
   (log/spy :trace "initial element"
     (->>
       (child-states chart element-or-id)
@@ -214,20 +240,22 @@
       (filter :initial?)
       first)))
 
-(defn atomic-state?
+(>defn atomic-state?
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => boolean?]
   (boolean
     (and
       (state? chart element-or-id)
       (empty? (child-states chart element-or-id)))))
 
-(defn initial?
+(>defn initial?
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => boolean?]
   (let [{:keys [initial initial?]} (element chart element-or-id)]
     (boolean
       (or initial? initial))))
 
-(defn condition-node?
+(>defn condition-node?
   "Returns true if the given element is ALL of:
 
   * An atomic state
@@ -235,6 +263,7 @@
   * NONE of the transitions require an event
   "
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => boolean?]
   (let [tids (transitions chart element-or-id)]
     (boolean
       (and
@@ -242,21 +271,24 @@
         (> (count tids) 1)
         (every? #(nil? (:event (element chart %))) tids)))))
 
-(defn parallel-state? [chart element-or-id]
+(>defn parallel-state? [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => boolean?]
   (boolean
     (= :parallel (:node-type (element chart element-or-id)))))
 
-(defn compound-state?
+(>defn compound-state?
   "Returns true if the given state contains other states."
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => boolean?]
   (and
     (not (parallel-state? chart element-or-id))
     (not (atomic-state? chart element-or-id))))
 
-(defn nearest-ancestor-state
+(>defn nearest-ancestor-state
   "Returns the ID of the state (if any) that encloses the given element-or-id, or nil if there is no
    ancestor state."
   [chart element-or-id]
+  [::sc/statechart (? ::sc/element-or-id) => (? ::sc/id)]
   (let [p (get-parent chart element-or-id)]
     (cond
       (state? chart p) p
@@ -273,23 +305,26 @@
    Returns the source (nearest ancestor that is a state element) of an element (meant to be used for transitions)."
   nearest-ancestor-state)
 
-(defn all-descendants
+(>defn all-descendants
   "Returns a set of IDs of the (recursive) descendants (children) of s"
   [chart s]
+  [::sc/statechart (? ::sc/element-or-id) => [:set ::sc/id]]
   (if-let [immediate-children (:children (element chart s))]
     (into (set immediate-children)
       (mapcat #(all-descendants chart %) immediate-children))
     #{}))
 
-(defn descendant?
+(>defn descendant?
   [chart s1 s2]
+  [::sc/statechart ::sc/element-or-id (? ::sc/element-or-id) => boolean?]
   (let [s1-id (element-id chart s1)]
     (boolean
       (contains? (all-descendants chart s2) s1-id))))
 
-(defn in-document-order
+(>defn in-document-order
   "Given a set/sequence of actual nodes-or-ids (as maps), returns a vector of those nodes-or-ids, but in document order."
   [chart nodes-or-ids]
+  [::sc/statechart [:every ::sc/element-or-id] => [:vector ::sc/element-or-id]]
   (let [ordered-ids (::sc/ids-in-document-order chart)
         ids         (set (map #(if (map? %) (:id %) %) nodes-or-ids))]
     (vec
@@ -300,13 +335,15 @@
 (defn compare-in-document-order
   "Comparator function returning -1, 0, or 1 to establish the relative order of two element IDs"
   [{::sc/keys [id-ordinals] :as chart} a b]
+  ; [::sc/statechart ::sc/element-or-id ::sc/element-or-id => [:enum -1 0 1]]
   (let [a (element-id chart a)
         b (element-id chart b)]
     (compare (get id-ordinals a) (get id-ordinals b))))
 
-(defn document-ordered-set
+(>defn document-ordered-set
   "Returns a set that keeps the IDs in document order"
   [chart & initial-elements]
+  [::sc/statechart [:* ::sc/id] => set?]
   (into
     (sorted-set-by (partial compare-in-document-order chart))
     initial-elements))
@@ -317,18 +354,21 @@
    Same as in-document-order."
   in-document-order)
 
-(defn in-exit-order
+(>defn in-exit-order
   "The reverse of in-document-order."
   [chart nodes]
+  [::sc/statechart [:every ::sc/element-or-id] => [:vector ::sc/element-or-id]]
   (into [] (reverse (in-document-order chart nodes))))
 
-(defn get-proper-ancestors
+(>defn get-proper-ancestors
   "Returns the node ids from `chart` that are proper ancestors of `element-or-id` (an id or actual element-or-id). If `stopping-element-or-id-or-id`
    is included, then that will stop the retrieval (not including the stopping element-or-id). The results are
    in the ancestry order (i.e. deepest element-or-id first)."
   ([chart element-or-id]
+   [::sc/statechart ::sc/element-or-id => [:vector ::sc/id]]
    (get-proper-ancestors chart element-or-id nil))
   ([chart element-or-id stopping-element-or-id]
+   [::sc/statechart ::sc/element-or-id (? ::sc/element-or-id) => [:vector ::sc/id]]
    (let [stop-id (:id (element chart stopping-element-or-id))]
      (loop [n      element-or-id
             result []]
@@ -337,10 +377,11 @@
            result
            (recur parent-id (conj result parent-id))))))))
 
-(defn find-least-common-compound-ancestor
+(>defn find-least-common-compound-ancestor
   "Returns the ELEMENT that is the common compound ancestor of all the `states`. NOTE: This may be
    the state chart itself. The compound state returned will be the one closest to all of the states."
   [chart states]
+  [::sc/statechart [:every ::sc/element-or-id] => ::sc/element]
   (let [possible-ancestors (conj
                              (into []
                                (comp

@@ -3,10 +3,10 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements
      :refer [assign
-             script
              data-model
              final
              on-entry
+             script
              state
              transition]]
     [com.fulcrologic.statecharts.testing :as testing]

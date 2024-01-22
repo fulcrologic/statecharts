@@ -1,12 +1,12 @@
 (ns com.fulcrologic.statecharts.data-model.working-memory-data-model-spec
   (:require
-    [com.fulcrologic.statecharts.elements :refer [state]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [fulcro-spec.core :refer [specification assertions component behavior =>]]
-    [com.fulcrologic.statecharts.protocols :as sp]))
+    [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
+    [com.fulcrologic.statecharts.elements :refer [state]]
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [fulcro-spec.core :refer [=> assertions component specification]]))
 
 (specification "Working memory model"
   (let [machine  (chart/statechart {}
