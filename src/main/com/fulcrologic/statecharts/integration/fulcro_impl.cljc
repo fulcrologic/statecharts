@@ -246,8 +246,10 @@
                                           (mtrigger! env asm-id error-event error-data))))})))
 
 (defmethod run-fulcro-data-op! :fulcro/invoke-remote [app processing-env operation]
-  (let [session-id (senv/session-id processing-env)]
-    (rc/transact! app [(remote-mutation-delegate (assoc operation :session-id session-id))])))
+  (let [session-id (senv/session-id processing-env)
+        {:keys [tx-options]} operation]
+    (rc/transact! app [(remote-mutation-delegate (assoc operation :session-id session-id))]
+      (or tx-options {}))))
 
 
 (defmethod run-fulcro-data-op! :fulcro/load [app processing-env {:keys [query-root component-or-actor options]}]
@@ -268,12 +270,11 @@
                          (sp/send! event-queue processing-env {:event  error-event
                                                                :data   (or error-data {})
                                                                :target session-id})))
-        component    (if (keyword? component-or-actor)
-                       (some->
-                         (get local-data component-or-actor)
-                         :component
-                         (rc/registry-key->class))
-                       component-or-actor)
+        component    (if-let [component-name (and
+                                               (keyword? component-or-actor)
+                                               (get-in local-data [:fulcro/actors component-or-actor :component]))]
+                       (rc/registry-key->class component-name)
+                       (rc/registry-key->class component-or-actor))
         target       (when target-alias (resolve-alias-path local-data target-alias))
         params       (cond-> (dissoc options ::sc/ok-event ::sc/error-event ::sc/error-data ::sc/ok-data ::sc/target-alias)
                        ok-action (assoc :ok-action ok-action)
