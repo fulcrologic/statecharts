@@ -6,8 +6,7 @@
    can be generated as only an alias, though an empty namespace of that name does exist."
   (:require
     [clojure.set :as set]
-    [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.malli.core :refer [>defn => ? >defn-]]
+    [com.fulcrologic.guardrails.malli.core :refer [=> >defn >defn- ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.elements :as elements]
     [com.fulcrologic.statecharts.malli-specs]
@@ -123,9 +122,7 @@
       (throw (ex-info (str "Illegal top-level node. Root node cannot have: " bad-nodes " elements.") {})))
     node))
 
-(def scxml
-  "See `chart`. SCXML-compliant name for top-level element."
-  statechart)
+(def scxml "Alias for `statechart`." statechart)
 
 (>defn element
   "Find the node in the chart that has the given ID (of any type)"

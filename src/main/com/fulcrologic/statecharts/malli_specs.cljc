@@ -1,8 +1,6 @@
 (ns com.fulcrologic.statecharts.malli-specs
   (:require
-    [malli.core :as m]
     [com.fulcrologic.guardrails.malli.core :refer [>def]]
-    [com.fulcrologic.guardrails.malli.registry :as gr.reg]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.protocols :as sp]))
 

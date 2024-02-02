@@ -1,5 +1,2 @@
 {:exclude #{com.fulcrologic.statecharts.algorithms.v20150901-impl
-            com.fulcrologic.statecharts.chart
-            com.fulcrologic.statecharts.elements
-            com.fulcrologic.statecharts.environment
-            com.fulcrologic.statecharts.events}}
+            com.fulcrologic.statecharts.chart}}

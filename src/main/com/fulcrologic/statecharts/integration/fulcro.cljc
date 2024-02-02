@@ -33,7 +33,7 @@
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
-    [com.fulcrologic.guardrails.malli.core :refer [>def >defn => ?]]
+    [com.fulcrologic.guardrails.malli.core :refer [=> >def >defn ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as cael]

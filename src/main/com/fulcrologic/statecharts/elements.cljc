@@ -16,7 +16,7 @@
   (:require
     [clojure.set :as set]
     [clojure.string :as str]
-    com.fulcrologic.statecharts.specs
+    com.fulcrologic.statecharts.malli-specs
     [com.fulcrologic.guardrails.malli.core :refer [>defn =>]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.util :refer [genid]]))
