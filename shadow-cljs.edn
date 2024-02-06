@@ -6,13 +6,14 @@
                        :test-dir         "resources/public"
                        :ns-regexp        "-(test|spec)$"
                        :compiler-options {:static-fns      false
-                                          :external-config {:guardrails {:throw? true :emit-spec? true}}}}
+                                          :external-config {:guardrails {:throw? true :emit-spec? true
+                                                                         :guardrails/mcps 100}}}}
 
             :ci-tests {:target           :karma
                        :js-options       {:js-provider :shadow}
                        :compiler-options {:static-fns      false ; required for mocking to work
                                           :external-config {:guardrails {:throw? true :emit-spec? true
-                                                                         :guardrails/mcps 400}}}
+                                                                         :guardrails/mcps 100}}}
                        :output-to        "target/ci.js"
                        :ns-regexp        "-(test|spec)$"}}}
 
