@@ -11,7 +11,8 @@
             :ci-tests {:target           :karma
                        :js-options       {:js-provider :shadow}
                        :compiler-options {:static-fns      false ; required for mocking to work
-                                          #_#_:external-config {:guardrails {:throw? true :emit-spec? true}}}
+                                          :external-config {:guardrails {:throw? true :emit-spec? true
+                                                                         :guardrails/mcps 400}}}
                        :output-to        "target/ci.js"
                        :ns-regexp        "-(test|spec)$"}}}
 

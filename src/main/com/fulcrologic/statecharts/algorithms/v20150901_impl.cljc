@@ -64,7 +64,7 @@
 (>defn- named-data
   "Convert a element namelist arg into a map of data from the data model."
   [{::sc/keys [data-model] :as env} namelist]
-  [[:map ::sc/data-model] map? => map?]
+  [[:map ::sc/data-model] (? map?) => map?]
   (if (map? namelist)
     (reduce-kv
       (fn [acc k location]
