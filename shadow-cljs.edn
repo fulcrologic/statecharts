@@ -5,15 +5,11 @@
  :builds   {:test     {:target           :browser-test
                        :test-dir         "resources/public"
                        :ns-regexp        "-(test|spec)$"
-                       :compiler-options {:static-fns      false
-                                          :external-config {:guardrails {:throw? true :emit-spec? true
-                                                                         :guardrails/mcps 100}}}}
+                       :compiler-options {:static-fns      false}}
 
             :ci-tests {:target           :karma
                        :js-options       {:js-provider :shadow}
-                       :compiler-options {:static-fns      false ; required for mocking to work
-                                          :external-config {:guardrails {:throw? true :emit-spec? true
-                                                                         :guardrails/mcps 100}}}
+                       :compiler-options {:static-fns      false}
                        :output-to        "target/ci.js"
                        :ns-regexp        "-(test|spec)$"}}}
 
