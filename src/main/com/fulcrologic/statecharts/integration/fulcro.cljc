@@ -36,6 +36,7 @@
     [com.fulcrologic.guardrails.malli.core :refer [=> >def >defn ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
+    [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as cael]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
     [com.fulcrologic.statecharts.execution-model.lambda :as lambda]
@@ -43,7 +44,8 @@
     [com.fulcrologic.statecharts.invocation.statechart :as i.statechart]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.registry.local-memory-registry :as lmr]
-    [com.fulcrologic.statecharts.util :refer [new-uuid]]))
+    [com.fulcrologic.statecharts.util :refer [new-uuid]]
+    [taoensso.timbre :as log]))
 
 (def local-data-path
   "[session-id & ks]
@@ -69,9 +71,17 @@
   impl/resolve-aliases)
 
 (>def ::expression-data [:map
-                         [:_event
-                          [:map [:target ::sc/id]]]
-                         [:fulcro/state-map :some]])
+                         [:_event {:optional true} [:map [:target ::sc/id]]]
+                         [:fulcro/state-map map?]])
+(>def ::env [:map
+             [:fulcro/app :any]
+             [:com.fulcrologic.statecharts/working-memory-store :any]
+             [:com.fulcrologic.statecharts/processor :any]
+             [:com.fulcrologic.statecharts/event-queue :any]
+             [:com.fulcrologic.statecharts/statechart-registry :any]
+             [:com.fulcrologic.statecharts/statechart :any]
+             [:com.fulcrologic.statecharts/execution-model :any]
+             [:com.fulcrologic.statecharts/vwmem :any]])
 
 (>defn resolve-actors
   "Resolve the UI tree(s) for the given actors in a statechart executable element. For example:
@@ -79,12 +89,18 @@
    ```
    (ele/script
      {:expr (fn [env data]
-              (let [{:actor/keys [form]} (resolve-actors data :actor/form)] ...))})
+              (let [{:actor/keys [form]} (resolve-actors env :actor/form)] ...))})
    ```
+
+   NOTE: You can use `data` instead of `env`, BUT in cases where you don't have an :_event that will fail. It is recommended
+   therefore that you use env.
   "
-  [{:keys [_event fulcro/state-map] :as data} & actor-names]
-  [::expression-data [:* :keyword] => [:map-of :keyword map?]]
-  (let [session-id (:target _event)
+  [{:keys [_event fulcro/state-map fulcro/app] :as data-or-env} & actor-names]
+  [[:or
+    ::env
+    ::expression-data] [:* :keyword] => [:map-of :keyword map?]]
+  (let [session-id (or (:target _event) (env/session-id data-or-env))
+        state-map  (or state-map (rapp/current-state app))
         local-data (get-in state-map (local-data-path session-id))
         actors     (:fulcro/actors local-data)]
     (reduce
@@ -97,10 +113,13 @@
       actor-names)))
 
 (>defn resolve-actor
-  "Returns the UI props of a single actor"
-  [data actor-name]
-  [::expression-data [:* :keyword] => (? map?)]
-  (get (resolve-actors data actor-name) actor-name))
+  "Returns the UI props of a single actor. Use env. `data` is allowed to prevent a non-breaking change, but doens't work
+   when a non-even predicate is evaluated."
+  [data-or-env actor-name]
+  [[:or
+    ::env
+    ::expression-data] [:* :keyword] => (? map?)]
+  (get (resolve-actors data-or-env actor-name) actor-name))
 
 (>defn resolve-actor-class
   "Returns the current Fulcro component class that is representing `actor-key` if any."

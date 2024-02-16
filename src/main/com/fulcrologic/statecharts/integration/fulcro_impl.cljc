@@ -55,8 +55,9 @@
              [path-key]))
          alias-path)))))
 
-(defn resolve-aliases [{:keys [_event fulcro/state-map] :as data}]
-  (let [session-id (:target _event)
+(defn resolve-aliases [{:keys [_event fulcro/app fulcro/state-map] :as env-or-data}]
+  (let [session-id (or (:target _event) (senv/session-id env-or-data))
+        state-map  (or state-map (rapp/current-state app))
         local-data (get-in state-map (local-data-path session-id))
         aliases    (get local-data :fulcro/aliases)]
     (reduce
@@ -285,11 +286,13 @@
 
 (defmutation do-apply-action [{:keys [f args]}]
   (action [{:keys [state]}]
-    (swap! state (fn [s] (apply s f args)))))
+    (try
+      (swap! state apply f args)
+      (catch #?(:cljs :default :clj Throwable) t
+        (log/error "Apply action failed:" {:f f :args args})))))
 
 (defmethod run-fulcro-data-op! :fulcro/apply-action [app _processing-env {:keys [f args]}]
   (rc/transact! app [(do-apply-action {:f f :args args})]))
-
 
 (def master-chart-id :com.fulcrologic.fulcro/master-statechart)
 
