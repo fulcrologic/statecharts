@@ -287,7 +287,7 @@
 (defmutation do-apply-action [{:keys [f args]}]
   (action [{:keys [state]}]
     (try
-      (swap! state apply f args)
+      (swap! state (fn [s] (apply f s args)))
       (catch #?(:cljs :default :clj Throwable) t
         (log/error "Apply action failed:" {:f f :args args})))))
 
