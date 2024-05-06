@@ -122,6 +122,8 @@
 
 (defn- expr-label [stmts] (str/join "\n" (map pr-str stmts)))
 
+(declare script)
+
 (defmacro exit-fn
   "A macro that emits a `on-exit` element, but looks more like a normal CLJC lambda:
 
@@ -137,9 +139,9 @@
 
   "
   [[env-sym data-sym] & body]
-  `(on-exit {:diagram/label ~(expr-label body)
-             :expr          (fn [~env-sym ~data-sym]
-                              ~@body)}))
+  `(on-exit {:diagram/label ~(expr-label body)}
+     (script {:expr (fn [~env-sym ~data-sym]
+                      ~@body)})))
 
 (defmacro entry-fn
   "A macro that emits a `on-entry` element, but looks more like a normal CLJC lambda:
@@ -156,9 +158,9 @@
 
   "
   [[env-sym data-sym] & body]
-  `(on-entry {:diagram/label ~(expr-label body)
-              :expr          (fn [~env-sym ~data-sym]
-                               ~@body)}))
+  `(on-entry {:diagram/label ~(expr-label body)}
+     (script {:expr (fn [~env-sym ~data-sym]
+                      ~@body)})))
 
 
 (defn history
