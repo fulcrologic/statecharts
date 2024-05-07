@@ -128,13 +128,14 @@
   "A macro that emits a `on-exit` element, but looks more like a normal CLJC lambda:
 
   ```
-  (sfn [env data] ...)
+  (exit-fn [env data] ...body...)
   ```
 
   is shorthand for
 
   ```
-  (script {:expr (fn [env data] ...)})
+  (on-exit {}
+    (script {:expr (fn [env data] ...body...)}))
   ```
 
   "
@@ -153,7 +154,8 @@
   is shorthand for
 
   ```
-  (on-entry {:expr (fn [env data] ...)})
+  (on-entry {}
+    (script {:expr (fn [env data] ...)})
   ```
 
   "
@@ -252,7 +254,7 @@
   "A macro that emits a `script` element, but looks more like a normal CLJC lambda:
 
   ```
-  (sfn [env data] ...)
+  (script-fn [env data] ...)
   ```
 
   is shorthand for

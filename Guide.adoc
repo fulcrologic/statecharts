@@ -341,7 +341,7 @@ in CLJC as lambdas:
   (script {:expr (fn [env data] ...)}))
 -----
 
-There is a macro version of the `script` element called `sfn` that can be used as a shorthand for
+There is a macro version of the `script` element called `script-fn` that can be used as a shorthand for
 script elements:
 
 [source]
@@ -349,7 +349,7 @@ script elements:
 ;; Use `data` to compute when this transition is "enabled"
 (transition {:event :a :cond (fn [env data] (your-predicate data))}
   ;; Run some arbitrary code on this transition
-  (sfn [env data] ...)))
+  (script-fn [env data] ...)))
 -----
 
 
