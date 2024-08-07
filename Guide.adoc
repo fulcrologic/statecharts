@@ -649,7 +649,7 @@ on the chart itself, but defining actors at runtime:
 
 The above code defines a chart that will have `:fulcro/aliases` on the local data model
 because of the statechart definition, and will have a runtime value for the `:fulcro/actors` based
-on data that was passed during start. Anthing initialized this way will go into the local data
+on data that was passed during start. Anything initialized this way will go into the local data
 store (which is a path based on the session id in the app database).
 
 Changing aliases and actors on the fly is therefore a simple matter of doing an `op/assign` operation on

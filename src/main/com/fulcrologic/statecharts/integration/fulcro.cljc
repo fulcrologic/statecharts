@@ -27,7 +27,7 @@
   Future expressions would see the `:local` key in the `data` argument, and would also find the full Fulcro
   state map in `:fulcro/state-map`.
 
-  See also `fulcro.adoc` in this namespace folder.
+  See also 'Integration with Fulcro' in Guide.adoc.
   "
   (:require
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
@@ -113,7 +113,7 @@
       actor-names)))
 
 (>defn resolve-actor
-  "Returns the UI props of a single actor. Use env. `data` is allowed to prevent a non-breaking change, but doens't work
+  "Returns the UI props of a single actor. Use env. `data` is allowed to prevent a non-breaking change, but doesn't work
    when a non-even predicate is evaluated."
   [data-or-env actor-name]
   [[:or

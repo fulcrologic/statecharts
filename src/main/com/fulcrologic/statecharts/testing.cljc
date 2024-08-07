@@ -77,7 +77,7 @@
         (not (fn? expr)) expr))))
 
 (defn new-mock-execution
-  "Create a mock exection model. Records the expressions seen. If the expression has an
+  "Create a mock execution model. Records the expressions seen. If the expression has an
    entry in the supplied `mocks` map, then if it is a fn, it will be called with `env` which
    will contain the normal stuff along with `:ncalls` (how many times that expression has been
    called). Otherwise the value in the map is returned.
@@ -113,7 +113,7 @@
   (sent? [_ required-elements-of-send-request]
     "Checks that a send request was submitted that had at LEAST the elements of
      `required-elements-of-send-request` in it. If the value of an element in the
-     required elelments is a `fn?`, then it will be treated as a predicate.")
+     required elements is a `fn?`, then it will be treated as a predicate.")
   (cancelled? [_ session-id send-id]
     "Checks that an attempt was made to cancel the send with the given id."))
 
