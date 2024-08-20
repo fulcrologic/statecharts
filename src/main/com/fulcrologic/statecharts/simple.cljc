@@ -35,7 +35,7 @@
 
    ```
    (def env (simple-env))
-   (env/register! env ::chart some-chart)
+   (register! env ::chart some-chart)
    (def processor (::sc/processor env))
    (def s0 (sp/start! processor env ::chart {::sc/session-id 42}))
    (def s1 (sp/process-event! processor env s0 event))

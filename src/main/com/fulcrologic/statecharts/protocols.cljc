@@ -1,7 +1,7 @@
 (ns com.fulcrologic.statecharts.protocols
   "Protocols for the various pluggable bits of this library:
 
-   Processor - A state machine processing algorithm. See com.fuclrologic.statecharts.algorithms.
+   Processor - A state machine processing algorithm. See com.fulcrologic.statecharts.algorithms.
    EventQueue - An external event queue for cross (and loopback) communication of machines and external services.
    DataModel - A model for saving/fetching data that can be directly manipulated by a state machine.
    ExecutionModel - A component that implements the interpretation of runnable code in the machine.

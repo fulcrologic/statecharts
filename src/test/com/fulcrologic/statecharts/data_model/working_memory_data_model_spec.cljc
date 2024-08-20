@@ -99,7 +99,7 @@
         "Assignments are merged into the root, but paths work as assoc-in"
         (dissoc (::wmdm/data-model @vwmem) :z) => {:x 1 :y 42 :a {:b {:c 99}
                                                                   :c 100}}
-        "Special root paths are propertly processed"
+        "Special root paths are properly processed"
         (select-keys (::wmdm/data-model @vwmem) [:z]) => {:z 3}))
 
     (component "get-at"

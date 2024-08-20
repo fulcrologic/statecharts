@@ -88,7 +88,7 @@
   (simple/send! env {:target session-id
                      :event  :swap})
 
-  ;; With autoforard on, we can ferry events though to the child
+  ;; With autoforward on, we can ferry events though to the child
   (simple/send! env {:target session-id
                      :event  :child/swap})
 

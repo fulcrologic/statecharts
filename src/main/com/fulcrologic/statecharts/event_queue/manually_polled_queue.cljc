@@ -1,6 +1,6 @@
 (ns com.fulcrologic.statecharts.event-queue.manually-polled-queue
   "An event queue that does NOT process event delays via any kind of notification system. Delayed events will
-  be queued, and will be kept invisible until you ask for an event AFTER the timout of the event has occured.
+  be queued, and will be kept invisible until you ask for an event AFTER the timout of the event has occurred.
   This means you must manually poll this queue.
 
   This queue DOES support any number of sessions, and maintains separate tracking for each.
@@ -12,7 +12,7 @@
 
   This allows you to implement your delivery mechanism in concert with your overall system.
 
-  The `process-next-event!` of this implementation processes all available events in a loop and then returns."
+  The `receive-events!` of this implementation processes all available events in a loop and then returns."
   (:require
     [clojure.string :as str]
     [com.fulcrologic.statecharts :as sc]
@@ -60,7 +60,7 @@
             (fn [{event-send-id ::sc/send-id}] (= send-id event-send-id))
             q)))))
   (receive-events! [this env handler]
-    ;; Run the events whose delivery time is before "now" for session-id
+    ;; Run the events whose delivery time is before "now" for all sessions registered
     (doseq [sid (keys @session-queues)]
       (sp/receive-events! this env handler {:session-id sid})))
   (receive-events! [this env handler {:keys [session-id]}]
@@ -83,7 +83,7 @@
           (try
             (handler env event)
             (catch #?(:clj Throwable :cljs :default) e
-              (log/error e "Event handler threw an execption"))))))))
+              (log/error e "Event handler threw an exception"))))))))
 
 (defn new-queue []
   (->ManuallyPolledQueue (atom {})))

@@ -87,5 +87,5 @@
     (::sc/event-name event-or-name)))
 
 (def cancel-event
-  "An event anme that will cause the state machine to exit."
+  "An event name that will cause the state machine to exit."
   ::cancel)

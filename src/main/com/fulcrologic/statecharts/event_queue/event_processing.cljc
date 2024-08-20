@@ -19,7 +19,7 @@
         (log/error "Session had no working memory. Event to session ignored" session-id)))))
 
 (defn process-events
-  "Processes events that are ready on the event queue. Syncrhonous. Returns as soon as the events
+  "Processes events that are ready on the event queue. Synchronous. Returns as soon as the events
    are complete."
   [{::sc/keys [processor working-memory-store event-queue] :as env}]
   (sp/receive-events! event-queue env
