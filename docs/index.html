@@ -1574,7 +1574,7 @@ there is also support for futures (which are cancelled if the state containing t
   (simple/send! env {<span class="symbol">:target</span> session-id
                      <span class="symbol">:event</span>  <span class="symbol">:swap</span>})
 
-  <span class="comment">;; With autoforard on, we can ferry events though to the child</span>
+  <span class="comment">;; With autoforward on, we can ferry events though to the child</span>
   (simple/send! env {<span class="symbol">:target</span> session-id
                      <span class="symbol">:event</span>  <span class="symbol">:child/swap</span>})
 
@@ -2023,7 +2023,7 @@ on the chart itself, but defining actors at runtime:</p>
 <div class="paragraph">
 <p>The above code defines a chart that will have <code>:fulcro/aliases</code> on the local data model
 because of the statechart definition, and will have a runtime value for the <code>:fulcro/actors</code> based
-on data that was passed during start. Anthing initialized this way will go into the local data
+on data that was passed during start. Anything initialized this way will go into the local data
 store (which is a path based on the session id in the app database).</p>
 </div>
 <div class="paragraph">
@@ -2603,7 +2603,7 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2024-05-07 15:25:06 -0700
+Last updated 2024-08-19 21:19:02 -0700
 </div>
 </div>
 </body>
