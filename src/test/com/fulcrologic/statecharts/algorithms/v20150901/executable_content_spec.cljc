@@ -6,7 +6,7 @@
     [com.fulcrologic.statecharts.elements :refer [Send final log on-entry on-exit parallel
                                                   script state transition]]
     [com.fulcrologic.statecharts.environment :as env]
-    [com.fulcrologic.statecharts.event-queue.event-processing :refer [standard-statechart-event-handler]]
+    [com.fulcrologic.statecharts.event-queue.event-processing :as sc.event-processing :refer [standard-statechart-event-handler]]
     [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
@@ -177,3 +177,30 @@
         "Includes that content in the events"
         (every? #(= (:data %) {:x 1}) @events) => true))))
 
+(specification "cond function that throws, disables the transition"
+  (let [env                      (simple/simple-env)
+        session-id               (new-uuid)
+        throwing-cond-statechart (chart/statechart {}
+                                   (state {:id :start}
+                                     (transition {:event  :try-to-transition
+                                                  :target :next
+                                                  :cond   (fn [_env data]
+                                                            (when (get-in data [:_event :data ::please-throw])
+                                                              (throw (ex-info "Oops" {})))
+                                                            true)}))
+                                   (state {:id :next}))]
+
+    (simple/register! env ::throwing-cond-statechart throwing-cond-statechart)
+    (simple/start! env ::throwing-cond-statechart session-id)
+
+    (simple/send! env {:event :try-to-transition :data {::please-throw true} :target session-id})
+    (sc.event-processing/process-events env)
+
+    (assertions "cond threw, no transition"
+      (testing/in? {:session-id session-id :env env} :start) => true)
+
+    (simple/send! env {:event :try-to-transition :target session-id})
+    (sc.event-processing/process-events env)
+
+    (assertions "cond did not throw, transition"
+      (testing/in? {:session-id session-id :env env} :next) => true)))

@@ -88,7 +88,9 @@
         (sp/send! event-queue env {:event             :error.execution
                                    :send-id           session-id
                                    :data              {:error e}
-                                   :source-session-id session-id})))))
+                                   :source-session-id session-id})
+        ; Expression failed to run
+        nil))))
 
 (>defn condition-match
   [{::sc/keys [statechart] :as env} element-or-id]
