@@ -65,7 +65,7 @@
                 (if (map? data)
                   (do
                     (log/trace "Loaded" data "into context" state-id)
-                    (vswap! vwmem ::data-model assoc state-id data))
+                    (vswap! vwmem assoc-in [::data-model state-id] data))
                   (log/error "Unable to use loaded data from" src "because it is not a map.")))
               (catch #?(:clj Throwable :cljs :default) e
                 (log/error e "Unable to load data from" src)))
@@ -156,7 +156,7 @@
                 (if (map? data)
                   (do
                     (log/trace "Loaded" data "into context" state-id)
-                    (vswap! vwmem ::data-model assoc state-id data))
+                    (vswap! vwmem assoc ::data-model data))
                   (log/error "Unable to use loaded data from" src "because it is not a map.")))
               (catch #?(:clj Throwable :cljs :default) e
                 (log/error e "Unable to load data from" src)))
