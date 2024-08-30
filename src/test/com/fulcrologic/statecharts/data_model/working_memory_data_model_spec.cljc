@@ -62,7 +62,18 @@
 
       (assertions
         "removes the value"
-        (sp/get-at DM (context :ROOT) :z) => nil))))
+        (sp/get-at DM (context :ROOT) :z) => nil))
+
+    (component "load-data"
+      (let [slurp-able-data (char-array (pr-str {::loaded :data-loaded-from-src}))
+            more-slurp-able-data (char-array (pr-str {::loaded :data-loaded-from-src-into-context}))]
+
+        (sp/load-data DM (context :ROOT) slurp-able-data)
+        (sp/load-data DM (context :A/a) more-slurp-able-data)
+
+        (assertions "Data loaded in"
+          (sp/get-at DM (context :ROOT) ::loaded) => :data-loaded-from-src
+          (sp/get-at DM (context :A/a) ::loaded) => :data-loaded-from-src-into-context)))))
 
 (specification "Flat Working memory model" :focus
   (let [machine  (chart/statechart {}
@@ -118,4 +129,12 @@
         (sp/get-at DM (context :ROOT) [:a :b]) => nil
         (sp/get-at DM (context :ROOT) :z) => nil
         "Leaves surrounding data"
-        (sp/get-at DM (context :ROOT) [:a :c]) => 100))))
+        (sp/get-at DM (context :ROOT) [:a :c]) => 100))
+
+    (component "load-data"
+      (let [slurp-able-data (char-array (pr-str {::loaded :data-loaded-from-src}))]
+
+        (sp/load-data DM (context :ROOT) slurp-able-data)
+
+        (assertions "Data loaded in"
+          (sp/get-at DM (context :ROOT) ::loaded) => :data-loaded-from-src)))))
