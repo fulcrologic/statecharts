@@ -3,6 +3,9 @@
      (:import (clojure.lang PersistentQueue)
               (java.util UUID Date))))
 
+#?(:clj
+   (def ^:dynamic *java-clock* nil))
+
 (defn genid
   "Generate a unique ID with a base prefix. Like `gensym` but returns a keyword."
   [s] (keyword (str (gensym (name s)))))
@@ -18,7 +21,9 @@
     args))
 
 (defn now-ms []
-  #?(:clj  (inst-ms (Date.))
+  #?(:clj  (if *java-clock*
+             (.millis *java-clock*)
+             (inst-ms (Date.)))
      :cljs (inst-ms (js/Date.))))
 
 (defn extend-key
