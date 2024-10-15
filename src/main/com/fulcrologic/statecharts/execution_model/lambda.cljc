@@ -18,11 +18,15 @@
                                                    (expr env data event-name event-data))
                                                  (expr env data)))
             update? (vector? result)]
+        ;; FIXME: The update logic should NOT be in the execution model! Possibly hard to move without breakage...
+        ;; It makes nodes like `assign` and `log` possibly try to run ops, which it should not.
         (when update?
           (log/trace "trying vector result as a data model update" result)
           (sp/update! data-model env {:ops result}))
         result)
       (let [update? (vector? expr)]
+        ;; FIXME: The update logic should NOT be in the execution model! Possibly hard to move without breakage...
+        ;; It makes nodes like `assign` and `log` possibly try to run ops, which it should not.
         (when update?
           (log/trace "trying vector result as a data model update" expr)
           (sp/update! data-model env {:ops expr}))
