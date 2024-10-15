@@ -65,7 +65,7 @@
                 (if (map? data)
                   (do
                     (log/trace "Loaded" data "into context" state-id)
-                    (vswap! vwmem ::data-model assoc state-id data))
+                    (vswap! vwmem update ::data-model assoc state-id data))
                   (log/error "Unable to use loaded data from" src "because it is not a map.")))
               (catch #?(:clj Throwable :cljs :default) e
                 (log/error e "Unable to load data from" src)))
@@ -151,12 +151,11 @@
   sp/DataModel
   (load-data [provider {::sc/keys [vwmem] :as env} src]
     #?(:clj (try
-              (let [data     (edn/read-string (slurp src))
-                    state-id (or (env/context-element-id env) :ROOT)]
+              (let [data (edn/read-string (slurp src))]
                 (if (map? data)
                   (do
-                    (log/trace "Loaded" data "into context" state-id)
-                    (vswap! vwmem ::data-model assoc state-id data))
+                    (log/trace "Loaded" data "into root data of model")
+                    (vswap! vwmem update ::data-model merge data))
                   (log/error "Unable to use loaded data from" src "because it is not a map.")))
               (catch #?(:clj Throwable :cljs :default) e
                 (log/error e "Unable to load data from" src)))

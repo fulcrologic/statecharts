@@ -4,11 +4,35 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
-    [com.fulcrologic.statecharts.elements :refer [state]]
+    [com.fulcrologic.statecharts.elements :as ele :refer [state]]
     [com.fulcrologic.statecharts.protocols :as sp]
     [fulcro-spec.core :refer [=> assertions component specification]]))
 
 (specification "Working memory model"
+  #?(:clj
+     (component "initial load"
+       (let [machine  (chart/statechart {}
+                        (ele/data-model {:expr (fn [& _]
+                                                 {:a 1})})
+                        (state {:id :A}
+                          (state {:id :A/a})))
+             DM       (wmdm/new-model)
+             vwmem    (volatile! {})
+             mock-env {::sc/statechart      machine
+                       ::sc/data-model      DM
+                       ::sc/execution-model (reify sp/ExecutionModel)
+                       ::sc/event-queue     (reify sp/EventQueue)
+                       ::sc/vwmem           vwmem}
+             context  (fn [c] (assoc mock-env ::sc/context-element-id c))
+             f        (java.io.File/createTempFile "foo" "data")]
+
+         (spit f "{:a 1}")
+
+         (sp/load-data DM (context :A) (.getAbsolutePath f))
+
+         (assertions
+           "Places values into the correct context in working memory"
+           (::wmdm/data-model @vwmem) => {:A {:a 1}}))))
   (let [machine  (chart/statechart {}
                    (state {:id :A}
                      (state {:id :A/a})))
@@ -65,6 +89,30 @@
         (sp/get-at DM (context :ROOT) :z) => nil))))
 
 (specification "Flat Working memory model" :focus
+  #?(:clj
+     (component "initial load"
+       (let [machine  (chart/statechart {}
+                        (ele/data-model {:expr (fn [& _]
+                                                 {:a 1})})
+                        (state {:id :A}
+                          (state {:id :A/a})))
+             DM       (wmdm/new-flat-model)
+             vwmem    (volatile! {})
+             mock-env {::sc/statechart      machine
+                       ::sc/data-model      DM
+                       ::sc/execution-model (reify sp/ExecutionModel)
+                       ::sc/event-queue     (reify sp/EventQueue)
+                       ::sc/vwmem           vwmem}
+             context  (fn [c] (assoc mock-env ::sc/context-element-id c))
+             f        (java.io.File/createTempFile "foo" "data")]
+
+         (spit f "{:a 1}")
+
+         (sp/load-data DM (context :A) (.getAbsolutePath f))
+
+         (assertions
+           "Places values into the correct context in working memory"
+           (::wmdm/data-model @vwmem) => {:a 1}))))
   (let [machine  (chart/statechart {}
                    (state {:id :A}
                      (state {:id :A/a})))
