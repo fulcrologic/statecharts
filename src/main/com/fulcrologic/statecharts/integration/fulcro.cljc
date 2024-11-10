@@ -188,7 +188,7 @@
    a final state.
 
    Returns the new session-id of the statechart."
-  [app {:keys [machine session-id data]
+  [app-ish {:keys [machine session-id data]
         :or   {session-id (new-uuid)
                data       {}}}]
   [::fulcro-appish [:map
@@ -197,8 +197,8 @@
                     [:data {:optional true} map?]] => (? ::sc/session-id)]
   (when machine
     (let [env (or
-                (statechart-env app)
-                (throw (ex-info "Statecharts are not installed on that app." {})))
+                (statechart-env app-ish)
+                (throw (ex-info "Statecharts are not installed." {})))
           {::sc/keys [processor working-memory-store]} env
           s0  (sp/start! processor env machine (cond-> {::sc/session-id                                session-id
                                                         :org.w3.scxml.event/invokeid                   (new-uuid)

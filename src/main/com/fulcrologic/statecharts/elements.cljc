@@ -139,10 +139,9 @@
   ```
 
   "
-  [[env-sym data-sym] & body]
+  [arglist & body]
   `(on-exit {:diagram/label ~(expr-label body)}
-     (script {:expr (fn [~env-sym ~data-sym]
-                      ~@body)})))
+     (script {:expr (fn ~arglist ~@body)})))
 
 (defmacro entry-fn
   "A macro that emits a `on-entry` element, but looks more like a normal CLJC lambda:
@@ -159,10 +158,9 @@
   ```
 
   "
-  [[env-sym data-sym] & body]
+  [arglist & body]
   `(on-entry {:diagram/label ~(expr-label body)}
-     (script {:expr (fn [~env-sym ~data-sym]
-                      ~@body)})))
+     (script {:expr (fn ~arglist ~@body)})))
 
 
 (defn history
@@ -263,11 +261,11 @@
   (script {:expr (fn [env data] ...)})
   ```
 
+  You can include the number of args that your execution env expects.
   "
-  [[env-sym data-sym] & body]
+  [arglist & body]
   `(script {:diagram/label ~(expr-label body)
-            :expr          (fn [~env-sym ~data-sym]
-                             ~@body)}))
+            :expr          (fn ~arglist ~@body)}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; External Communication
