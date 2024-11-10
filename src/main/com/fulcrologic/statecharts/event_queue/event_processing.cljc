@@ -24,7 +24,7 @@
   [{::sc/keys [processor working-memory-store event-queue] :as env}]
   (sp/receive-events! event-queue env
     (fn [env {:keys [target] :as event}]
-      (log/debug "Received event" event)
+      (log/info "Received event" event)
       (if-not target
         (log/warn "Event did not have a session target. This queue only supports events to charts." event)
         (let [session-id target

@@ -149,7 +149,7 @@
   sp/EventQueue
   (send! [_ e r] (sp/send! (::sc/event-queue env) e r))
   (cancel! [_ e s si] (sp/cancel! (::sc/event-queue env) e s si))
-  (receive-events! [_ _ _ _])
+  (receive-events! [_ e s si] (sp/receive-events! (::sc/event-queue env) e s si))
   sp/Processor
   (start! [_ env k options] (sp/start! (::sc/processor env) env k options))
   (process-event! [_ env wm evt] (sp/process-event! (::sc/processor env) env wm evt))
@@ -179,18 +179,18 @@
    The default data model is the flat working memory model, the default processor is the v20150901 version,
    and the validator checks things according to that same version.
    "
-  [{:keys [statechart processor-factory data-model-factory validator session-id mocking-options]
+  [{:keys [statechart processor-factory data-model-factory event-queue validator session-id mocking-options]
     :or   {data-model-factory new-flat-model
+           event-queue (new-mock-queue)
            validator          configuration-problems}} mocks]
   (assert statechart "Statechart is supplied")
   (let [data-model (data-model-factory)
-        mock-queue (new-mock-queue)
         exec-model (new-mock-execution data-model (or mocks {}) mocking-options)
         env        (simple/simple-env (cond-> {:statechart                statechart
                                                ::sc/execution-model       exec-model
                                                ::sc/data-model            data-model
                                                ::sc/invocation-processors [(new-mock-invocations)]
-                                               ::sc/event-queue           mock-queue}
+                                               ::sc/event-queue           event-queue}
                                         validator (assoc :configuration-validator validator)
                                         processor-factory (assoc ::sc/processor (processor-factory))))]
     (simple/register! env ::chart statechart)
@@ -257,6 +257,12 @@
           wmem2 (sp/process-event! processor env wmem (new-event e))]
       (sp/save-working-memory! working-memory-store env session-id wmem2)))
   (sp/get-working-memory working-memory-store env session-id))
+
+(defn current-configuration
+  [{:keys                                      [session-id]
+    {::sc/keys [working-memory-store] :as env} :env} ]
+  (let [wmem (sp/get-working-memory working-memory-store env session-id)]
+    (get wmem ::sc/configuration)))
 
 (defn in?
   "Check to see that the machine in the testing-env is in the given state."

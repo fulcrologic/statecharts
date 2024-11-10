@@ -20,7 +20,7 @@
   (supports-invocation-type? [_this typ] (= :future typ))
   (start-invocation! [_this {::sc/keys [event-queue]
                              :as       env} {:keys [invokeid src params]}]
-    (log/trace "Start future " invokeid src params)
+    (log/debug "Start future " invokeid src params)
     (let [source-session-id (env/session-id env)
           child-session-id  (str source-session-id "." invokeid)
           done-event-name   (keyword (str "done.invoke." invokeid))]
@@ -44,12 +44,12 @@
           (swap! active-futures assoc child-session-id f)))
       true))
   (stop-invocation! [_ env {:keys [invokeid]}]
-    (log/trace "Stop future" invokeid)
+    (log/debug "Stop future" invokeid)
     (let [source-session-id (env/session-id env)
           child-session-id  (str source-session-id "." invokeid)
           f                 (get @active-futures child-session-id)]
       (when f
-        (log/trace "Sending cancel to future")
+        (log/debug "Sending cancel to future")
         (future-cancel f))
       true))
   (forward-event! [_this _env _event]

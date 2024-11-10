@@ -21,6 +21,7 @@
 (>def ::sc/initial-element [:and ::sc/element [:fn #(:initial? %)]])
 (>def ::sc/id-ordinals [:map-of ::sc/id nat-int?])
 (>def ::sc/state-element [:and ::sc/element [:fn #(boolean (#{:state :parallel :final} (:node-type %)))]])
+(>def ::sc/parallel-element [:and ::sc/element [:fn #(= :parallel (:node-type %))]])
 (>def ::sc/elements-by-id [:map-of keyword? ::sc/element])
 (>def ::sc/element-or-id [:or ::sc/element ::sc/id])
 (>def ::sc/running? boolean?)
