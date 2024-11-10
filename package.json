@@ -4,6 +4,9 @@
   "description": "State Charts with SCXML implementation",
   "main": "index.js",
   "directories": {},
+  "dependencies": {
+    "elkjs": "^0.9.3"
+  },
   "devDependencies": {
     "karma": "6.3.17",
     "karma-chrome-launcher": "3.1.0",
@@ -14,9 +17,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:awkay/statecharts.git"
+    "url": "git@github.com:fulcrologic/statecharts.git"
   },
   "author": "",
-  "license": "MIT",
-  "dependencies": {}
+  "license": "MIT"
 }

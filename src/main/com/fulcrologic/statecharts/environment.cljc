@@ -27,12 +27,24 @@
   [{::sc/keys [vwmem] :as _env}]
   (some-> vwmem deref :org.w3.scxml.event/invokeid))
 
+(defn current-configuration
+  "Returns the set of active states."
+  [{::sc/keys [vwmem] :as _env}]
+  [::sc/env => [:set :keyword]]
+  (some-> vwmem deref ::sc/configuration))
+
 (defn is-in-state?
   "Returns true if the given `state-id` is active (in the configuration) of the state chart."
-  [{::sc/keys [vwmem] :as _env} state-id]
+  [env state-id]
   [::sc/env ::sc/id => boolean?]
-  (let [active-states (some-> vwmem deref ::sc/configuration)]
+  (let [active-states (current-configuration env)]
     (contains? active-states state-id)))
+
+(>defn normalized-chart
+  "Returns the normalized statechart definition"
+  [env]
+  [::sc/processing-env => ::sc/statechart]
+  (::sc/statechart env))
 
 (def In
   "[env state-id]
