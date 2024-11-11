@@ -9,13 +9,14 @@
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
     [com.fulcrologic.statecharts.protocols :as scp]
     [com.fulcrologic.statecharts.testing :as testing]
+    [com.fulcrologic.statecharts.integration.fulcro.ui-routes :as uir]
     [fulcro-spec.core :refer [=> assertions behavior specification]]
     [taoensso.timbre :as log]))
 
 (let [b (volatile! false)]
-  (defn set-busy! [v] (vreset! b v))
+  (defn set-busy! [v] (vreset! b v) nil)
   (defn busy? [env {:keys [_event]} & args]
-    (and @b (not (-> _event :data :force?)))))
+    (and @b (not (-> _event :data ::force?)))))
 
 (defn record-failed-route! [env {:keys [_event]} & args]
   [(ops/assign ::failed-route-event _event)])
@@ -32,8 +33,9 @@
       (scp/send! event-queue env {:event  (:name failed-route-event)
                                   :target target
                                   :data   (merge (:data failed-route-event)
-                                            {:force? true})})))
+                                            {::force? true})})))
   nil)
+
 
 (def application-chart
   (chart/statechart {}
@@ -52,23 +54,12 @@
                        :target :routing-info/idle}
             (script {:expr override-route!}))))
 
-      (state {:id :region/routes}
-        (transition {:event :route-to.*
-                     :cond  busy?}
-          (script {:expr record-failed-route!})
-          (ele/raise {:event :event.routing-info/show}))
-        (transition {:event  :route-to.routeA.2.1
-                     :target :routeA.2.1})
-        (transition {:event  :route-to.routeA.2.2
-                     :target :routeA.2.2})
-        (transition {:event  :route-to.routeA.1
-                     :target :routeA.1})
-
-        (state {:id :routeA}
-          (state {:id :routeA.1})
-          (state {:id :routeA.2}
-            (state {:id :routeA.2.1})
-            (state {:id :routeA.2.2}
+      (uir/routes {:id :region/routes}
+        (uir/rstate {:route/target :route/foo}
+          (uir/rstate {:route/target :route/routeA.1})
+          (uir/rstate {:route/target :route/routeA.2}
+            (uir/rstate {:route/target :route/routeA.2.1})
+            (uir/rstate {:route/target :route/routeA.2.2}
               (on-entry {}
                 (script {:expr entered!})))))))))
 
