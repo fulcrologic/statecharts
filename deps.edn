@@ -2,7 +2,7 @@
 
  :deps    {com.taoensso/timbre        {:mvn/version "6.0.4"}
            metosin/malli              {:mvn/version "0.13.0"}
-           com.fulcrologic/guardrails {:mvn/version "1.2.0-2"}
+           com.fulcrologic/guardrails {:mvn/version "1.2.9"}
            org.clojure/core.async     {:mvn/version "1.6.681"}}
 
  :aliases {:test      {:extra-paths ["src/test"]

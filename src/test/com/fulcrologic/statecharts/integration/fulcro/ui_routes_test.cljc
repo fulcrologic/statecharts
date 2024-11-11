@@ -3,8 +3,7 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :as ele :refer
-     [on-entry parallel script state transition]]
+    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry parallel script state transition]]
     [com.fulcrologic.statecharts.event-queue.event-processing :refer [process-events]]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
     [com.fulcrologic.statecharts.protocols :as scp]
@@ -25,35 +24,10 @@
 (defn entered! [& _]
   (vswap! entry-count inc))
 
-(defn clear-override! [& args] [(ops/assign ::failed-route-event nil)])
-(defn override-route! [{::sc/keys [vwmem event-queue] :as env} {::keys [failed-route-event]} & args]
-  (when failed-route-event
-    (let [target (::sc/session-id @vwmem)]
-      (log/info "Re-sending event" failed-route-event)
-      (scp/send! event-queue env {:event  (:name failed-route-event)
-                                  :target target
-                                  :data   (merge (:data failed-route-event)
-                                            {::force? true})})))
-  nil)
-
 
 (def application-chart
   (chart/statechart {}
-    (parallel {}
-      (state {:id :region/routing-info}
-        (state {:id :routing-info/idle}
-          (on-entry {}
-            (script {:expr clear-override!}))
-          (transition {:event  :event.routing-info/show
-                       :target :routing-info/open}))
-        (state {:id :routing-info/open}
-
-          (transition {:event  :event.routing-info/close
-                       :target :routing-info/idle})
-          (transition {:event  :event.routing-info/force-route
-                       :target :routing-info/idle}
-            (script {:expr override-route!}))))
-
+    (uir/routing-regions
       (uir/routes {:id :region/routes}
         (uir/rstate {:route/target :route/foo}
           (uir/rstate {:route/target :route/routeA.1})

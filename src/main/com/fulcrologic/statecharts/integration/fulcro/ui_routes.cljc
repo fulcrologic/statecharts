@@ -7,8 +7,11 @@
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry script state transition]]
+    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry script state transition parallel]]
     [com.fulcrologic.statecharts.environment :as senv]
+    [com.fulcrologic.statecharts.integration.fulcro :as scf]
+    [com.fulcrologic.statecharts.protocols :as scp]
+    [com.fulcrologic.statecharts.integration.fulcro.ui-routes-options :as ro]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]))
 
@@ -19,12 +22,18 @@
     (keyword new-ns nm)))
 
 (defn initialize-route! [{:fulcro/keys [app] :as env} {::keys [target] :as data}]
-  (let [state-map (app/current-state app)
-        Target    (comp/registry-key->class target)
-        {::keys [initialize initial-props]} (comp/component-options Target)
-        props     (if initial-props (initial-props env data) {})
-        ident     (comp/get-ident Target props)
-        exists?   (some? (get-in state-map ident))]
+  (let [state-map     (app/current-state app)
+        Target        (comp/registry-key->class target)
+        options       (comp/component-options Target)
+        initialize    (or (ro/initialize options) :once)
+        initial-props (ro/initial-props options)
+        props         (if initial-props
+                        (initial-props env data)
+                        (comp/get-initial-state Target (or
+                                                         (-> data :_event :data)
+                                                         {})))
+        ident         (comp/get-ident Target props)
+        exists?       (some? (get-in state-map ident))]
     (when (or
             (and (= :once initialize) (not exists?))
             (= :always initialize))
@@ -124,3 +133,74 @@
       (concat
         direct-transitions
         route-states))))
+
+(defn clear-override! [& args] [(ops/assign ::failed-route-event nil)])
+(defn override-route! [{::sc/keys [vwmem event-queue] :as env} {::keys [failed-route-event]} & args]
+  (when failed-route-event
+    (let [target (::sc/session-id @vwmem)]
+      (log/info "Re-sending event" failed-route-event)
+      (scp/send! event-queue env {:event  (:name failed-route-event)
+                                  :target target
+                                  :data   (merge (:data failed-route-event)
+                                            {::force? true})})))
+  nil)
+
+(def routing-info-state
+  (state {:id :region/routing-info}
+    (state {:id :routing-info/idle}
+      (on-entry {}
+        (script {:expr clear-override!}))
+      (transition {:event  :event.routing-info/show
+                   :target :routing-info/open}))
+    (state {:id :routing-info/open}
+
+      (transition {:event  :event.routing-info/close
+                   :target :routing-info/idle})
+      (transition {:event  :event.routing-info/force-route
+                   :target :routing-info/idle}
+        (script {:expr override-route!})))))
+
+(>defn routing-regions
+  "Wraps the routes application statechart in a parallel state that includes management of the (optionally modal)
+   route info (information when routing is denied, with the option to override)"
+  [routes]
+  [[:map
+    [:routing/root [:fn comp/component-class?]]]
+   => ::sc/parallel-element]
+  (parallel {}
+    routing-info-state
+    routes))
+
+(defn force-continue-routing!
+  "Sends an event to the statechart with the given session-id that indicates the most-recently-denied route should
+   be forced."
+  [app-ish session-id]
+  (scf/send! app-ish session-id :event.routing-info/force-route {}))
+
+(defn ui-current-subroute [parent-component-instance]
+  (let [this         parent-component-instance
+        q            (comp/get-query this (app/current-state this))
+        {:ui/keys [current-route]} (comp/props this)
+        {:keys [component]} (first
+                              (filter
+                                (fn [{:keys [dispatch-key]}] (= dispatch-key :ui/current-route))
+                                (:children (eql/query->ast q))))
+        render-child (when component (comp/factory component))]
+    (if render-child
+      (render-child current-route)
+      (log/error "No subroute to render."))))
+
+(def session-id ::session)
+
+(defn route-to! [app-ish target]
+  (scf/send! app-ish session-id (route-to-event-name target)))
+
+(defn update-chart! [app statechart]
+  (scf/register-statechart! app ::chart statechart))
+
+(defn start-routing! [app statechart]
+  (update-chart! app statechart)
+  (scf/start! app {:machine    ::chart
+                   :session-id session-id
+                   :data       {}}))
+
