@@ -233,7 +233,7 @@
         render-child  (when Target (factory-fn Target))]
     (if render-child
       (render-child current-route)
-      (log/error "No subroute to render for " (comp/component-name parent-component-instance)))))
+      (log/error "No subroute to render for" target-registry-key "in" (comp/component-name parent-component-instance)))))
 
 (def session-id
   "The global statechart session ID that is used for the application statechart."

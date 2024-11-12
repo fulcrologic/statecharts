@@ -1,9 +1,14 @@
 {:paths   ["src/main"]
 
- :deps    {com.taoensso/timbre        {:mvn/version "6.0.4"}
-           metosin/malli              {:mvn/version "0.13.0"}
-           com.fulcrologic/guardrails {:mvn/version "1.2.9"}
-           org.clojure/core.async     {:mvn/version "1.6.681"}}
+ :deps    {com.taoensso/timbre                         {:mvn/version "6.0.4"}
+           metosin/malli                               {:mvn/version "0.13.0"}
+           com.fulcrologic/guardrails                  {:mvn/version "1.2.9"}
+           org.eclipse.elk/org.eclipse.elk.core        {:mvn/version "0.9.1"}
+           org.eclipse.elk/org.eclipse.elk.graph       {:mvn/version "0.9.1"}
+           org.eclipse.elk/org.eclipse.elk.graph.json  {:mvn/version "0.9.1"}
+           org.eclipse.elk/org.eclipse.elk.alg.layered {:mvn/version "0.9.1"}
+           org.eclipse.elk/org.eclipse.elk.alg.common  {:mvn/version "0.9.1"}
+           org.clojure/core.async                      {:mvn/version "1.6.681"}}
 
  :aliases {:test      {:extra-paths ["src/test"]
                        :extra-deps  {org.clojure/test.check  {:mvn/version "1.1.0"}
