@@ -19,7 +19,8 @@
     com.fulcrologic.statecharts.malli-specs
     [com.fulcrologic.guardrails.malli.core :refer [>defn =>]]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.util :refer [genid]]))
+    [com.fulcrologic.statecharts.util :refer [genid]]
+    [taoensso.timbre :as log]))
 
 (def executable-content-types #{:raise :log :if :else-if :else :for-each :assign :script :send :cancel})
 (def legal-children
@@ -67,6 +68,9 @@
 
    https://www.w3.org/TR/scxml/#state"
   [{:keys [id initial initial?] :as attrs} & children]
+  #?(:cljs
+     (when (and goog.DEBUG (not id))
+       (log/warn "State is missing an explicit ID. Code reloading on an active chart will malfunction.")))
   (new-element :state attrs children))
 
 (defn parallel
@@ -74,6 +78,9 @@
 
   https://www.w3.org/TR/scxml/#parallel"
   [{:keys [id] :as attrs} & children]
+  #?(:cljs
+     (when (and goog.DEBUG (not id))
+       (log/warn "Parallel state is missing an explicit ID. Code reloading on an active chart will malfunction.")))
   (new-element :parallel attrs children))
 
 (defn transition

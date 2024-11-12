@@ -27,8 +27,10 @@
 
 (def application-chart
   (chart/statechart {}
+    (state {:id :state/other})
     (uir/routing-regions
-      (uir/routes {:id :region/routes}
+      (uir/routes {:id           :region/routes
+                   :routing/root `Foo}
         (uir/rstate {:route/target :route/foo}
           (uir/rstate {:route/target :route/routeA.1})
           (uir/rstate {:route/target :route/routeA.2}
@@ -37,14 +39,33 @@
               (on-entry {}
                 (script {:expr entered!})))))))))
 
+(specification "has-routes?"
+  (assertions
+    "Non-leaf"
+    (uir/has-routes? application-chart :region/routes) => true
+    (uir/has-routes? application-chart :route/foo) => true
+    (uir/has-routes? application-chart :route/routeA.2) => true
+    "Leaf"
+    (uir/has-routes? application-chart :route/routeA.2.2) => false))
+
+(specification "leaf-route?" :focus
+  (assertions
+    "Non-routing nodes"
+    (uir/leaf-route? application-chart :state/other) => false
+    "Non-leaf"
+    (uir/leaf-route? application-chart :region/routes) => false
+    (uir/leaf-route? application-chart :route/foo) => false
+    "Leaf"
+    (uir/leaf-route? application-chart :route/routeA.2.2) => true))
+
 (specification "Route entry"
   (let [event-queue (mpq/new-queue)
         env         (testing/new-testing-env {:statechart  application-chart
-                                              :event-queue event-queue} {entered!             entered!
-                                                                         busy?                busy?
-                                                                         override-route!      override-route!
-                                                                         clear-override!      clear-override!
-                                                                         record-failed-route! record-failed-route!})]
+                                              :event-queue event-queue} {entered!                 entered!
+                                                                         uir/busy?                uir/busy?
+                                                                         uir/override-route!      uir/override-route!
+                                                                         uir/clear-override!      uir/clear-override!
+                                                                         uir/record-failed-route! uir/record-failed-route!})]
     (set-busy! false)
     (vreset! entry-count 0)
     (testing/start! env)

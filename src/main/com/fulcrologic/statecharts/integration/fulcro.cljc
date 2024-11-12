@@ -174,6 +174,14 @@
                    deref ::sc/env ::sc/statechart-registry)]
     (sp/register-statechart! registry k statechart)))
 
+(>defn lookup-statechart
+  "Attempt to return the statechart definition of the given registration k."
+  [app-ish k]
+  [::fulcro-appish :keyword => (? ::sc/statechart)]
+  (let [registry (-> (rc/any->app app-ish) :com.fulcrologic.fulcro.application/runtime-atom
+                   deref ::sc/env ::sc/statechart-registry)]
+    (sp/get-statechart registry k)))
+
 (>defn statechart-env
   "Returns the installed statechart env. "
   [app-ish]
@@ -189,8 +197,8 @@
 
    Returns the new session-id of the statechart."
   [app-ish {:keys [machine session-id data]
-        :or   {session-id (new-uuid)
-               data       {}}}]
+            :or   {session-id (new-uuid)
+                   data       {}}}]
   [::fulcro-appish [:map
                     [:machine :keyword]
                     [:session-id {:optional true} ::sc/id]
