@@ -135,13 +135,15 @@
       [(hash node-id->size)])
     layout))
 
-(defsc Visualizer [this {:ui/keys [chart-id layout states transitions node-id->size node-id->position] :as props}]
+(defsc Visualizer [this {:ui/keys [chart-id layout states transitions node-id->size node-id->position] :as props}
+                   {:keys [session-id]}]
   {:query         [:ui/chart-id
                    :ui/layout
                    :ui/states
                    :ui/transitions
                    :ui/node-id->size
-                   :ui/node-id->position]
+                   :ui/node-id->position
+                   [::sc/session-id '_]]
    :initial-state {:ui/chart-id          :param/chart-id
                    :ui/node-id->size     {}
                    :ui/node-id->position {}}
@@ -149,7 +151,10 @@
    :use-hooks?    true}
   (use-chart-elements this chart-id)
   (use-state-sizes this states)
-  (let [node-id->layout (use-elk-layout this chart-id node-id->size)]
+  (let [node-id->layout (use-elk-layout this chart-id node-id->size)
+        active?         (if session-id
+                          (scf/current-configuration this session-id)
+                          #{})]
     (dom/div {:style {:position         :relative
                       :width            (str (get-in (or node-id->layout node-id->size) [:ROOT :width]) "px")
                       :height           (str (get-in (or node-id->layout node-id->size) [:ROOT :height]) "px")
@@ -157,22 +162,36 @@
                       :left             (get-in (or node-id->layout node-id->position) [:ROOT :x] 0)
                       :background-color "white"}}
       (mapv
-        (fn [{:keys [id compound? node-type children] :as node}]
-          (dom/div {:key   (pr-str id)
-                    :style {:position     :absolute
-                            :border       "2px solid black"
-                            :borderRadius "10px"
-                            :padding      "10px"
-                            :width        (str (get-in (or node-id->layout node-id->size) [id :width]) "px")
-                            :height       (str (get-in (or node-id->layout node-id->size) [id :height]) "px")
-                            :top          (get-in (or node-id->layout node-id->position) [id :y] 0)
-                            :left         (get-in (or node-id->layout node-id->position) [id :x] 0)}
-                    :ref   (:ref (meta node))}
-            (dom/div (if compound?
-                       {:style {:position "absolute"
-                                :top      "-20px"}}
-                       {})
-              (element-label node))))
+        (fn [{:keys [id initial? compound? node-type children] :as node}]
+          (if initial?
+            (dom/div {:key   (pr-str id)
+                      :style {:position         :absolute
+                              :background-color "black"
+                              :borderRadius     "15px"
+                              :width            "15px"
+                              :height           "15px"
+                              :top              (get-in (or node-id->layout node-id->position) [id :y] 0)
+                              :left             (get-in (or node-id->layout node-id->position) [id :x] 0)}
+                      :ref   (:ref (meta node))})
+            (dom/div {:key   (pr-str id)
+                      :style {:position     :absolute
+                              :border       (str "2px solid " (if (active? id) "red" "black"))
+                              :borderRadius "10px"
+                              :padding      "10px"
+                              :width        (str (get-in (or node-id->layout node-id->size) [id :width]) "px")
+                              :height       (str (get-in (or node-id->layout node-id->size) [id :height]) "px")
+                              :top          (get-in (or node-id->layout node-id->position) [id :y] 0)
+                              :left         (get-in (or node-id->layout node-id->position) [id :x] 0)}
+                      :ref   (:ref (meta node))}
+              (dom/div (if compound?
+                         {:style {:position "absolute"
+                                  :top      "-20px"}}
+                         {})
+                (element-label node)))))
         states))))
 
-(def ui-visualizer (comp/factory Visualizer))
+(def ui-visualizer
+  "[props {:keys [session-id]}]
+
+   Render the visualizer. If you include a session ID then the current configuration will be highlighted."
+  (comp/computed-factory Visualizer))
