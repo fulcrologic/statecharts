@@ -138,18 +138,17 @@
         (fn [p] (dom/path {:key         id
                            :fill        "transparent"
                            :markerEnd   "url(#arrowhead)"
-                           :strokeWidth "1"
+                           :strokeWidth "2"
                            :stroke      "black"
                            :d           p}))
         paths))))
 
-(defn render-layout [{:keys [width height children edges]}]
+(defn render-edges [{:keys [width height edges]}]
   (dom/svg {:viewBox (str "0 0 " width " " height) :width "100%" :height "100%" :xmlns "http://www.w3.org/2000/svg"}
     (dom/defs
       (dom/marker
         {:id "arrowhead", :markerWidth "10", :markerHeight "7", :refx "10", :refy "3.5", :orient "auto"}
         (dom/polygon {:points "0 0, 10 3.5, 0 7", :fill "black"})))
-    (mapv render-node children)
     (mapv render-edge edges)))
 
 (comment

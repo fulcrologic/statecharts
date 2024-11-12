@@ -130,7 +130,8 @@
                 elk-input (chart->elk-tree chart node-id->size)]
             (async/go
               (let [layout (async/<! (elk/layout! elk-input))]
-                (set-layout! (to-layout-map layout))))))
+                (set-layout! {:node-id->layout (to-layout-map layout)
+                              :layout layout})))))
         js/undefined)
       [(hash node-id->size)])
     layout))
@@ -151,7 +152,7 @@
    :use-hooks?    true}
   (use-chart-elements this chart-id)
   (use-state-sizes this states)
-  (let [node-id->layout (use-elk-layout this chart-id node-id->size)
+  (let [{:keys [layout node-id->layout]} (use-elk-layout this chart-id node-id->size)
         active?         (if session-id
                           (scf/current-configuration this session-id)
                           #{})]
@@ -161,6 +162,7 @@
                       :top              (get-in (or node-id->layout node-id->position) [:ROOT :y] 0)
                       :left             (get-in (or node-id->layout node-id->position) [:ROOT :x] 0)
                       :background-color "white"}}
+      (elk/render-edges layout)
       (mapv
         (fn [{:keys [id initial? compound? node-type children] :as node}]
           (if initial?
