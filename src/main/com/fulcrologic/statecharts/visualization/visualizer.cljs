@@ -45,7 +45,7 @@
                                        [(pr-str parent)])}))
                        (vals elements-by-id)))]
     (assoc (node->tree elements-by-id chart)
-      :edges all-edges
+      :edges         all-edges
       :layoutOptions {"elk.hierarchyHandling"                     "INCLUDE_CHILDREN",
                       "elk.algorithm"                             "layered",
                       "elk.algorithm.depth"                       20,
@@ -119,6 +119,23 @@
       {}
       absolute-nodes)))
 
+(defn update-edge-points
+  [edges node-id->layout]
+  (mapv #(let [container-node-id (edn/read-string (:container %))
+               {:keys [x y]} (node-id->layout container-node-id)
+               node-points    {:x x :y y}]
+           (update % :sections (fn [section]
+                                 (mapv
+                                   (fn [s]
+                                     (assoc s
+                                       :startPoint (merge-with + (:startPoint s) node-points)
+                                       :endPoint (merge-with + (:endPoint s) node-points)
+                                       :bendPoints (mapv
+                                                     (fn [b] (merge-with + b node-points))
+                                                     (:bendPoints s))))
+                                   section))))
+    edges))
+
 (defn use-elk-layout [this chart-id node-id->size]
   (let [[layout set-layout!] (hooks/use-state nil)]
     (hooks/use-effect
@@ -129,9 +146,11 @@
                             :height 500)
                 elk-input (chart->elk-tree chart node-id->size)]
             (async/go
-              (let [layout (async/<! (elk/layout! elk-input))]
-                (set-layout! {:node-id->layout (to-layout-map layout)
-                              :layout          layout})))))
+              (let [layout          (async/<! (elk/layout! elk-input))
+                    node-id->layout (to-layout-map layout)
+                    layout          (update layout :edges update-edge-points node-id->layout)]
+                (set-layout! {:node-id->layout node-id->layout
+                              :layout layout})))))
         js/undefined)
       [(hash node-id->size)])
     layout))
@@ -162,13 +181,14 @@
                       :top             (get-in (or node-id->layout node-id->position) [:ROOT :y] 0)
                       :left            (get-in (or node-id->layout node-id->position) [:ROOT :x] 0)
                       :backgroundColor "white"}}
-      (elk/render-edges layout)
+      (when layout (elk/render-edges layout))
       (mapv
         (fn [{:keys [id initial? compound? node-type children] :as node}]
           (if initial?
             (dom/div {:key   (pr-str id)
                       :style {:position         :absolute
-                              :background-color "black"
+                              :zIndex 1
+                              :backgroundColor  "black"
                               :borderRadius     "15px"
                               :width            "15px"
                               :height           "15px"
@@ -177,17 +197,25 @@
                       :ref   (:ref (meta node))})
             (dom/div {:key   (pr-str id)
                       :style {:position     :absolute
+                              :zIndex (if compound? 0 1)
                               :border       (str "2px solid " (if (active? id) "red" "black"))
                               :borderRadius "10px"
                               :padding      "10px"
                               :width        (str (get-in (or node-id->layout node-id->size) [id :width]) "px")
                               :height       (str (get-in (or node-id->layout node-id->size) [id :height]) "px")
+                              :minHeight    "80px"
                               :top          (get-in (or node-id->layout node-id->position) [id :y] 0)
                               :left         (get-in (or node-id->layout node-id->position) [id :x] 0)}
                       :ref   (:ref (meta node))}
               (dom/div (if compound?
-                         {:style {:position "absolute"
-                                  :top      "-20px"}}
+                         {:style {:position        "absolute"
+                                  :borderRadius    "10px"
+                                  :backgroundColor "black"
+                                  :color           "white"
+                                  :padding         "1px 6px"
+                                  :fontSize        "11px"
+                                  :lineHeight      "15px"
+                                  :top             "-10px"}}
                          {})
                 (element-label node)))))
         states))))
