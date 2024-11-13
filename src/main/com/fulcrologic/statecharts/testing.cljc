@@ -258,6 +258,12 @@
       (sp/save-working-memory! working-memory-store env session-id wmem2)))
   (sp/get-working-memory working-memory-store env session-id))
 
+(defn current-configuration
+  [{:keys                                      [session-id]
+    {::sc/keys [working-memory-store] :as env} :env} ]
+  (let [wmem (sp/get-working-memory working-memory-store env session-id)]
+    (get wmem ::sc/configuration)))
+
 (defn in?
   "Check to see that the machine in the testing-env is in the given state."
   [{:keys                                      [session-id]

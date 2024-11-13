@@ -23,7 +23,7 @@
       (= typ ::sc/chart)))
   (start-invocation! [this {::sc/keys [event-queue processor statechart-registry working-memory-store]
                             :as       env} {:keys [invokeid src params]}]
-    (log/trace "Start invocation" invokeid src params)
+    (log/debug "Start invocation" invokeid src params)
     (let [source-session-id (env/session-id env)
           child-session-id  invokeid
           statechart        (sp/get-statechart statechart-registry src)]
@@ -42,23 +42,18 @@
                                                  :org.w3.scxml.event/invokeid invokeid})]
           (sp/save-working-memory! working-memory-store env child-session-id wmem)))
       true))
-  (stop-invocation! [this {::sc/keys [event-queue] :as env} {:keys [invokeid] :as data}]
-    (log/trace "Stop invocation" invokeid)
+  (stop-invocation! [this {::sc/keys [event-queue working-memory-store] :as env} {:keys [invokeid] :as data}]
+    (log/debug "Stop invocation" invokeid)
     (let [source-session-id (env/session-id env)
-          child-session-id  (str source-session-id "." invokeid)]
-      (when event-queue
-        (log/trace "Sending cancel event to invoked child machine")
-        (sp/send! event-queue env {:target            child-session-id
-                                   :sendid            source-session-id
-                                   :source-session-id source-session-id
-                                   :event             evts/cancel-event}))
+          child-session-id  invokeid]
+      (sp/delete-working-memory! working-memory-store env child-session-id)
       true))
   (forward-event! [this {::sc/keys [event-queue] :as env} {:keys [type invokeid event]}]
-    (log/trace "Forward event " invokeid event)
+    (log/debug "Forward event " invokeid event)
     (let [source-session-id (env/session-id env)
-          child-session-id  (str source-session-id "." invokeid)]
+          child-session-id  invokeid]
       (when event-queue
-        (log/trace "sending event on event queue to" child-session-id)
+        (log/debug "sending event on event queue to" child-session-id)
         (sp/send! event-queue env {:target            child-session-id
                                    :type              (or type ::sc/chart)
                                    :sendid            child-session-id

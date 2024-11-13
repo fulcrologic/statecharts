@@ -147,7 +147,7 @@
   (dom/svg {:viewBox (str "0 0 " width " " height) :width "100%" :height "100%" :xmlns "http://www.w3.org/2000/svg"}
     (dom/defs
       (dom/marker
-        {:id "arrowhead", :markerWidth "10", :markerHeight "7", :refx "10", :refy "3.5", :orient "auto"}
+        {:id "arrowhead", :markerWidth "10", :markerHeight "7", :refX "10", :refY "3.5", :orient "auto"}
         (dom/polygon {:points "0 0, 10 3.5, 0 7", :fill "black"})))
     (mapv render-edge edges)))
 

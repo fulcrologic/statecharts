@@ -131,7 +131,7 @@
             (async/go
               (let [layout (async/<! (elk/layout! elk-input))]
                 (set-layout! {:node-id->layout (to-layout-map layout)
-                              :layout layout})))))
+                              :layout          layout})))))
         js/undefined)
       [(hash node-id->size)])
     layout))
@@ -153,15 +153,15 @@
   (use-chart-elements this chart-id)
   (use-state-sizes this states)
   (let [{:keys [layout node-id->layout]} (use-elk-layout this chart-id node-id->size)
-        active?         (if session-id
-                          (scf/current-configuration this session-id)
-                          #{})]
-    (dom/div {:style {:position         :relative
-                      :width            (str (get-in (or node-id->layout node-id->size) [:ROOT :width]) "px")
-                      :height           (str (get-in (or node-id->layout node-id->size) [:ROOT :height]) "px")
-                      :top              (get-in (or node-id->layout node-id->position) [:ROOT :y] 0)
-                      :left             (get-in (or node-id->layout node-id->position) [:ROOT :x] 0)
-                      :background-color "white"}}
+        active? (if session-id
+                  (scf/current-configuration this session-id)
+                  #{})]
+    (dom/div {:style {:position        :relative
+                      :width           (str (get-in (or node-id->layout node-id->size) [:ROOT :width]) "px")
+                      :height          (str (get-in (or node-id->layout node-id->size) [:ROOT :height]) "px")
+                      :top             (get-in (or node-id->layout node-id->position) [:ROOT :y] 0)
+                      :left            (get-in (or node-id->layout node-id->position) [:ROOT :x] 0)
+                      :backgroundColor "white"}}
       (elk/render-edges layout)
       (mapv
         (fn [{:keys [id initial? compound? node-type children] :as node}]

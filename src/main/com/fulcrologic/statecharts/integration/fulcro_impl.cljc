@@ -189,6 +189,7 @@
       (on-save session-id wmem)))
   (delete-working-memory! [_this _env session-id]
     (swap! (state-atom fulcro-app) update ::sc/session-id dissoc session-id)
+    (swap! (state-atom fulcro-app) update ::sc/local-data dissoc session-id)
     (when (fn? on-delete)
       (on-delete session-id))))
 

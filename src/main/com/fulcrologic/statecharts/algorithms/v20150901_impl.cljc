@@ -78,13 +78,13 @@
 
 (defn- run-expression! [{::sc/keys [event-queue execution-model] :as env} expr]
   (try
-    (log/trace "Running expression" expr)
-    (log/spy :trace
+    (log/debug "Running expression" expr)
+    (log/spy :debug
       (sp/run-expression! execution-model env expr))
     (catch #?(:clj Throwable :cljs :default) e
       (log/error e "Expression failure")
       (let [session-id (env/session-id env)]
-        (log/trace "Sending event" :error.execution "for exception" (ex-message e))
+        (log/debug "Sending event" :error.execution "for exception" (ex-message e))
         (sp/send! event-queue env {:event             :error.execution
                                    :send-id           session-id
                                    :data              {:error e}
@@ -99,8 +99,8 @@
     (if (nil? cond)
       true
       (do
-        (log/trace "evaluating condition" cond)
-        (log/spy :trace
+        (log/debug "evaluating condition" cond)
+        (log/spy :debug
           (boolean (run-expression! env cond)))))))
 
 (>defn session-id
@@ -181,9 +181,9 @@
   (let [{::sc/keys [history-value]} @vwmem]
     (reduce
       (fn [targets s]
-        (log/spy :trace "target" s)
+        (log/spy :debug "target" s)
         (let [{:keys [id] :as s} (chart/element statechart s)]
-          (log/spy :trace "target-element" id)
+          (log/spy :debug "target-element" id)
           (cond
             (and
               (chart/history-element? statechart s)
@@ -196,21 +196,21 @@
 
             :else (conj targets id))))
       (chart/document-ordered-set statechart)
-      (log/spy :trace "target(s)"
+      (log/spy :debug "target(s)"
         (:target (chart/element statechart t))))))
 
 (>defn get-transition-domain
   [{::sc/keys [statechart] :as env} t]
   [::sc/processing-env ::sc/element-or-id => (? ::sc/id)]
-  (let [tstates (log/spy :trace (get-effective-target-states env t))
-        tsource (log/spy :trace (chart/nearest-ancestor-state statechart t))]
+  (let [tstates (log/spy :debug (get-effective-target-states env t))
+        tsource (log/spy :debug (chart/nearest-ancestor-state statechart t))]
     (cond
       (empty? tstates) nil
       (and
         (= :internal (:type t))
         (chart/compound-state? statechart tsource)
         (every? (fn [s] (chart/descendant? statechart s tsource)) tstates)) tsource
-      :else (log/spy :trace (:id (chart/find-least-common-compound-ancestor statechart (into (if tsource [tsource] []) tstates)))))))
+      :else (log/spy :debug (:id (chart/find-least-common-compound-ancestor statechart (into (if tsource [tsource] []) tstates)))))))
 
 (>defn compute-entry-set!
   "Returns [states-to-enter states-for-default-entry default-history-content]."
@@ -237,7 +237,7 @@
   "Initialize the data models in volatile working memory `wmem` for the given states, if necessary."
   [{::sc/keys [statechart data-model] :as env} state]
   [::sc/processing-env ::sc/element-or-id => nil?]
-  (log/trace "Initializing data model for" state)
+  (log/debug "Initializing data model for" state)
   (let [dm-eles (chart/get-children statechart state :data-model)
         {:keys [src expr]} (chart/element statechart (first dm-eles))]
     (when (> (count dm-eles) 1)
@@ -247,8 +247,8 @@
         src (sp/load-data data-model env src)
         (fn? expr) (let [ops (run-expression! env expr)]
                      (when (vector? ops)
-                       (sp/update! data-model env {:ops (log/spy :trace ops)})))
-        (map? expr) (sp/update! data-model env {:ops (log/spy :trace (ops/set-map-ops expr))})
+                       (sp/update! data-model env {:ops (log/spy :debug ops)})))
+        (map? expr) (sp/update! data-model env {:ops (log/spy :debug (ops/set-map-ops expr))})
         :else (sp/update! data-model env {:ops (ops/set-map-ops {})})))
     nil))
 
@@ -265,23 +265,27 @@
     (run-expression! env expr)))
 
 (defmethod execute-element-content! :on-entry [env {:keys [id] :as element}]
-  (log/trace "on-entry " id)
+  (log/debug "on-entry " id)
   (execute! env element))
 
 (defmethod execute-element-content! :on-exit [env {:keys [id] :as element}]
-  (log/trace "on-exit " id)
+  (log/debug "on-exit " id)
   (execute! env element))
 
-(defmethod execute-element-content! :log [env {:keys [label expr]}]
-  (log/debug (or label "LOG") (run-expression! env expr)))
+(defmethod execute-element-content! :log [env {:keys [label expr level]}]
+  (case level
+    :error (log/error (or label "LOG") (run-expression! env expr))
+    :warn (log/warn (or label "LOG") (run-expression! env expr))
+    :info (log/info (or label "LOG") (run-expression! env expr))
+    (log/debug (or label "LOG") (run-expression! env expr))))
 
 (defmethod execute-element-content! :raise [env {:keys [event]}]
-  (log/trace "Raise " event)
+  (log/debug "Raise " event)
   (raise env event))
 
 (defmethod execute-element-content! :assign [env {:keys [location expr]}]
   (let [v (run-expression! env expr)]
-    (log/trace "Assign" location " = " v)
+    (log/debug "Assign" location " = " v)
     (env/assign! env location v)))
 
 (letfn [(send! [{::sc/keys [event-queue
@@ -302,7 +306,7 @@
                 id                (if idlocation (genid "send") id)
                 target            (!? env target targetexpr)
                 target-is-parent? (= target (env/parent-session-id env))
-                data              (log/spy :trace
+                data              (log/spy :debug
                                     "Computed send event data"
                                     (merge
                                       (named-data env namelist)
@@ -317,7 +321,7 @@
                                                :delay             (or (!? env delay delayexpr) 0)}
                                         target-is-parent? (assoc :invoke-id (env/invoke-id env))))))]
   (defmethod execute-element-content! :send [env element]
-    (log/trace "Send event" element)
+    (log/debug "Send event" element)
     (when-not (send! env element)
       (raise env (evts/new-event {:name :error.execution
                                   :data {:type    :send
@@ -325,7 +329,7 @@
 
 (defmethod execute-element-content! :cancel [{::sc/keys [event-queue] :as env}
                                              {:keys [sendid sendidexpr] :as element}]
-  (log/trace "Cancel event" element)
+  (log/debug "Cancel event" element)
   (let [id (!? env sendid sendidexpr)]
     (sp/cancel! event-queue env (env/session-id env) id)))
 
@@ -333,7 +337,7 @@
   "Run the executable content (immediate children) of s."
   [{::sc/keys [statechart] :as env} s]
   [::sc/processing-env ::sc/element-or-id => nil?]
-  (log/trace "Execute content of" s)
+  (log/debug "Execute content of" s)
   (let [{:keys [children]} (chart/element statechart s)]
     (doseq [n children]
       (try
@@ -350,7 +354,7 @@
                        first
                        (chart/element statechart))]
     (if done-element
-      (log/spy :trace "computed done data" (execute-element-content! env done-element))
+      (log/spy :debug "computed done data" (execute-element-content! env done-element))
       {})))
 
 (>defn enter-states!
@@ -361,11 +365,11 @@
   (let [[states-to-enter
          ;; TODO: Verify states-for-default-entry is kept around correct amount of time!
          states-for-default-entry
-         default-history-content] (log/spy :trace "entry set"
+         default-history-content] (log/spy :debug "entry set"
                                     (compute-entry-set! env))]
     (doseq [s (chart/in-entry-order statechart states-to-enter)
             :let [state-id (chart/element-id statechart s)]]
-      (log/trace "Enter" state-id)
+      (log/debug "Enter" state-id)
       (in-state-context env s
         (vswap! vwmem update ::sc/configuration conj s)
         (vswap! vwmem update ::sc/states-to-invoke conj s)
@@ -379,7 +383,7 @@
           (execute! env t))
         (when-let [content (get default-history-content (chart/element-id statechart s))]
           (execute-element-content! env (chart/element statechart content)))
-        (when (log/spy :trace (chart/final-state? statechart s))
+        (when (log/spy :debug (chart/final-state? statechart s))
           (if (= :ROOT (chart/get-parent statechart s))
             (vswap! vwmem assoc ::sc/running? false)
             (let [parent      (chart/get-parent statechart s)
@@ -397,7 +401,7 @@
                               :type   :internal
                               :data   done-data
                               :name   (keyword (str "done.state." (name (chart/element-id statechart grandparent))))})))))))))
-  (log/spy :trace "after enter states: " (::sc/configuration @vwmem))
+  (log/spy :debug "after enter states: " (::sc/configuration @vwmem))
   nil)
 
 (>defn execute-transition-content!
@@ -415,7 +419,7 @@
   (let [states-to-exit (volatile! (chart/document-ordered-set statechart))]
     (doseq [t (map #(chart/element statechart %) transitions)]
       (when (contains? t :target)
-        (let [domain (log/spy :trace (get-transition-domain env t))]
+        (let [domain (log/spy :debug (get-transition-domain env t))]
           (doseq [s (::sc/configuration @vwmem)]
             (when (chart/descendant? statechart s domain)
               (vswap! states-to-exit conj s))))))
@@ -427,7 +431,7 @@
   [::sc/processing-env [:or
                         [:sequential ::sc/id]
                         [:set ::sc/id]] => [:set ::sc/id]]
-  (log/spy :trace "conflicting?" enabled-transitions)
+  (log/spy :debug "conflicting?" enabled-transitions)
   (let [filtered-transitions (volatile! (chart/document-ordered-set statechart))]
     (doseq [t1 enabled-transitions
             :let [to-remove  (volatile! (chart/document-ordered-set statechart))
@@ -435,8 +439,8 @@
       (doseq [t2 @filtered-transitions
               :while (not @preempted?)]
         (when (seq (set/intersection
-                     (log/spy :trace (compute-exit-set env [t1]))
-                     (log/spy :trace (compute-exit-set env [t2]))))
+                     (log/spy :debug (compute-exit-set env [t1]))
+                     (log/spy :debug (compute-exit-set env [t2]))))
           (if (chart/descendant? statechart (chart/source statechart t1) (chart/source statechart t2))
             (vswap! to-remove conj t2)
             (vreset! preempted? true))))
@@ -478,7 +482,7 @@
   "Returns a new version of working memory with ::sc/enabled-transitions populated."
   [{::sc/keys [statechart vwmem] :as env} event]
   [::sc/processing-env ::sc/event-or-name => ::sc/working-memory]
-  (let [tns (log/spy :trace "enabled transitions"
+  (let [tns (log/spy :debug "enabled transitions"
               (remove-conflicting-transitions env
                 (select-transitions* statechart (::sc/configuration @vwmem)
                   (fn [t] (and
@@ -492,7 +496,7 @@
                invocation-processors] :as env} invocation]
   (let [{:keys [type typeexpr src srcexpr] :as invocation} (chart/element statechart invocation)
         type (!? env type typeexpr)
-        src  (!? env src srcexpr)]
+        src  (or src (!? env nil srcexpr))]
     (assoc invocation
       :type type
       :src src
@@ -505,6 +509,7 @@
                        event-queue] :as env} invocation]
           (let [{:keys [type src
                         id idlocation
+                        explicit-id?
                         namelist params
                         processor] :as invocation} (invocation-details env invocation)
                 parent-state-id (chart/nearest-ancestor-state statechart invocation)]
@@ -514,15 +519,15 @@
                                   (assoc acc k (sp/run-expression! execution-model env expr)))
                                 {}
                                 params)
-                    invokeid  (if idlocation
-                                (str parent-state-id "." (new-uuid))
-                                id)
+                    invokeid  (if explicit-id?
+                                id
+                                (str parent-state-id "." (new-uuid)))
                     params    (merge
                                 (named-data env namelist)
                                 param-map)]
                 (when idlocation
                   (sp/update! data-model env {:ops [(ops/assign idlocation invokeid)]}))
-                (log/tracef "Starting invocation id = %s, type = %s, src = %s, params = %s"
+                (log/debugf "Starting invocation id = %s, type = %s, src = %s, params = %s"
                   (str invokeid) (str type) (str src) (str params))
                 (sp/start-invocation! processor env {:invokeid invokeid
                                                      :src      src
@@ -572,13 +577,13 @@
               (let [invokeid (if idlocation
                                (sp/get-at data-model env idlocation)
                                id)]
-                (log/trace "Stopping invocation" invokeid)
+                (log/debug "Stopping invocation" invokeid)
                 (sp/stop-invocation! processor env {:invokeid invokeid
                                                     :type     type})))))]
   (>defn cancel-active-invocations!
     [{::sc/keys [statechart] :as env} state]
     [::sc/processing-env ::sc/element-or-id => nil?]
-    (log/spy :trace "Stopping invocations for " state)
+    (log/spy :debug "Stopping invocations for " state)
     (doseq [i (chart/invocations statechart state)]
       (stop-invocation! env i))
     nil))
@@ -603,7 +608,7 @@
                     (= s (chart/element-id statechart (chart/get-parent statechart s0)))))]
           (vswap! vwmem assoc-in [::sc/history-value id] (into #{} (filter f configuration))))))
     (doseq [s states-to-exit]
-      (log/trace "Leaving state " s)
+      (log/debug "Leaving state " s)
       (in-state-context env s
         (let [to-exit (chart/exit-handlers statechart s)]
           (run-many! env to-exit)
@@ -632,7 +637,7 @@
           (if (empty? internal-queue)
             (vreset! macrostep-done? true)
             (let [internal-event (first internal-queue)]
-              (log/spy :trace internal-event)
+              (log/spy :debug internal-event)
               (vswap! vwmem update ::sc/internal-queue pop)
               (env/assign! env [:ROOT :_event] internal-event)
               (select-transitions! env internal-event))))
@@ -657,7 +662,7 @@
            ::sc/keys                [parent-session-id]} @vwmem]
       (when (and invokeid parent-session-id)
         (let [session-id (env/session-id env)]
-          (log/trace "Sending done event from" session-id "to" parent-session-id "for" invokeid)
+          (log/debug "Sending done event from" session-id "to" parent-session-id "for" invokeid)
           (sp/send! event-queue env {:target            parent-session-id
                                      :sendid            session-id
                                      :source-session-id session-id
@@ -703,7 +708,7 @@
                  statechart)]
     (in-state-context env parent
       (env/assign! env [:ROOT :_event] event)
-      (when-let [finalize (log/spy :trace "finalizers" (chart/get-children statechart invocation :finalize))]
+      (when-let [finalize (log/spy :debug "finalizers" (chart/get-children statechart invocation :finalize))]
         (doseq [f finalize]
           (execute! (assoc env :_event event) f)))
       (env/delete! env [:ROOT :_event]))))
@@ -727,7 +732,7 @@
               :let [id (if-let [loc (or idlocation id-location)]
                          (sp/get-at data-model env loc)
                          id)]]
-        (when (log/spy :trace "event from invocation?" (= invokeid id))
+        (when (log/spy :debug "event from invocation?" (= invokeid id))
           (finalize! env inv external-event))
         (when (or (true? autoforward) (true? auto-forward?))
           (forward-event! env inv external-event))))
@@ -744,7 +749,7 @@
                                  [:org.w3.scxml.event/invokeid {:optional true}]] => ::sc/processing-env]
   (if-let [statechart (sp/get-statechart statechart-registry statechart-src)]
     (do
-      (log/spy :trace "Processing event on statechart" statechart-src)
+      (log/spy :debug "Processing event on statechart" statechart-src)
       (assoc env
         ::sc/context-element-id :ROOT
         ::sc/statechart statechart
@@ -764,7 +769,7 @@
    is called by an overall processing system instead of directly."
   [env external-event]
   [::sc/processing-env ::sc/event-or-name => ::sc/working-memory]
-  (log/spy :trace external-event)
+  (log/spy :debug external-event)
   (let [event (new-event external-event)]
     (with-processing-context env
       (if (cancel? event)
