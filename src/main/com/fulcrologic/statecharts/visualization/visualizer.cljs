@@ -31,21 +31,21 @@
                                          :diagram/label (element-label node)}
                                    (get node-id->size id {:width 40 :height 40})))
                          (seq children) (assoc :children
-                                               (vec
-                                                 (keep (fn [k] (node->tree* id->element (id->element k)))
-                                                   children))))))
-        all-edges  (vec
-                     (keep
-                       (fn [{:keys [id node-type parent target]}]
-                         (when (= node-type :transition)
-                           {:id      (pr-str id)
-                            :sources [(pr-str parent)]
-                            :targets (if target
-                                       (mapv pr-str target)
-                                       [(pr-str parent)])}))
-                       (vals elements-by-id)))]
+                                          (vec
+                                            (keep (fn [k] (node->tree* id->element (id->element k)))
+                                              children))))))
+        all-edges (vec
+                    (keep
+                      (fn [{:keys [id node-type parent target]}]
+                        (when (= node-type :transition)
+                          {:id      (pr-str id)
+                           :sources [(pr-str parent)]
+                           :targets (if target
+                                      (mapv pr-str target)
+                                      [(pr-str parent)])}))
+                      (vals elements-by-id)))]
     (assoc (node->tree elements-by-id chart)
-      :edges         all-edges
+      :edges all-edges
       :layoutOptions {"elk.hierarchyHandling"                     "INCLUDE_CHILDREN",
                       "elk.algorithm"                             "layered",
                       "elk.algorithm.depth"                       20,
@@ -57,19 +57,21 @@
                       "elk.spacing.nodeNode"                      20
                       "elk.layered.spacing.nodeNodeBetweenLayers" 20})))
 
-(defn use-chart-elements [this chart-id]
+(defn use-chart-elements [this chart-or-id]
   (hooks/use-effect
     (fn []
-      (let [{::sc/keys [elements-by-id]} (scf/lookup-statechart this chart-id)
-            state?      (fn [k] (boolean (#{:initial :final :state :parallel} (get-in elements-by-id [k :node-type]))))
-            states      (vec
-                          (keep
-                            (fn [{:keys [node-type children] :as node}]
-                              (when (#{:initial :final :state :parallel} node-type)
-                                (cond-> (with-meta node {:ref (react/createRef)})
-                                  (some state? children) (assoc :compound? true)
-                                  )))
-                            (vals elements-by-id)))
+      (let [{::sc/keys [elements-by-id]} (if (map? chart-or-id)
+                                           chart-or-id
+                                           (scf/lookup-statechart this chart-or-id))
+            state? (fn [k] (boolean (#{:initial :final :state :parallel} (get-in elements-by-id [k :node-type]))))
+            states (vec
+                     (keep
+                       (fn [{:keys [node-type children] :as node}]
+                         (when (#{:initial :final :state :parallel} node-type)
+                           (cond-> (with-meta node {:ref (react/createRef)})
+                             (some state? children) (assoc :compound? true)
+                             )))
+                       (vals elements-by-id)))
             transitions (vec
                           (filter
                             (fn [{:keys [node-type]}] (= :transition node-type))
@@ -79,7 +81,7 @@
         (m/set-value!! this :ui/node-id->size {})
         (m/set-value!! this :ui/node-id->position {}))
       js/undefined)
-    [(hash chart-id)]))
+    [(hash chart-or-id)]))
 
 (defn have-dom-nodes? [states] (every? (fn [s] (some? (.-current (:ref (meta s))))) states))
 
@@ -92,7 +94,7 @@
                          (map
                            (fn [{:keys [id] :as node}]
                              (let [dom-node (some-> node (meta) (:ref) (.-current))
-                                   size     (.getBoundingClientRect dom-node)]
+                                   size (.getBoundingClientRect dom-node)]
                                [id {:width  (.-width size)
                                     :height (.-height size)}])))
                          states)]
@@ -103,8 +105,8 @@
 
 (defn flatten-nodes
   [node parent-x parent-y]
-  (let [x-offset     (+ (:x node) parent-x)
-        y-offset     (+ (:y node) parent-y)
+  (let [x-offset (+ (:x node) parent-x)
+        y-offset (+ (:y node) parent-y)
         updated-node (assoc node :x x-offset :y y-offset)]
     (if (:children node)
       (into [updated-node]
@@ -123,7 +125,7 @@
   [edges node-id->layout]
   (mapv #(let [container-node-id (edn/read-string (:container %))
                {:keys [x y]} (node-id->layout container-node-id)
-               node-points    {:x x :y y}]
+               node-points {:x x :y y}]
            (update % :sections (fn [section]
                                  (mapv
                                    (fn [s]
@@ -136,28 +138,31 @@
                                    section))))
     edges))
 
-(defn use-elk-layout [this chart-id node-id->size]
+(defn use-elk-layout [this chart-or-id node-id->size]
   (let [[layout set-layout!] (hooks/use-state nil)]
     (hooks/use-effect
       (fn []
         (when (seq node-id->size)
-          (let [chart     (assoc (scf/lookup-statechart this chart-id)
-                            :width 1000
-                            :height 500)
+          (let [chart (assoc (if (map? chart-or-id)
+                               chart-or-id
+                               (scf/lookup-statechart this chart-or-id))
+                        :width 1000
+                        :height 500)
                 elk-input (chart->elk-tree chart node-id->size)]
             (async/go
-              (let [layout          (async/<! (elk/layout! elk-input))
+              (let [layout (async/<! (elk/layout! elk-input))
                     node-id->layout (to-layout-map layout)
-                    layout          (update layout :edges update-edge-points node-id->layout)]
+                    layout (update layout :edges update-edge-points node-id->layout)]
                 (set-layout! {:node-id->layout node-id->layout
-                              :layout layout})))))
+                              :layout          layout})))))
         js/undefined)
       [(hash node-id->size)])
     layout))
 
 (defsc Visualizer [this {:ui/keys [chart-id layout states transitions node-id->size node-id->position] :as props}
-                   {:keys [session-id]}]
+                   {:keys [session-id chart current-configuration]}]
   {:query         [:ui/chart-id
+                   :ui/chart
                    :ui/layout
                    :ui/states
                    :ui/transitions
@@ -169,12 +174,12 @@
                    :ui/node-id->position {}}
    :ident         (fn [_] [:component/id ::Visualizer])
    :use-hooks?    true}
-  (use-chart-elements this chart-id)
+  (use-chart-elements this (or chart chart-id))
   (use-state-sizes this states)
-  (let [{:keys [layout node-id->layout]} (use-elk-layout this chart-id node-id->size)
+  (let [{:keys [layout node-id->layout]} (use-elk-layout this (or chart chart-id) node-id->size)
         active? (if session-id
                   (scf/current-configuration this session-id)
-                  #{})]
+                  (or current-configuration #{}))]
     (dom/div {:style {:position        :relative
                       :width           (str (get-in (or node-id->layout node-id->size) [:ROOT :width]) "px")
                       :height          (str (get-in (or node-id->layout node-id->size) [:ROOT :height]) "px")
@@ -186,18 +191,18 @@
         (fn [{:keys [id initial? compound? node-type children] :as node}]
           (if initial?
             (dom/div {:key   (pr-str id)
-                      :style {:position         :absolute
-                              :zIndex 1
-                              :backgroundColor  "black"
-                              :borderRadius     "15px"
-                              :width            "15px"
-                              :height           "15px"
-                              :top              (get-in (or node-id->layout node-id->position) [id :y] 0)
-                              :left             (get-in (or node-id->layout node-id->position) [id :x] 0)}
+                      :style {:position        :absolute
+                              :zIndex          1
+                              :backgroundColor "black"
+                              :borderRadius    "15px"
+                              :width           "15px"
+                              :height          "15px"
+                              :top             (get-in (or node-id->layout node-id->position) [id :y] 0)
+                              :left            (get-in (or node-id->layout node-id->position) [id :x] 0)}
                       :ref   (:ref (meta node))})
             (dom/div {:key   (pr-str id)
                       :style {:position     :absolute
-                              :zIndex (if compound? 0 1)
+                              :zIndex       (if compound? 0 1)
                               :border       (str "2px solid " (if (active? id) "red" "black"))
                               :borderRadius "10px"
                               :padding      "10px"

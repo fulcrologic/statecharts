@@ -31,11 +31,13 @@
   "
   (:require
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
+    [com.fulcrologic.fulcro.inspect.inspect-client :as inspect :refer [ido statechart-event!]]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.malli.core :refer [=> >def >defn ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
+    [com.fulcrologic.statecharts.environment :as senv]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as cael]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
@@ -248,20 +250,32 @@
                   [:on-delete {:optional true} fn?]] => ::sc/env]
    (let [runtime-atom (:com.fulcrologic.fulcro.application/runtime-atom app)]
      (when-not (contains? @runtime-atom ::sc/env)
-       (let [dm       (impl/new-fulcro-data-model app)
-             q        (mpq/new-queue)
-             ex       (lambda/new-execution-model dm q {:explode-event? true})
-             registry (lmr/new-registry)
-             wmstore  (impl/->FulcroWorkingMemoryStore app on-save on-delete)
-             env      (merge {:fulcro/app                app
-                              ::sc/statechart-registry   registry
-                              ::sc/data-model            dm
-                              ::sc/event-queue           q
-                              ::sc/working-memory-store  wmstore
-                              ::sc/processor             (alg/new-processor)
-                              ::sc/invocation-processors [(i.statechart/new-invocation-processor)]
-                              ::sc/execution-model       ex}
-                        extra-env)]
+       (let [dm                 (impl/new-fulcro-data-model app)
+             real-queue         (mpq/new-queue)
+             instrumented-queue (reify sp/EventQueue
+                                  (send! [_ env send-request] (sp/send! real-queue env send-request))
+                                  (cancel! [event-queue env session-id send-id] (sp/cancel! real-queue env session-id send-id))
+                                  (receive-events! [this env handler] (sp/receive-events! this env handler {}))
+                                  (receive-events! [_ env handler options]
+                                    (let [wrapped-handler (fn [{:fulcro/keys [app] :as env} event]
+                                                            (handler env event)
+                                                            (inspect/ilet [new-config (senv/current-configuration env)]
+                                                              (if (map? event)
+                                                                (statechart-event! app (senv/session-id env) (:name event) (:data event) new-config)
+                                                                (statechart-event! app (senv/session-id env) event {} new-config))))]
+                                      (sp/receive-events! real-queue env wrapped-handler options))))
+             ex                 (lambda/new-execution-model dm instrumented-queue {:explode-event? true})
+             registry           (lmr/new-registry)
+             wmstore            (impl/->FulcroWorkingMemoryStore app on-save on-delete)
+             env                (merge {:fulcro/app                app
+                                        ::sc/statechart-registry   registry
+                                        ::sc/data-model            dm
+                                        ::sc/event-queue           instrumented-queue
+                                        ::sc/working-memory-store  wmstore
+                                        ::sc/processor             (alg/new-processor)
+                                        ::sc/invocation-processors [(i.statechart/new-invocation-processor)]
+                                        ::sc/execution-model       ex}
+                                  extra-env)]
          (swap! runtime-atom assoc ::sc/env (assoc env :events-running-atom
                                                        (cael/run-event-loop! env 16)))))
      (register-statechart! app impl/master-chart-id impl/application-chart)
