@@ -22,7 +22,7 @@
            :dev       {:extra-paths ["src/dev" "src/examples"]
                        :extra-deps  {thheller/shadow-cljs                {:mvn/version "2.16.7"}
                                      hickory/hickory                     {:mvn/version "0.7.1"}
-                                     com.fulcrologic/fulcro              {:mvn/version "3.6.0"}
+                                     com.fulcrologic/fulcro              {:mvn/version "3.6.11-SNAPSHOT"}
                                      vvvvalvalval/scope-capture          {:mvn/version "0.3.2"}
                                      djblue/portal                       {:mvn/version "0.18.1"}
                                      org.clojure/clojure                 {:mvn/version "1.10.3"}
