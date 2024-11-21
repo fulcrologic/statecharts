@@ -51,11 +51,9 @@
                       "elk.algorithm.depth"                       20,
                       "elk.layered.considerModelOrder"            "NODES_AND_EDGES",
                       "elk.layered.wrapping.strategy"             "MULTI_EDGE"
-                      "elk.nodeLabels.padding"                    44
-                      "elk.aspectRatio"                           "2"
                       "elk.direction"                             "RIGHT"
-                      "elk.spacing.nodeNode"                      20
-                      "elk.layered.spacing.nodeNodeBetweenLayers" 20})))
+                      "elk.spacing.nodeNode"                      50
+                      "elk.layered.spacing.nodeNodeBetweenLayers" 100})))
 
 (defn use-chart-elements [this chart-or-id]
   (hooks/use-effect
@@ -146,8 +144,8 @@
           (let [chart (assoc (if (map? chart-or-id)
                                chart-or-id
                                (scf/lookup-statechart this chart-or-id))
-                        :width 1000
-                        :height 500)
+                        :width 2000
+                        :height 2000)
                 elk-input (chart->elk-tree chart node-id->size)]
             (async/go
               (let [layout (async/<! (elk/layout! elk-input))
@@ -205,9 +203,12 @@
                               :zIndex       (if compound? 0 1)
                               :border       (str "2px solid " (if (active? id) "red" "black"))
                               :borderRadius "10px"
+                              ;; TASK: Padding AND 32x border need to be counted in the size..the demo nodes we're measuring are wrong
                               :padding      "10px"
-                              :width        (str (get-in (or node-id->layout node-id->size) [id :width]) "px")
-                              :height       (str (get-in (or node-id->layout node-id->size) [id :height]) "px")
+                              :width        (str (- (get-in (or node-id->layout node-id->size) [id :width])
+                                                   24) "px")
+                              :height       (str (- (get-in (or node-id->layout node-id->size) [id :height])
+                                                   24) "px")
                               :minHeight    "80px"
                               :top          (get-in (or node-id->layout node-id->position) [id :y] 0)
                               :left         (get-in (or node-id->layout node-id->position) [id :x] 0)}

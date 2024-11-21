@@ -77,38 +77,6 @@
        (.layout (RecursiveGraphLayoutEngine.) graph monitor)
        c)))
 
-(comment
-  (async/go
-    (let [result (async/<!
-                   (layout! {:id            "root",
-                             :layoutOptions {"elk.hierarchyHandling"                     "INCLUDE_CHILDREN",
-                                             "elk.algorithm"                             "layered",
-                                             "elk.layered.considerModelOrder"            "NODES_AND_EDGES",
-                                             "elk.layered.wrapping.strategy"             "MULTI_EDGE",
-                                             "elk.aspectRatio"                           "2",
-                                             "elk.direction"                             "RIGHT",
-                                             "elk.spacing.nodeNode"                      50 ; vertical
-                                             "elk.layered.spacing.nodeNodeBetweenLayers" 50} ; horizontal
-                             :children      [{:id "n1", :width 50, :height 50},
-                                             {:id "n2", :width 50, :height 50},
-                                             {:id       "n3", :width 100, :height 100
-                                              :children [{:id     "n4"
-                                                          :width  20
-                                                          :height 20}
-                                                         {:id     "n5"
-                                                          :width  20
-                                                          :height 20}
-                                                         {:id     "n6"
-                                                          :width  20
-                                                          :height 20}]}],
-                             :edges         [{:id "e1", :sources ["n1"], :targets ["n2"]},
-                                             {:id "e2", :sources ["n1"], :targets ["n3"]}
-                                             {:id "ie1" :sources ["n4"] :targets ["n5"]}
-                                             {:id "ie2" :sources ["n5"] :targets ["n6"]}
-                                             {:id "ie3" :sources ["n6"] :targets ["n1"]}]}))]
-      (def -result result)))
-  )
-
 (defn render-node [{:keys [id x y width height children] :as props}]
   (dom/g {}
     (dom/rect

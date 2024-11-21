@@ -31,13 +31,13 @@
   "
   (:require
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
-    [com.fulcrologic.fulcro.inspect.inspect-client :as inspect :refer [ido statechart-event!]]
+    [com.fulcrologic.fulcro.inspect.inspect-client :as inspect :refer [statechart-event!]]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.malli.core :refer [=> >def >defn ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
-    [com.fulcrologic.statecharts.environment :as senv]
+    [com.fulcrologic.statecharts.environment]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as cael]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
@@ -46,8 +46,7 @@
     [com.fulcrologic.statecharts.invocation.statechart :as i.statechart]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.registry.local-memory-registry :as lmr]
-    [com.fulcrologic.statecharts.util :refer [new-uuid]]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.statecharts.util :refer [new-uuid]]))
 
 (def local-data-path
   "[session-id & ks]
@@ -257,12 +256,14 @@
                                   (cancel! [event-queue env session-id send-id] (sp/cancel! real-queue env session-id send-id))
                                   (receive-events! [this env handler] (sp/receive-events! this env handler {}))
                                   (receive-events! [_ env handler options]
-                                    (let [wrapped-handler (fn [{:fulcro/keys [app] :as env} event]
+                                    (let [wrapped-handler (fn [{::sc/keys    [working-memory-store]
+                                                                :fulcro/keys [app] :as env} event]
                                                             (handler env event)
-                                                            (inspect/ilet [new-config (senv/current-configuration env)]
+                                                            (inspect/ilet [session-id (:target event)
+                                                                           {::sc/keys [configuration] :as wmem} (sp/get-working-memory working-memory-store env session-id)]
                                                               (if (map? event)
-                                                                (statechart-event! app (senv/session-id env) (:name event) (:data event) new-config)
-                                                                (statechart-event! app (senv/session-id env) event {} new-config))))]
+                                                                (statechart-event! app session-id (:name event) (:data event) configuration)
+                                                                (statechart-event! app session-id event {} configuration))))]
                                       (sp/receive-events! real-queue env wrapped-handler options))))
              ex                 (lambda/new-execution-model dm instrumented-queue {:explode-event? true})
              registry           (lmr/new-registry)
