@@ -203,7 +203,7 @@
                               :zIndex       (if compound? 0 1)
                               :border       (str "2px solid " (if (active? id) "red" "black"))
                               :borderRadius "10px"
-                              ;; TASK: Padding AND 32x border need to be counted in the size..the demo nodes we're measuring are wrong
+                              ;; NOTE: We have to subtract off the padding/boder from width/height to get alignment
                               :padding      "10px"
                               :width        (str (- (get-in (or node-id->layout node-id->size) [id :width])
                                                    24) "px")
