@@ -1,6 +1,7 @@
 (ns com.fulcrologic.statecharts.integration.fulcro.ui-routes
   "A composable statechart-driven UI routing system"
   (:require
+    [clojure.set :as set]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
@@ -8,11 +9,12 @@
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry script state transition parallel]]
+    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry parallel script state transition]]
     [com.fulcrologic.statecharts.environment :as senv]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
-    [com.fulcrologic.statecharts.protocols :as scp]
+    [com.fulcrologic.statecharts.integration.fulcro.route-url :as ru]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes-options :as ro]
+    [com.fulcrologic.statecharts.protocols :as scp]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
@@ -96,6 +98,41 @@
       (replace-join! app Parent parent-ident :ui/current-route Target target-ident)))
   nil)
 
+(defn- establish-route-params-node
+  "Statechart node that looks at the parameters desired by a route. If those parameters
+   are in the event data, then it uses those, and sets them on the URL. If they are
+   not in the event data, it attempts to get them from the URL.
+
+   In both cases the obtained parameters (or the lack thereof) are set into
+   [:routing/parameters <state-id>] in the data model."
+  [{:keys       [id]
+    :route/keys [path params]}]
+  (script
+    {:expr
+     (fn [env data-model & _]
+       (let [event-data              (:data (:_event data-model))
+             ks                      (set (keys event-data))
+             event-has-route-params? (boolean (seq (set/intersection ks params)))
+             path-params             (some-> (ru/current-url)
+                                       (ru/current-url-state-params)
+                                       (get id))
+             has-path-params?        (boolean
+                                       (seq (set/intersection
+                                              (set (keys path-params))
+                                              params)))
+             actual-params           (select-keys
+                                       (cond
+                                         (log/spy :info event-has-route-params?) event-data
+                                         (log/spy :info has-path-params?) path-params
+                                         :else {})
+                                       params)]
+         (ru/replace-url!
+           (-> (ru/current-url)
+             (cond-> path (ru/new-url-path path))
+             (ru/update-url-state-param id (constantly (log/spy :info  actual-params)))))
+         (log/spy :info [(ops/assign
+                           [:routing/parameters id] actual-params)])))}))
+
 (defn rstate
   "Create a routing state. Requires a :route/target attribute which should be
    anything accepted by comp/registry-key->class.  If `id` is not specified it
@@ -103,7 +140,7 @@
    this node will be a parallel state, where all immediate children will be active at the
    same time."
   [{:keys       [id parallel?]
-    :route/keys [target] :as props} & children]
+    :route/keys [target path] :as props} & children]
   (let [target-key (coerce-to-keyword target)
         id         (or id target-key)]
     ;; TODO: See which kind of management the component wants. Simple routing, invocation
@@ -111,6 +148,7 @@
     (apply (if parallel? parallel state) (merge props {:id           id
                                                        :route/target target-key})
       (on-entry {}
+        (establish-route-params-node (assoc props :id id))
         (script {:expr (fn [env data & _]
                          (let [ident (initialize-route! env (assoc data ::target target-key))]
                            [(ops/assign [:route/idents target-key] ident)]))})
@@ -154,6 +192,8 @@
     (apply state (-> (assoc state-props :id id :route/target target-key)
                    (dissoc :invoke-params :finalize :autoforward :on-done :exit-target :statechart-id))
       (on-entry {}
+        (establish-route-params-node (assoc state-props :id id))
+        (script {:expr (fn [& _])})
         (script {:expr (fn [env data & _]
                          (let [ident (initialize-route! env (assoc data ::target target-key))]
                            [(ops/assign [:route/idents target-key] ident)]))})
