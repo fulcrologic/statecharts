@@ -2,6 +2,7 @@
   "A composable statechart-driven UI routing system"
   (:require
     [clojure.set :as set]
+    [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
@@ -12,12 +13,19 @@
     [com.fulcrologic.statecharts.elements :as ele :refer [on-entry parallel script state transition]]
     [com.fulcrologic.statecharts.environment :as senv]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
+    [com.fulcrologic.statecharts.integration.fulcro.route-history :as rhist]
     [com.fulcrologic.statecharts.integration.fulcro.route-url :as ru]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes-options :as ro]
     [com.fulcrologic.statecharts.protocols :as scp]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
+
+(def session-id
+  "The global statechart session ID that is used for the application statechart."
+  ::session)
+
+(def history (volatile! nil))
 
 (defn ?!
   "Run if the argument is a fn. This function can accept a value or function. If it is a
@@ -109,8 +117,8 @@
     :route/keys [path params]}]
   (script
     {:expr
-     (fn [env data-model & _]
-       (let [event-data              (:data (:_event data-model))
+     (fn [{:fulcro/keys [app]} _dm _e event-data]
+       (let [{::keys [external?]} event-data
              ks                      (set (keys event-data))
              event-has-route-params? (boolean (seq (set/intersection ks params)))
              path-params             (some-> (ru/current-url)
@@ -122,16 +130,18 @@
                                               params)))
              actual-params           (select-keys
                                        (cond
-                                         (log/spy :info event-has-route-params?) event-data
-                                         (log/spy :info has-path-params?) path-params
+                                         event-has-route-params? event-data
+                                         has-path-params? path-params
                                          :else {})
                                        params)]
-         (ru/replace-url!
-           (-> (ru/current-url)
-             (cond-> path (ru/new-url-path path))
-             (ru/update-url-state-param id (constantly (log/spy :info  actual-params)))))
-         (log/spy :info [(ops/assign
-                           [:routing/parameters id] actual-params)])))}))
+         #_(ru/replace-url!
+             (-> (ru/current-url)
+               (cond-> path (ru/new-url-path path))
+               (ru/update-url-state-param id (constantly actual-params))))
+         (when path
+           (when (and (not external?) @history)
+             (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
+           [(ops/assign [:routing/parameters id] actual-params)])))}))
 
 (defn rstate
   "Create a routing state. Requires a :route/target attribute which should be
@@ -246,6 +256,35 @@
 (defn record-failed-route! [env {:keys [_event]} & args]
   [(ops/assign ::failed-route-event _event)])
 
+(defn undo-url-change [env dm event-name {:route/keys [uid] :as event-data}]
+  (let [id->node (rhist/recent-history @history)
+        r        (get id->node uid)]
+    (rhist/replace-route! @history r)
+    nil))
+
+(defn apply-external-route
+  "Look at the URL and figure out which of the statechart states we need to be in,
+   compute the parameters, and then trigger an event to go there."
+  [{::sc/keys    [statechart-registry]
+    :fulcro/keys [app]} & _]
+  (let [{::sc/keys [elements-by-id]} (scp/get-statechart statechart-registry ::chart)
+        elements         (vals elements-by-id)
+        current-path     (ru/current-url-path)
+        {target-state-id :id
+         :route/keys     [target]} (first
+                                     (filter
+                                       (fn [{:route/keys [path]}]
+                                         (= path current-path))
+                                       elements))
+        route-event-name (log/spy :info (route-to-event-name target))
+        ;; FIXME: Don't tie to HTML
+        route-params     (log/spy :info
+                           (get (log/spy :info (ru/current-url-state-params (ru/current-url)))
+                             (log/spy :info target-state-id)))]
+    (scf/send! app ::session route-event-name (assoc route-params
+                                                ::external? true))
+    nil))
+
 (defn routes
   "Emits a state that represents the region that contains all of the
    routes. This will emit all of the transitions for direct navigation
@@ -274,6 +313,13 @@
                    :cond  busy?}
         (script {:expr record-failed-route!})
         (ele/raise {:event :event.routing-info/show}))
+      (transition {:event :event/external-route-change
+                   :cond  busy?}
+        (script {:expr undo-url-change})
+        (ele/raise {:event :event.routing-info/show}))
+      (transition {:event :event/external-route-change}
+        (script {:expr apply-external-route}))
+
       (concat
         direct-transitions
         route-states))))
@@ -314,9 +360,12 @@
                     :qualified-symbol
                     [:fn rc/component-class?]]]]
    => ::sc/parallel-element]
-  (parallel {:id :state/top-parallel}
-    routing-info-state
-    routes))
+  (state {:id :state/route-root}
+    (on-entry {}
+      (script {:expr apply-external-route}))
+    (parallel {:id :state/top-parallel}
+      routing-info-state
+      routes)))
 
 (defn ui-current-subroute
   "Render the current subroute. factory-fn is the function wrapper that generates a proper element (e.g. comp/factory),
@@ -354,10 +403,6 @@
       (render-child current-route)
       (log/error "No subroute to render for" target-registry-key "in" (rc/component-name parent-component-instance)))))
 
-(def session-id
-  "The global statechart session ID that is used for the application statechart."
-  ::session)
-
 (defn route-to!
   "Attempt to route to the given target."
   ([app-ish target] (route-to! app-ish target {}))
@@ -370,9 +415,31 @@
   [app statechart]
   (scf/register-statechart! app ::chart statechart))
 
+(defn state-for-path [{::sc/keys [elements-by-id] :as statechart} current-path]
+  (let [elements (vals elements-by-id)]
+    (first
+      (filter
+        (fn [{:route/keys [path]}]
+          (= path current-path))
+        elements))))
+
 (defn start-routing!
   "Installs the statechart and starts it."
   [app statechart]
+  (vreset! history (rhist/new-html5-history app
+                     {:route->url (fn [{:keys       [id]
+                                        :route/keys [path params]}]
+                                    (-> (ru/current-url)
+                                      (ru/update-url-state-param id (constantly params))
+                                      (ru/new-url-path (str "/" (str/join "/" path)))))
+                      :url->route (fn []
+                                    (let [url        (ru/current-url)
+                                          id->params (ru/current-url-state-params url)
+                                          path       (ru/current-url-path url)
+                                          {:keys [id] :as state} (state-for-path statechart path)]
+                                      {:id           id
+                                       :route/path   path
+                                       :route/params (get id->params id)}))}))
   (update-chart! app statechart)
   (scf/start! app {:machine    ::chart
                    :session-id session-id

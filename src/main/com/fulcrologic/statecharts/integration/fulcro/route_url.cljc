@@ -1,5 +1,6 @@
 (ns com.fulcrologic.statecharts.integration.fulcro.route-url
   (:require
+    [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.transit :as ft]))
 
 (defn current-url [] #?(:cljs (.-href (.-location js/window))))
@@ -16,6 +17,16 @@
            hash    (.-hash url)
            new-url (str origin new-path search hash)]
        new-url)))
+
+(defn current-url-path
+  ([] (current-url-path (current-url)))
+  ([href]
+   #?(:cljs
+      (let [url         (js/URL. href)
+            path-string (.-pathname url)]
+        (if (seq path-string)
+          (filterv #(not= "" %) (str/split path-string #"/"))
+          [])))))
 
 (defn current-url-state-params [href]
   #?(:cljs

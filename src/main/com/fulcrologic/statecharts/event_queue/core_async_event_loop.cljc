@@ -43,7 +43,7 @@
                     next-mem   (when wmem (sp/process-event! processor env wmem event))]
                 (if next-mem
                   (sp/save-working-memory! working-memory-store env session-id next-mem)
-                  (log/warnf "Session had no working memory. Event %s could not be sent to session %s" event session-id)))))
+                  (log/info "Session had no working memory. Event could not be sent to session" {:event event :id session-id})))))
           {}))
       (if @running?
         (recur)
