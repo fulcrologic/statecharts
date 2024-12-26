@@ -1,19 +1,15 @@
 (ns com.fulcrologic.statecharts.visualization.visualizer
   (:require
     ["react" :as react]
-    [clojure.edn :as edn]
-    [clojure.pprint :refer [pprint]]
     [clojure.core.async :as async]
-    [clojure.walk :as walk]
+    [clojure.edn :as edn]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
-    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.dom :as dom]
+    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.react.hooks :as hooks]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
-    [com.fulcrologic.statecharts.visualization.elk :as elk]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.statecharts.visualization.elk :as elk]))
 
 (defn element-label [{:keys [id diagram/label]}]
   (or
@@ -31,19 +27,19 @@
                                          :diagram/label (element-label node)}
                                    (get node-id->size id {:width 40 :height 40})))
                          (seq children) (assoc :children
-                                          (vec
-                                            (keep (fn [k] (node->tree* id->element (id->element k)))
-                                              children))))))
-        all-edges (vec
-                    (keep
-                      (fn [{:keys [id node-type parent target]}]
-                        (when (= node-type :transition)
-                          {:id      (pr-str id)
-                           :sources [(pr-str parent)]
-                           :targets (if target
-                                      (mapv pr-str target)
-                                      [(pr-str parent)])}))
-                      (vals elements-by-id)))]
+                                               (vec
+                                                 (keep (fn [k] (node->tree* id->element (id->element k)))
+                                                   children))))))
+        all-edges  (vec
+                     (keep
+                       (fn [{:keys [id node-type parent target]}]
+                         (when (= node-type :transition)
+                           {:id      (pr-str id)
+                            :sources [(pr-str parent)]
+                            :targets (if target
+                                       (mapv pr-str target)
+                                       [(pr-str parent)])}))
+                       (vals elements-by-id)))]
     (assoc (node->tree elements-by-id chart)
       :edges all-edges
       :layoutOptions {"elk.hierarchyHandling"                     "INCLUDE_CHILDREN",
@@ -61,15 +57,15 @@
       (let [{::sc/keys [elements-by-id]} (if (map? chart-or-id)
                                            chart-or-id
                                            (scf/lookup-statechart this chart-or-id))
-            state? (fn [k] (boolean (#{:initial :final :state :parallel} (get-in elements-by-id [k :node-type]))))
-            states (vec
-                     (keep
-                       (fn [{:keys [node-type children] :as node}]
-                         (when (#{:initial :final :state :parallel} node-type)
-                           (cond-> (with-meta node {:ref (react/createRef)})
-                             (some state? children) (assoc :compound? true)
-                             )))
-                       (vals elements-by-id)))
+            state?      (fn [k] (boolean (#{:initial :final :state :parallel} (get-in elements-by-id [k :node-type]))))
+            states      (vec
+                          (keep
+                            (fn [{:keys [node-type children] :as node}]
+                              (when (#{:initial :final :state :parallel} node-type)
+                                (cond-> (with-meta node {:ref (react/createRef)})
+                                  (some state? children) (assoc :compound? true)
+                                  )))
+                            (vals elements-by-id)))
             transitions (vec
                           (filter
                             (fn [{:keys [node-type]}] (= :transition node-type))
@@ -92,7 +88,7 @@
                          (map
                            (fn [{:keys [id] :as node}]
                              (let [dom-node (some-> node (meta) (:ref) (.-current))
-                                   size (.getBoundingClientRect dom-node)]
+                                   size     (.getBoundingClientRect dom-node)]
                                [id {:width  (.-width size)
                                     :height (.-height size)}])))
                          states)]
@@ -103,8 +99,8 @@
 
 (defn flatten-nodes
   [node parent-x parent-y]
-  (let [x-offset (+ (:x node) parent-x)
-        y-offset (+ (:y node) parent-y)
+  (let [x-offset     (+ (:x node) parent-x)
+        y-offset     (+ (:y node) parent-y)
         updated-node (assoc node :x x-offset :y y-offset)]
     (if (:children node)
       (into [updated-node]
@@ -123,7 +119,7 @@
   [edges node-id->layout]
   (mapv #(let [container-node-id (edn/read-string (:container %))
                {:keys [x y]} (node-id->layout container-node-id)
-               node-points {:x x :y y}]
+               node-points       {:x x :y y}]
            (update % :sections (fn [section]
                                  (mapv
                                    (fn [s]
@@ -141,20 +137,20 @@
     (hooks/use-effect
       (fn []
         (when (seq node-id->size)
-          (let [chart (assoc (if (map? chart-or-id)
-                               chart-or-id
-                               (scf/lookup-statechart this chart-or-id))
-                        :width 2000
-                        :height 2000)
+          (let [chart     (assoc (if (map? chart-or-id)
+                                   chart-or-id
+                                   (scf/lookup-statechart this chart-or-id))
+                            :width 2000
+                            :height 2000)
                 elk-input (chart->elk-tree chart node-id->size)]
             (async/go
-              (let [layout (async/<! (elk/layout! elk-input))
+              (let [layout          (async/<! (elk/layout! elk-input))
                     node-id->layout (to-layout-map layout)
-                    layout (update layout :edges update-edge-points node-id->layout)]
+                    layout          (update layout :edges update-edge-points node-id->layout)]
                 (set-layout! {:node-id->layout node-id->layout
                               :layout          layout})))))
         js/undefined)
-      [(hash node-id->size)])
+      [(hash node-id->size) chart-or-id])
     layout))
 
 (defsc Visualizer [this {:ui/keys [chart-id layout states transitions node-id->size node-id->position] :as props}

@@ -3,6 +3,7 @@
  :deps    {com.taoensso/timbre                         {:mvn/version "6.0.4"}
            metosin/malli                               {:mvn/version "0.13.0"}
            com.fulcrologic/guardrails                  {:mvn/version "1.2.9"}
+           com.fulcrologic/fulcro-devtools-remote      {:mvn/version "0.2.5"}
            org.eclipse.elk/org.eclipse.elk.core        {:mvn/version "0.9.1"}
            org.eclipse.elk/org.eclipse.elk.graph       {:mvn/version "0.9.1"}
            org.eclipse.elk/org.eclipse.elk.graph.json  {:mvn/version "0.9.1"}
@@ -24,7 +25,7 @@
            :dev              {:extra-paths ["src/dev" "src/examples"]
                               :extra-deps  {thheller/shadow-cljs                {:mvn/version "2.16.7"}
                                             hickory/hickory                     {:mvn/version "0.7.1"}
-                                            com.fulcrologic/fulcro              {:mvn/version "3.8.0-alpha1"}
+                                            com.fulcrologic/fulcro              {:mvn/version "3.8.0-alpha3"}
                                             com.fulcrologic/fulcro-rad          {:mvn/version "1.6.7"}
                                             vvvvalvalval/scope-capture          {:mvn/version "0.3.2"}
                                             djblue/portal                       {:mvn/version "0.18.1"}

@@ -118,30 +118,33 @@
   (script
     {:expr
      (fn [{:fulcro/keys [app]} _dm _e event-data]
-       (let [{::keys [external?]} event-data
-             ks                      (set (keys event-data))
-             event-has-route-params? (boolean (seq (set/intersection ks params)))
-             path-params             (some-> (ru/current-url)
-                                       (ru/current-url-state-params)
-                                       (get id))
-             has-path-params?        (boolean
-                                       (seq (set/intersection
-                                              (set (keys path-params))
-                                              params)))
-             actual-params           (select-keys
-                                       (cond
-                                         event-has-route-params? event-data
-                                         has-path-params? path-params
-                                         :else {})
-                                       params)]
-         #_(ru/replace-url!
-             (-> (ru/current-url)
-               (cond-> path (ru/new-url-path path))
-               (ru/update-url-state-param id (constantly actual-params))))
-         (when path
-           (when (and (not external?) @history)
-             (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
-           [(ops/assign [:routing/parameters id] actual-params)])))}))
+       (when path
+         (log/spy :info [id _e event-data])
+         (let [{::keys [external?]} event-data
+               ks                      (set (keys event-data))
+               event-has-route-params? (boolean (seq (set/intersection ks params)))
+               path-params             (some-> (ru/current-url)
+                                         (ru/current-url-state-params)
+                                         (get id))
+               has-path-params?        (boolean
+                                         (seq (set/intersection
+                                                (set (keys path-params))
+                                                params)))
+               actual-params           (select-keys
+                                         (cond
+                                           event-has-route-params? event-data
+                                           has-path-params? path-params
+                                           :else {})
+                                         params)]
+           #_(ru/replace-url!
+               (-> (ru/current-url)
+                 (cond-> path (ru/new-url-path path))
+                 (ru/update-url-state-param id (constantly actual-params))))
+           (when @history
+             (if (log/spy :info external?)
+               (rhist/replace-route! @history {:id id :route/path path :route/params actual-params})
+               (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
+             [(ops/assign [:routing/parameters id] actual-params)]))))}))
 
 (defn rstate
   "Create a routing state. Requires a :route/target attribute which should be
@@ -256,10 +259,16 @@
 (defn record-failed-route! [env {:keys [_event]} & args]
   [(ops/assign ::failed-route-event _event)])
 
-(defn undo-url-change [env dm event-name {:route/keys [uid] :as event-data}]
-  (let [id->node (rhist/recent-history @history)
-        r        (get id->node uid)]
-    (rhist/replace-route! @history r)
+(defn undo-url-change [env dm event-name {:route/keys [uid] :as popped-or-pushed-event-data}]
+  (let [id->node         (rhist/recent-history @history)
+        ids              (reverse (keys id->node))
+        most-recent      (first ids)
+        next-most-recent (second ids)
+        r                (get id->node most-recent)
+        back?            (= uid next-most-recent)]
+    (if (log/spy :info back?)
+      (rhist/push-route! @history (log/spy :info r))
+      (rhist/replace-route! @history (log/spy :info (get id->node uid)) ))
     nil))
 
 (defn apply-external-route
@@ -276,13 +285,14 @@
                                        (fn [{:route/keys [path]}]
                                          (= path current-path))
                                        elements))
-        route-event-name (log/spy :info (route-to-event-name target))
+        route-event-name (log/spy :info "route-event-name" (when target (route-to-event-name target)))
         ;; FIXME: Don't tie to HTML
-        route-params     (log/spy :info
-                           (get (log/spy :info (ru/current-url-state-params (ru/current-url)))
-                             (log/spy :info target-state-id)))]
-    (scf/send! app ::session route-event-name (assoc route-params
-                                                ::external? true))
+        route-params     (log/spy :info "route-params" (when route-event-name
+                                                         (get (ru/current-url-state-params (ru/current-url))
+                                                           target-state-id)))]
+    (when route-event-name
+      (scf/send! app ::session route-event-name (assoc route-params
+                                                  ::external? true)))
     nil))
 
 (defn routes
@@ -315,6 +325,7 @@
         (ele/raise {:event :event.routing-info/show}))
       (transition {:event :event/external-route-change
                    :cond  busy?}
+        (script {:expr record-failed-route!})
         (script {:expr undo-url-change})
         (ele/raise {:event :event.routing-info/show}))
       (transition {:event :event/external-route-change}
@@ -359,7 +370,7 @@
                     :qualified-keyword
                     :qualified-symbol
                     [:fn rc/component-class?]]]]
-   => ::sc/parallel-element]
+   => ::sc/element]
   (state {:id :state/route-root}
     (on-entry {}
       (script {:expr apply-external-route}))

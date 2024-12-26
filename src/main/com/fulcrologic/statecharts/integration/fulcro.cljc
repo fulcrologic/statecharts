@@ -31,7 +31,7 @@
   "
   (:require
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
-    [com.fulcrologic.fulcro.inspect.inspect-client :as inspect :refer [statechart-event!]]
+    [com.fulcrologic.fulcro.inspect.inspect-client :as inspect]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.malli.core :refer [=> >def >defn ?]]
@@ -262,8 +262,8 @@
                                                             (inspect/ilet [session-id (:target event)
                                                                            {::sc/keys [configuration] :as wmem} (sp/get-working-memory working-memory-store env session-id)]
                                                               (if (map? event)
-                                                                (statechart-event! app session-id (:name event) (:data event) configuration)
-                                                                (statechart-event! app session-id event {} configuration))))]
+                                                                (impl/statechart-event! app session-id (:name event) (:data event) configuration)
+                                                                (impl/statechart-event! app session-id event {} configuration))))]
                                       (sp/receive-events! real-queue env wrapped-handler options))))
              ex                 (lambda/new-execution-model dm instrumented-queue {:explode-event? true})
              registry           (lmr/new-registry)

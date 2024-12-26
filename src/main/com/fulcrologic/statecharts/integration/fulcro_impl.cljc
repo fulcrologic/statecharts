@@ -1,8 +1,15 @@
 (ns com.fulcrologic.statecharts.integration.fulcro-impl
   (:require
     [clojure.set :as set]
+    [com.fulcrologic.devtools.common.protocols :as dp]
+    [com.fulcrologic.devtools.common.resolvers :as dres]
+    [com.fulcrologic.devtools.common.utils :refer [strip-lambdas]]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.fulcro.inspect.inspect-client :refer [app-uuid app-uuid-key]]
+    [com.fulcrologic.fulcro.inspect.target-impl :as timpl]
+    [com.fulcrologic.fulcro.inspect.devtool-api :as dapi]
+    [com.fulcrologic.fulcro.inspect.tools :as fit]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
@@ -12,8 +19,70 @@
     [com.fulcrologic.statecharts.elements :as ele]
     [com.fulcrologic.statecharts.environment :as senv]
     [com.fulcrologic.statecharts.protocols :as sp]
+    [com.wsscode.pathom.connect :as pc]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]))
+
+(dapi/remote-mutations statechart-event)
+
+(defn runtime-atom [app] (:com.fulcrologic.fulcro.application/runtime-atom app))
+
+(dres/defresolver statechart-definition-resolver [env input]
+  {::pc/output [{:statechart/definitions [:statechart/registry-key
+                                          :statechart/chart]}]}
+  (let [params   (:query-params env)
+        app-uuid (app-uuid params)
+        app      (get @timpl/apps* app-uuid)]
+    (when app
+      (let [runtime-env          (some-> (runtime-atom app) deref :com.fulcrologic.statecharts/env)
+            chart-id->definition (some-> runtime-env :com.fulcrologic.statecharts/statechart-registry :charts deref strip-lambdas)
+            definitions          (mapv (fn [[k v]]
+                                         {:statechart/registry-key k
+                                          :statechart/chart        v})
+                                   chart-id->definition)]
+        {:statechart/definitions definitions}))))
+
+(dres/defresolver statechart-session-resolver [env input]
+  {::pc/output [{:statechart/available-sessions [:com.fulcrologic.statecharts/session-id
+                                                 :com.fulcrologic.statecharts/history-value
+                                                 :com.fulcrologic.statecharts/parent-session-id
+                                                 :com.fulcrologic.statecharts/statechart-src
+                                                 :com.fulcrologic.statecharts/configuration
+                                                 :com.fulcrologic.statecharts/statechart]}]}
+  (let [params   (:query-params env)
+        app-uuid (app-uuid params)
+        app      (get @timpl/apps* app-uuid)]
+    (when (boolean app)
+      (let [{session-id->session :com.fulcrologic.statecharts/session-id :as state-map} (rapp/current-state app)
+            runtime-env          (some-> (runtime-atom app) deref :com.fulcrologic.statecharts/env)
+            chart-id->definition (some-> runtime-env :com.fulcrologic.statecharts/statechart-registry :charts deref strip-lambdas)
+            available-sessions   (mapv
+                                   (fn [session]
+                                     (let [src-id (:com.fulcrologic.statecharts/statechart-src session)]
+                                       (-> session
+                                         (select-keys [:com.fulcrologic.statecharts/session-id
+                                                       :com.fulcrologic.statecharts/history-value
+                                                       :com.fulcrologic.statecharts/parent-session-id
+                                                       :com.fulcrologic.statecharts/statechart-src
+                                                       :com.fulcrologic.statecharts/configuration])
+                                         (assoc :com.fulcrologic.statecharts/statechart {:statechart/registry-key src-id
+                                                                                         :statechart/chart        (chart-id->definition src-id)}))))
+                                   (vals session-id->session))]
+        {:statechart/available-sessions available-sessions}))))
+
+(defmethod timpl/handle-inspect-event `statechart-event [tconn app event]
+  (let [app-uuid (app-uuid app)]
+    (dp/transmit! tconn app-uuid [(statechart-event event)])))
+
+(defn statechart-event! [app session-id event data new-config]
+  #?(:cljs
+     (let [app-uuid (app-uuid app)]
+       (log/spy :info [app-uuid session-id new-config event data])
+       (fit/notify! app `statechart-event {app-uuid-key                               app-uuid
+                                           :com.fulcrologic.statecharts/session-id    session-id
+                                           :event                                     event
+                                           :data                                      data
+                                           :com.fulcrologic.statecharts/configuration new-config}))))
 
 (defn local-data-path
   "Returns the Fulcro app state ident location of the local data of a specific instance of a running state machine."

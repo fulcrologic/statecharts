@@ -112,16 +112,19 @@
 (defrecord HTML5History [hash-based? current-uid prefix uid->history default-route
                          fulcro-app route->url url->route]
   RouteHistory
-  (push-route! [this r]
+  (push-route! [this {:keys [uid] :as r}]
     #?(:cljs
-       (let [url (str prefix (route->url (log/spy :info r) hash-based?))]
-         (swap! current-uid inc)
-         (swap! uid->history assoc @current-uid (assoc r :uid @current-uid))
+       (let [url (str prefix (route->url r hash-based?))]
+         (log/info "PUSH" r)
+         (when-not uid
+           (swap! current-uid inc)
+           (swap! uid->history assoc @current-uid (assoc r :uid @current-uid)))
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (replace-route! [this {:keys [uid] :as r}]
     #?(:cljs
        (let [url (str prefix (route->url r hash-based?))
              uid (or uid @current-uid)]
+         (log/info "REPLACE" r)
          (swap! uid->history assoc uid (assoc r :uid uid))
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
   (recent-history [_] @uid->history))
