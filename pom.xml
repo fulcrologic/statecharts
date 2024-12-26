@@ -110,6 +110,11 @@
             <version>0.9.1</version>
         </dependency>
         <dependency>
+            <groupId>com.fulcrologic</groupId>
+            <artifactId>fulcro-devtools-remote</artifactId>
+            <version>0.2.5</version>
+        </dependency>
+        <dependency>
             <groupId>org.clojure</groupId>
             <artifactId>core.async</artifactId>
             <version>1.6.681</version>
