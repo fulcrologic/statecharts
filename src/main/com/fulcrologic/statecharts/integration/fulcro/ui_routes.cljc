@@ -1,5 +1,7 @@
-(ns com.fulcrologic.statecharts.integration.fulcro.ui-routes
-  "A composable statechart-driven UI routing system"
+(ns  com.fulcrologic.statecharts.integration.fulcro.ui-routes
+  "A composable statechart-driven UI routing system.
+
+   ALPHA. This namespace's API is subject to change."
   (:require
     [clojure.set :as set]
     [clojure.string :as str]

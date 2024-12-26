@@ -1,4 +1,5 @@
 (ns com.fulcrologic.statecharts.integration.fulcro.route-history
+  "ALPHA. This namespace's API is subject to change."
   (:require
     #?(:cljs [goog.object :as gobj])
     [clojure.set :as set]
