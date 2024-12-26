@@ -111,6 +111,11 @@
         </dependency>
         <dependency>
             <groupId>com.fulcrologic</groupId>
+            <artifactId>fulcro-inspect</artifactId>
+            <version>1.0.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fulcrologic</groupId>
             <artifactId>fulcro-devtools-remote</artifactId>
             <version>0.2.5</version>
         </dependency>
