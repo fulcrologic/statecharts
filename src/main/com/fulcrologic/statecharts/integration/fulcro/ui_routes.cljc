@@ -1,10 +1,11 @@
-(ns  com.fulcrologic.statecharts.integration.fulcro.ui-routes
+(ns com.fulcrologic.statecharts.integration.fulcro.ui-routes
   "A composable statechart-driven UI routing system.
 
    ALPHA. This namespace's API is subject to change."
   (:require
     [clojure.set :as set]
     [clojure.string :as str]
+    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
@@ -22,6 +23,9 @@
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
+
+(defn rad-form? [Component] (boolean (rc/component-options Component :com.fulcrologic.rad.form/id)))
+(defn rad-report? [Component] (boolean (rc/component-options Component :com.fulcrologic.rad.report/source-attribute)))
 
 (def session-id
   "The global statechart session ID that is used for the application statechart."
@@ -44,26 +48,36 @@
     (or (symbol? v) (string? v)) (keyword v)
     (rc/component-class? v) (rc/class->registry-key v)))
 
-(>defn route-to-event-name [target-key]
+(>defn route-to-event-name [target]
   [[:or
     [:fn rc/component-class?]
     :qualified-symbol
     :qualified-keyword] => :qualified-keyword]
-  (let [[nspc nm] [(namespace target-key) (name target-key)]
-        new-ns (str "route-to." nspc)]
+  (let [target-key (coerce-to-keyword target)
+        [nspc nm] [(namespace target-key) (name target-key)]
+        new-ns     (str "route-to." nspc)]
     (keyword new-ns nm)))
 
 (defn initialize-route! [{:fulcro/keys [app] :as env} {::keys [target] :as data}]
   (let [state-map     (app/current-state app)
+        event-data    (get-in data [:_event :data])
         Target        (rc/registry-key->class target)
+        form?         (log/spy :info (rad-form? Target))
+        report?       (rad-report? Target)
         options       (rc/component-options Target)
-        initialize    (or (ro/initialize options) :once)
+        initialize    (or (ro/initialize options)
+                        (cond
+                          form? :always
+                          report? :once
+                          :else :once))
         initial-props (ro/initial-props options)
         props         (if initial-props
                         (initial-props env data)
-                        (rc/get-initial-state Target (or
-                                                       (-> data :_event :data)
-                                                       {})))
+                        (if form?
+                          (let [{:keys [id]} (log/spy :info event-data)
+                                id-key (log/spy :info (rc/component-options Target :com.fulcrologic.rad.form/id :com.fulcrologic.rad.attributes/qualified-key))]
+                            {id-key id})
+                          (rc/get-initial-state Target (or event-data {}))))
         ident         (rc/get-ident Target props)
         exists?       (some? (get-in state-map ident))]
     (when (or
@@ -82,7 +96,11 @@
                     (fn [cs]
                       (conj (vec (remove #(= join-key (:dispatch-key %)) cs))
                         (eql/query->ast1 [{join-key (rc/get-query Target state-map)}]))))
-        new-query (log/spy :debug "New Query: " (eql/ast->query nq-ast))]
+        new-query (eql/ast->query nq-ast)]
+    (when (not parent-ident)
+      (log/error "Unable to fix join. Route will have no props because parent has no ident."
+        {:parent (rc/component-name Parent)
+         :target (rc/component-name Target)}))
     (swap! state-atom assoc-in (conj parent-ident join-key) target-ident)
     (rc/set-query! app Parent {:query new-query})))
 
@@ -101,7 +119,8 @@
         parent-registry-key  (coerce-to-keyword parent-component-ref)
         Parent               (rc/registry-key->class parent-registry-key)
         Target               (rc/registry-key->class route-target)
-        parent-ident         (get-in data [:route/idents parent-registry-key])
+        ;; The parent might not be an actual route state that got initialized, so we may not have it in the idents.
+        parent-ident         (get-in data [:route/idents parent-registry-key] (rc/get-ident Parent {}))
         target-ident         (get-in data [:route/idents route-target])]
     (if parallel?
       (replace-join! app Parent parent-ident route-target Target target-ident)
@@ -121,7 +140,6 @@
     {:expr
      (fn [{:fulcro/keys [app]} _dm _e event-data]
        (when path
-         (log/spy :info [id _e event-data])
          (let [{::keys [external?]} event-data
                ks                      (set (keys event-data))
                event-has-route-params? (boolean (seq (set/intersection ks params)))
@@ -143,7 +161,7 @@
                  (cond-> path (ru/new-url-path path))
                  (ru/update-url-state-param id (constantly actual-params))))
            (when @history
-             (if (log/spy :info external?)
+             (if external?
                (rhist/replace-route! @history {:id id :route/path path :route/params actual-params})
                (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
              [(ops/assign [:routing/parameters id] actual-params)]))))}))
@@ -165,7 +183,7 @@
       (on-entry {}
         (establish-route-params-node (assoc props :id id))
         (script {:expr (fn [env data & _]
-                         (let [ident (initialize-route! env (assoc data ::target target-key))]
+                         (let [ident (log/spy :info (initialize-route! env (assoc data ::target target-key)))]
                            [(ops/assign [:route/idents target-key] ident)]))})
         (script {:expr (fn [env data & _] (update-parent-query! env data id))}))
       children)))
@@ -268,9 +286,9 @@
         next-most-recent (second ids)
         r                (get id->node most-recent)
         back?            (= uid next-most-recent)]
-    (if (log/spy :info back?)
-      (rhist/push-route! @history (log/spy :info r))
-      (rhist/replace-route! @history (log/spy :info (get id->node uid)) ))
+    (if back?
+      (rhist/push-route! @history r)
+      (rhist/replace-route! @history (get id->node uid)))
     nil))
 
 (defn apply-external-route
@@ -287,11 +305,11 @@
                                        (fn [{:route/keys [path]}]
                                          (= path current-path))
                                        elements))
-        route-event-name (log/spy :info "route-event-name" (when target (route-to-event-name target)))
+        route-event-name (when target (route-to-event-name target))
         ;; FIXME: Don't tie to HTML
-        route-params     (log/spy :info "route-params" (when route-event-name
-                                                         (get (ru/current-url-state-params (ru/current-url))
-                                                           target-state-id)))]
+        route-params     (when route-event-name
+                           (get (ru/current-url-state-params (ru/current-url))
+                             target-state-id))]
     (when route-event-name
       (scf/send! app ::session route-event-name (assoc route-params
                                                   ::external? true)))
@@ -521,3 +539,19 @@
         session-id (get-in state-map [::sc/local-data session-id :invocation/id target-key])]
     (when session-id
       (scf/current-configuration this session-id))))
+
+(defn rad-edit!
+  "Routes to Form and starts an edit on the given id"
+  ([app-ish Form id]
+   (rad-edit! app-ish Form id {}))
+  ([app-ish Form id params]
+   (route-to! app-ish Form {:id     id
+                            :params params})))
+
+(defn rad-create!
+  "Routes to Form and starts a create."
+  ([app-ish Form]
+   (rad-edit! app-ish Form (tempid/tempid) {}))
+  ([app-ish Form params]
+   (route-to! app-ish Form {:id     (tempid/tempid)
+                            :params params})))
