@@ -116,7 +116,6 @@
   (push-route! [this {:keys [uid] :as r}]
     #?(:cljs
        (let [url (str prefix (route->url r hash-based?))]
-         (log/info "PUSH" r)
          (when-not uid
            (swap! current-uid inc)
            (swap! uid->history assoc @current-uid (assoc r :uid @current-uid)))
@@ -125,7 +124,6 @@
     #?(:cljs
        (let [url (str prefix (route->url r hash-based?))
              uid (or uid @current-uid)]
-         (log/info "REPLACE" r)
          (swap! uid->history assoc uid (assoc r :uid uid))
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
   (recent-history [_] @uid->history))
@@ -148,15 +146,15 @@
     "Prefix must start with a slash, and not end with one.")
   #?(:cljs
      (try
-       (let [history (map->HTML5History (log/spy :info (merge
-                                                         params
-                                                         {:fulcro-app   app
-                                                          :route->url   route->url
-                                                          :url->route   url->route
-                                                          :hash-based?  hash-based?
-                                                          :prefix       prefix
-                                                          :uid->history (atom (sorted-map))
-                                                          :current-uid  (atom 1)})))
+       (let [history (map->HTML5History (merge
+                                          params
+                                          {:fulcro-app   app
+                                           :route->url   route->url
+                                           :url->route   url->route
+                                           :hash-based?  hash-based?
+                                           :prefix       prefix
+                                           :uid->history (atom (sorted-map))
+                                           :current-uid  (atom 1)}))
              pop-state-listener
                      (fn [evt]
                        (when (gobj/getValueByKeys evt "state")
@@ -168,5 +166,3 @@
          history)
        (catch :default e
          (log/error e "Unable to create HTML5 history.")))))
-
-

@@ -28,7 +28,7 @@
    Returns an atom containing a boolean that is what keeps the event loop running. If you swap that atom to `false` then
    the event loop will exit."
   [{::sc/keys [processor working-memory-store event-queue] :as env} resolution-ms]
-  (log/info "Event loop started")
+  (log/debug "Event loop started")
   (let [running? (atom true)]
     (async/go-loop []
       (async/<! (async/timeout resolution-ms))
@@ -43,7 +43,7 @@
                     next-mem   (when wmem (sp/process-event! processor env wmem event))]
                 (if next-mem
                   (sp/save-working-memory! working-memory-store env session-id next-mem)
-                  (log/info "Session had no working memory. Event could not be sent to session" {:event event :id session-id})))))
+                  (log/debug "Session had no working memory. Event could not be sent to session" {:event event :id session-id})))))
           {}))
       (if @running?
         (recur)

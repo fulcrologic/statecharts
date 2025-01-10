@@ -5,15 +5,15 @@
   (:require
     [clojure.set :as set]
     [clojure.string :as str]
-    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
+    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry parallel script state transition]]
+    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry on-exit parallel script script-fn state transition]]
     [com.fulcrologic.statecharts.environment :as senv]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
     [com.fulcrologic.statecharts.integration.fulcro.route-history :as rhist]
@@ -62,7 +62,7 @@
   (let [state-map     (app/current-state app)
         event-data    (get-in data [:_event :data])
         Target        (rc/registry-key->class target)
-        form?         (log/spy :info (rad-form? Target))
+        form?         (rad-form? Target)
         report?       (rad-report? Target)
         options       (rc/component-options Target)
         initialize    (or (ro/initialize options)
@@ -72,10 +72,10 @@
                           :else :once))
         initial-props (ro/initial-props options)
         props         (if initial-props
-                        (initial-props env data)
+                        (?! initial-props env data)
                         (if form?
-                          (let [{:keys [id]} (log/spy :info event-data)
-                                id-key (log/spy :info (rc/component-options Target :com.fulcrologic.rad.form/id :com.fulcrologic.rad.attributes/qualified-key))]
+                          (let [{:keys [id]} event-data
+                                id-key (rc/component-options Target :com.fulcrologic.rad.form/id :com.fulcrologic.rad.attributes/qualified-key)]
                             {id-key id})
                           (rc/get-initial-state Target (or event-data {}))))
         ident         (rc/get-ident Target props)
@@ -97,7 +97,7 @@
                       (conj (vec (remove #(= join-key (:dispatch-key %)) cs))
                         (eql/query->ast1 [{join-key (rc/get-query Target state-map)}]))))
         new-query (eql/ast->query nq-ast)]
-    (when (not parent-ident)
+    (when (and (not parent-ident) (rc/has-ident? Parent))
       (log/error "Unable to fix join. Route will have no props because parent has no ident."
         {:parent (rc/component-name Parent)
          :target (rc/component-name Target)}))
@@ -120,7 +120,7 @@
         Parent               (rc/registry-key->class parent-registry-key)
         Target               (rc/registry-key->class route-target)
         ;; The parent might not be an actual route state that got initialized, so we may not have it in the idents.
-        parent-ident         (get-in data [:route/idents parent-registry-key] (rc/get-ident Parent {}))
+        parent-ident         (get-in data [:route/idents parent-registry-key] (when (rc/has-ident? Parent) (rc/get-ident Parent {})))
         target-ident         (get-in data [:route/idents route-target])]
     (if parallel?
       (replace-join! app Parent parent-ident route-target Target target-ident)
@@ -183,9 +183,14 @@
       (on-entry {}
         (establish-route-params-node (assoc props :id id))
         (script {:expr (fn [env data & _]
-                         (let [ident (log/spy :info (initialize-route! env (assoc data ::target target-key)))]
+                         (let [ident (initialize-route! env (assoc data ::target target-key))]
+                           ;; FIXME: Route idents should be stored by path; otherwise we can only have one of each kind on-screen
+                           ;; at a time.
                            [(ops/assign [:route/idents target-key] ident)]))})
         (script {:expr (fn [env data & _] (update-parent-query! env data id))}))
+      (on-exit {}
+        (script-fn [& _]
+          [(ops/delete [:route/idents target-key])]))
       children)))
 
 (defn istate
@@ -224,9 +229,11 @@
         id         (or id target-key)]
     (apply state (-> (assoc state-props :id id :route/target target-key)
                    (dissoc :invoke-params :finalize :autoforward :on-done :exit-target :statechart-id))
+      (on-exit {}
+        (script-fn [& _]
+          [(ops/delete [:route/idents target-key])]))
       (on-entry {}
         (establish-route-params-node (assoc state-props :id id))
-        (script {:expr (fn [& _])})
         (script {:expr (fn [env data & _]
                          (let [ident (initialize-route! env (assoc data ::target target-key))]
                            [(ops/assign [:route/idents target-key] ident)]))})
@@ -234,7 +241,7 @@
       (ele/invoke (cond-> {:params      (merge
                                           {:fulcro/actors (fn [env data]
                                                             (let [Target (rc/registry-key->class target-key)
-                                                                  ident  (get-in data [:route/idents target-key] (rc/get-ident Target {}))
+                                                                  ident  (get-in data [:route/idents target-key] (when (rc/has-ident? Target) (rc/get-ident Target {})))
                                                                   actors (merge {:actor/component (scf/actor Target ident)} (?! (rc/component-options Target ro/actors)))]
                                                               actors))}
                                           invoke-params)
@@ -260,7 +267,7 @@
         (ele/script {:expr (or on-done (constantly nil))}))
       children)))
 
-(defn busy? [{:fulcro/keys [app] :as env} {:keys [_event]} & args]
+(defn busy? [{:fulcro/keys [app] :as env} {:keys [_event] :as data} & args]
   (if (-> _event :data ::force?)
     false
     (let [state-ids (senv/current-configuration env)
@@ -271,7 +278,7 @@
                                   {::keys [busy?] :as opts} (some-> Target (rc/component-options))]
                               (if busy?
                                 ;; TODO: Would be nice to pass the component props, but need live actor
-                                (boolean (busy? app state-id))
+                                (boolean (busy? env data))
                                 false)))
                       state-ids)]
       busy?)))
@@ -337,8 +344,20 @@
                                             :target t}
                                  (ele/raise {:event :event.routing-info/close})))
                              all-targets)]
-    ;; TODO: Need a "Root" for setting parent query and join data
     (apply state props
+      (on-entry {}
+        (script-fn [env data]
+          (let [root-key   (coerce-to-keyword root)
+                Root       (rc/registry-key->class root-key)
+                root-ident (when (rc/has-ident? Root) (rc/get-ident Root {}))]
+            (cond
+              (and (vector? root-ident) (nil? (second root-ident)))
+              (log/error "The routing root of all routes MUST have a constant ident (or be the absolute root of the app)")
+
+              (vector? root-ident)
+              [(ops/assign [:route/idents root-key] root-ident)]
+
+              :else nil))))
       (transition {:event :route-to.*
                    :cond  busy?}
         (script {:expr record-failed-route!})
@@ -360,7 +379,7 @@
 (defn override-route! [{::sc/keys [vwmem event-queue] :as env} {::keys [failed-route-event]} & args]
   (if failed-route-event
     (let [target (::sc/session-id @vwmem)]
-      (log/info "Re-sending event" failed-route-event)
+      (log/trace "Re-sending event" failed-route-event)
       (scp/send! event-queue env {:event  (:name failed-route-event)
                                   :target target
                                   :data   (merge (:data failed-route-event)
@@ -520,6 +539,11 @@
    be forced."
   [app-ish]
   (scf/send! app-ish session-id :event.routing-info/force-route {}))
+
+(defn abandon-route-change! [app-ish]
+  "Sends an event to the statechart that will abandon the attempt to route and close the routing info. "
+  [app-ish]
+  (scf/send! app-ish session-id :event.routing-info/close {}))
 
 (defn send-to-self!
   "Send an event to an invoked statechart that is co-locatied on `this`.

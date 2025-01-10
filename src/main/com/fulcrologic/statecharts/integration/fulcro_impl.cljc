@@ -77,7 +77,6 @@
 (defn statechart-event! [app session-id event data new-config]
   #?(:cljs
      (let [app-uuid (app-uuid app)]
-       (log/spy :info [app-uuid session-id new-config event data])
        (fit/notify! app `statechart-event {app-uuid-key                               app-uuid
                                            :com.fulcrologic.statecharts/session-id    session-id
                                            :event                                     event
@@ -374,4 +373,3 @@
                              (let [{::sc/keys [source-session-id]} _event]
                                [(op/delete [:fulcro/state-map ::sc/session-id source-session-id])
                                 (op/delete [:fulcro/state-map ::sc/local-data source-session-id])]))})))))
-
