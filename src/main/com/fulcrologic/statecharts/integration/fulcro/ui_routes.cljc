@@ -5,10 +5,11 @@
   (:require
     [clojure.set :as set]
     [clojure.string :as str]
+    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
+    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
-    [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
     [com.fulcrologic.statecharts :as sc]
@@ -24,14 +25,18 @@
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
-(defn rad-form? [Component] (boolean (rc/component-options Component :com.fulcrologic.rad.form/id)))
-(defn rad-report? [Component] (boolean (rc/component-options Component :com.fulcrologic.rad.report/source-attribute)))
+(defn form?
+  "Returns true if the given component looks like a Fulcro form using form-state."
+  [Component] (boolean (rc/component-options Component :form-fields)))
+(defn rad-report?
+  "Returns true if the given component looks like a RAD report."
+  [Component] (boolean (rc/component-options Component :com.fulcrologic.rad.report/source-attribute)))
 
 (def session-id
   "The global statechart session ID that is used for the application statechart."
   ::session)
 
-(def history (volatile! nil))
+(defonce history (volatile! nil))
 
 (defn ?!
   "Run if the argument is a fn. This function can accept a value or function. If it is a
@@ -48,7 +53,10 @@
     (or (symbol? v) (string? v)) (keyword v)
     (rc/component-class? v) (rc/class->registry-key v)))
 
-(>defn route-to-event-name [target]
+(>defn route-to-event-name
+  "Given a registry key or component class, this function returns the event name that can be sent to the
+   routing statechart in order to directly go to that state/route."
+  [target]
   [[:or
     [:fn rc/component-class?]
     :qualified-symbol
@@ -58,11 +66,24 @@
         new-ns     (str "route-to." nspc)]
     (keyword new-ns nm)))
 
-(defn initialize-route! [{:fulcro/keys [app] :as env} {::keys [target] :as data}]
-  (let [state-map     (app/current-state app)
+(defn initialize-route!
+  "Logic that the statechart will run to initialize the target route component's state in the Fulcro database.
+   This is controlled primarily by two options:
+
+   uo/initialize
+   ui/initial-props
+
+   If the target component has a constant ident and initial-state, then neither option is necessary and the default
+   for uo/initialize will be :once. If the ident isn't a constant, then you must make sure the the initial-props or initial-state
+   will lead to data that can be used with `(get-ident Class data)` to get a valid ident.
+
+   Returns the ident of the initialized component.
+   "
+  [{:fulcro/keys [app] :as env} {::keys [target] :as data}]
+  (let [state-map     (rapp/current-state app)
         event-data    (get-in data [:_event :data])
         Target        (rc/registry-key->class target)
-        form?         (rad-form? Target)
+        form?         (form? Target)
         report?       (rad-report? Target)
         options       (rc/component-options Target)
         initialize    (or (ro/initialize options)
@@ -75,7 +96,7 @@
                         (?! initial-props env data)
                         (if form?
                           (let [{:keys [id]} event-data
-                                id-key (rc/component-options Target :com.fulcrologic.rad.form/id :com.fulcrologic.rad.attributes/qualified-key)]
+                                id-key (first (rc/get-ident Target {}))]
                             {id-key id})
                           (rc/get-initial-state Target (or event-data {}))))
         ident         (rc/get-ident Target props)
@@ -87,8 +108,10 @@
       (merge/merge-component! app Target props))
     ident))
 
-(defn- replace-join! [app Parent parent-ident join-key Target target-ident]
-  (let [{::app/keys [state-atom]} app
+(defn replace-join!
+  "Logic to update the query of Parent such that `join-key` is an EQL join to `Target`."
+  [app Parent parent-ident join-key Target target-ident]
+  (let [{:com.fulcrologic.fulcro.application/keys [state-atom]} app
         state-map @state-atom
         old-query (rc/get-query Parent state-map)
         oq-ast    (eql/query->ast old-query)
@@ -105,7 +128,9 @@
     (rc/set-query! app Parent {:query new-query})))
 
 (>defn update-parent-query!
-  "Dynamically set the query of Parent such that :ui/current-route is a join to Target."
+  "Dynamically set the query of the parent of `target-id` such that it's query includes a join to the given target. For
+   parallel routes the join key will be the registry key of the :route/target of state `target-id`,
+   and otherwise it will be `:ui/current-route`."
   [{:fulcro/keys [app] :as env} data target-id]
   [::sc/processing-env map? :keyword => :nil]
   (let [{::sc/keys [elements-by-id]} (senv/normalized-chart env)
@@ -127,8 +152,8 @@
       (replace-join! app Parent parent-ident :ui/current-route Target target-ident)))
   nil)
 
-(defn- establish-route-params-node
-  "Statechart node that looks at the parameters desired by a route. If those parameters
+(defn establish-route-params-node
+  "A custom statechart node that looks at the parameters desired by a route. If those parameters
    are in the event data, then it uses those, and sets them on the URL. If they are
    not in the event data, it attempts to get them from the URL.
 
@@ -156,10 +181,6 @@
                                            has-path-params? path-params
                                            :else {})
                                          params)]
-           #_(ru/replace-url!
-               (-> (ru/current-url)
-                 (cond-> path (ru/new-url-path path))
-                 (ru/update-url-state-param id (constantly actual-params))))
            (when @history
              (if external?
                (rhist/replace-route! @history {:id id :route/path path :route/params actual-params})
@@ -267,6 +288,13 @@
         (ele/script {:expr (or on-done (constantly nil))}))
       children)))
 
+(defn busy-form-handler
+  [FormClass]
+  (fn [{:fulcro/keys [app]} {:route/keys [idents]}]
+    (let [form-ident (get idents (rc/class->registry-key FormClass))
+          form-props (when form-ident (fns/ui->props (rapp/current-state app) FormClass form-ident))]
+      (and form-props (fs/dirty? form-props)))))
+
 (defn busy? [{:fulcro/keys [app] :as env} {:keys [_event] :as data} & args]
   (if (-> _event :data ::force?)
     false
@@ -274,10 +302,14 @@
           {::sc/keys [elements-by-id]} (senv/normalized-chart env)
           busy?     (some (fn [state-id]
                             (let [t      (get-in elements-by-id [state-id :route/target])
+
                                   Target (rc/registry-key->class t)
-                                  {::keys [busy?] :as opts} (some-> Target (rc/component-options))]
+                                  form?  (form? Target)
+                                  {::keys [busy?] :as opts} (some-> Target (rc/component-options))
+                                  busy?  (if (and form? (not busy?))
+                                           (busy-form-handler Target)
+                                           busy?)]
                               (if busy?
-                                ;; TODO: Would be nice to pass the component props, but need live actor
                                 (boolean (busy? env data))
                                 false)))
                       state-ids)]
@@ -424,7 +456,7 @@
    NOTE: This will NOT properly render a parallel route. You must use `ui-parallel-route`"
   [parent-component-instance factory-fn]
   (let [this         parent-component-instance
-        q            (rc/get-query this (app/current-state this))
+        q            (rc/get-query this (rapp/current-state this))
         {:ui/keys [current-route]} (rc/props this)
         {:keys [component]} (first
                               (filter
@@ -550,32 +582,15 @@
    as specified on the component via ro/idlocation (defaults to [:child-session-id])."
   ([this event-name] (send-to-self! this event-name {}))
   ([this event-name event-data]
-   (let [target-key (rc/class->registry-key (comp/react-type this))
-         state-map  (app/current-state this)
+   (let [target-key (rc/class->registry-key (rc/component-type this))
+         state-map  (rapp/current-state this)
          session-id (get-in state-map [::sc/local-data session-id :invocation/id target-key])]
      (when session-id
        (scf/send! this session-id event-name event-data)))))
 
-
 (defn current-invocation-configuration [this]
-  (let [target-key (rc/class->registry-key (comp/react-type this))
-        state-map  (app/current-state this)
+  (let [target-key (rc/class->registry-key (rc/component-type this))
+        state-map  (rapp/current-state this)
         session-id (get-in state-map [::sc/local-data session-id :invocation/id target-key])]
     (when session-id
       (scf/current-configuration this session-id))))
-
-(defn rad-edit!
-  "Routes to Form and starts an edit on the given id"
-  ([app-ish Form id]
-   (rad-edit! app-ish Form id {}))
-  ([app-ish Form id params]
-   (route-to! app-ish Form {:id     id
-                            :params params})))
-
-(defn rad-create!
-  "Routes to Form and starts a create."
-  ([app-ish Form]
-   (rad-edit! app-ish Form (tempid/tempid) {}))
-  ([app-ish Form params]
-   (route-to! app-ish Form {:id     (tempid/tempid)
-                            :params params})))
