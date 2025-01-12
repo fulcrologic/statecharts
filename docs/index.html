@@ -556,8 +556,9 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_working_memory_and_identity">3.8. Working Memory and Identity</a></li>
 <li><a href="#_invocations">3.9. Invocations</a>
 <ul class="sectlevel3">
-<li><a href="#_invoking_other_state_charts_or_futures">3.9.1. Invoking other State Charts or Futures</a></li>
-<li><a href="#_custom_invocation_processors">3.9.2. Custom Invocation Processors</a></li>
+<li><a href="#_passing_invocation_data">3.9.1. Passing Invocation Data</a></li>
+<li><a href="#_invoking_other_state_charts_or_futures">3.9.2. Invoking other State Charts or Futures</a></li>
+<li><a href="#_custom_invocation_processors">3.9.3. Custom Invocation Processors</a></li>
 </ul>
 </li>
 </ul>
@@ -1474,7 +1475,22 @@ pre-processed by <code>finalize</code> elements and can update the data model be
 the chart. See the SCXML standard for a full description of how invocations work.</p>
 </div>
 <div class="sect3">
-<h4 id="_invoking_other_state_charts_or_futures"><a class="anchor" href="#_invoking_other_state_charts_or_futures"></a><a class="link" href="#_invoking_other_state_charts_or_futures">3.9.1. Invoking other State Charts or Futures</a></h4>
+<h4 id="_passing_invocation_data"><a class="anchor" href="#_passing_invocation_data"></a><a class="link" href="#_passing_invocation_data">3.9.1. Passing Invocation Data</a></h4>
+<div class="paragraph">
+<p>The <code>invoke</code> element has both a <code>:namelist</code> and <code>:params</code> argument. The former allows you to list data locations
+of the parent that should be copied to the child. <code>:params</code> is dynamic, and allows you to specify expressions that
+calculate values to inject into the child data model. These options can be used together, with params taking precedence.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(invoke {<span class="symbol">:namelist</span> {[<span class="symbol">:area</span> <span class="symbol">:x</span>] [<span class="symbol">:target</span> <span class="symbol">:y</span>]}
+         <span class="symbol">:params</span> (<span class="keyword">fn</span> [env data] {[<span class="symbol">:other</span> <span class="symbol">:y</span>] <span class="integer">42</span>
+         <span class="keyword">..</span><span class="keyword">.</span>})</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_invoking_other_state_charts_or_futures"><a class="anchor" href="#_invoking_other_state_charts_or_futures"></a><a class="link" href="#_invoking_other_state_charts_or_futures">3.9.2. Invoking other State Charts or Futures</a></h4>
 <div class="paragraph">
 <p>The library has a built-in <code>InvocationProcessor</code> that knows how to start other statecharts via an <code>invoke</code>, and in CLJ
 there is also support for futures (which are cancelled if the state containing the invoke is exited).</p>
@@ -1500,14 +1516,16 @@ there is also support for futures (which are cancelled if the state containing t
     (data-model {<span class="symbol">:x</span> <span class="integer">1</span>})
     (state {}                                               <span class="comment">; top-level state so we can log an exit from the overall machine</span>
       (on-exit {}
-        (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">CHILD CHART EXIT</span><span class="delimiter">&quot;</span></span>}))
+        (log {<span class="symbol">:level</span> <span class="symbol">:info</span>
+              <span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">CHILD CHART EXIT</span><span class="delimiter">&quot;</span></span>}))
 
       (transition {<span class="symbol">:event</span>  <span class="symbol">:event/exit</span>
                    <span class="symbol">:target</span> <span class="symbol">:state/final</span>})
 
       (state {<span class="symbol">:id</span> <span class="symbol">:X</span>}
         (on-entry {}
-          (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child X</span><span class="delimiter">&quot;</span></span> <span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ {<span class="symbol">:keys</span> [x]}] x)}))
+          (log {<span class="symbol">:level</span> <span class="symbol">:info</span>
+                <span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child X</span><span class="delimiter">&quot;</span></span> <span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ {<span class="symbol">:keys</span> [x]}] x)}))
         <span class="comment">;; NOTE: The future invocation processor is only coded for CLJ, so this invocation is ignored in CLJS</span>
         (invoke {<span class="symbol">:id</span>     <span class="symbol">:child/future</span>
                  <span class="symbol">:type</span>   <span class="symbol">:future</span>
@@ -1515,20 +1533,22 @@ there is also support for futures (which are cancelled if the state containing t
                  <span class="symbol">:src</span>    (<span class="keyword">fn</span> [{<span class="symbol">:keys</span> [<span class="keyword">time</span>]}]
                            (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Invocation running for</span><span class="delimiter">&quot;</span></span> <span class="keyword">time</span>)
                            <span class="error">#</span>?(<span class="symbol">:clj</span> (<span class="keyword">try</span>
-                                     (Thread/sleep (<span class="keyword">*</span> <span class="integer">1000</span> <span class="keyword">time</span>))
+                                     (Thread/sleep (<span class="keyword">long</span> (<span class="keyword">*</span> <span class="integer">1000</span> <span class="keyword">time</span>)))
                                      (<span class="keyword">catch</span> InterruptedException e
                                        (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Future cancelled!</span><span class="delimiter">&quot;</span></span>)
                                        (<span class="keyword">throw</span> e))))
                            (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Future function completed</span><span class="delimiter">&quot;</span></span>)
                            {<span class="symbol">:future-result</span> <span class="symbol">:DONE</span>})})
-        (transition {<span class="symbol">:event</span> <span class="symbol">:done.invoke</span>}
-          (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Future indicated that it completed</span><span class="delimiter">&quot;</span></span>
+        (transition {<span class="symbol">:event</span> <span class="symbol">:done.invoke.*</span>}
+          (log {<span class="symbol">:level</span> <span class="symbol">:info</span>
+                <span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Future indicated that it completed</span><span class="delimiter">&quot;</span></span>
                 <span class="symbol">:expr</span>  (<span class="keyword">fn</span> [e d]
                          (log/spy <span class="symbol">:debug</span> d))}))
         (transition {<span class="symbol">:event</span> <span class="symbol">:child/swap</span> <span class="symbol">:target</span> <span class="symbol">:Y</span>}))
       (state {<span class="symbol">:id</span> <span class="symbol">:Y</span>}
         (on-entry {}
-          (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child Y</span><span class="delimiter">&quot;</span></span>}))
+          (log {<span class="symbol">:level</span> <span class="symbol">:info</span>
+                <span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child Y</span><span class="delimiter">&quot;</span></span>}))
         (on-exit {}
           (Send {<span class="symbol">:event</span>      <span class="symbol">:child.left-y</span>
                  <span class="symbol">:type</span>       <span class="symbol">::sc/chart</span>
@@ -1544,25 +1564,28 @@ there is also support for futures (which are cancelled if the state containing t
   (statechart {}
     (state {<span class="symbol">:id</span> <span class="symbol">:A</span>}
       (on-entry {}
-        (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Main A</span><span class="delimiter">&quot;</span></span>}))
+        (log {<span class="symbol">:level</span> <span class="symbol">:info</span>
+              <span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Main A</span><span class="delimiter">&quot;</span></span>}))
       (transition {<span class="symbol">:event</span> <span class="symbol">:swap</span> <span class="symbol">:target</span> <span class="symbol">:B</span>}))
     (state {<span class="symbol">:id</span> <span class="symbol">:B</span>}
       (on-entry {}
-        (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Main B</span><span class="delimiter">&quot;</span></span>}))
+        (log {<span class="symbol">:level</span> <span class="symbol">:info</span>
+              <span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Main B</span><span class="delimiter">&quot;</span></span>}))
       (transition {<span class="symbol">:event</span> <span class="symbol">:swap</span> <span class="symbol">:target</span> <span class="symbol">:A</span>})
       (transition {<span class="symbol">:event</span> <span class="symbol">:child.*</span>}
-        (log {<span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child event</span><span class="delimiter">&quot;</span></span> <span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ data] data)}))
+        (log {<span class="symbol">:level</span> <span class="symbol">:info</span>
+              <span class="symbol">:label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Child event</span><span class="delimiter">&quot;</span></span> <span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ data] data)}))
       (invoke {<span class="symbol">:id</span>          <span class="symbol">:main/child</span>
                <span class="symbol">:autoforward</span> <span class="predefined-constant">true</span>                            <span class="comment">; be careful, sends all events through, but it is possible to cause infinite loops if child sends events in response</span>
                <span class="symbol">:type</span>        <span class="symbol">:statechart</span>
                <span class="symbol">:src</span>         `child-chart
                <span class="symbol">:params</span>      {<span class="symbol">:x</span> <span class="integer">10</span>}
                <span class="symbol">:finalize</span>    (<span class="keyword">fn</span> [env data]
-                              (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Finalize: </span><span class="delimiter">&quot;</span></span> data))}))))
+                              (log/info <span class="string"><span class="delimiter">&quot;</span><span class="content">Event from child to parent: </span><span class="delimiter">&quot;</span></span> data))}))))
 
 (<span class="keyword">comment</span>
   (<span class="keyword">do</span>
-    (log/set-level! <span class="symbol">:debug</span>)                                 <span class="comment">; so we can see log elements</span>
+    (log/set-level! <span class="symbol">:info</span>)                                  <span class="comment">; so we can see log elements</span>
     (<span class="keyword">def</span> <span class="function">session-id</span> <span class="integer">42</span>)
     (<span class="keyword">def</span> <span class="function">env</span> (simple/simple-env))
     (simple/register! env `main-chart main-chart)
@@ -1574,16 +1597,18 @@ there is also support for futures (which are cancelled if the state containing t
   (simple/send! env {<span class="symbol">:target</span> session-id
                      <span class="symbol">:event</span>  <span class="symbol">:swap</span>})
 
+  (<span class="symbol">::sc/working-memory-store</span> env)
   <span class="comment">;; With autoforward on, we can ferry events though to the child</span>
   (simple/send! env {<span class="symbol">:target</span> session-id
                      <span class="symbol">:event</span>  <span class="symbol">:child/swap</span>})
 
-  <span class="comment">;; When the child chart is running (top chart is in :B), can send it events</span>
-  <span class="comment">;; The session ID of a child session will be the string of &lt;parent-session-ID `.` &lt;id | invokeid&gt;&gt;</span>
-  (simple/send! env {<span class="symbol">:target</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">42.:main/child</span><span class="delimiter">&quot;</span></span>
+  <span class="comment">;; When the child chart is running (top chart is in :B), You can send it events.</span>
+  <span class="comment">;; The session ID of a child session will be the ID of the node, of if you don't supply one an autogenerated</span>
+  <span class="comment">;; one will be stored at idlocation with the string value &lt;parent-session-ID `.` &lt;generated-id&gt;</span>
+  (simple/send! env {<span class="symbol">:target</span> <span class="symbol">:main/child</span>
                      <span class="symbol">:event</span>  <span class="symbol">:child/swap</span>})
 
-  (simple/send! env {<span class="symbol">:target</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">42.:main/child</span><span class="delimiter">&quot;</span></span>
+  (simple/send! env {<span class="symbol">:target</span> <span class="symbol">:main/child</span>
                      <span class="symbol">:event</span>  <span class="symbol">:event/exit</span>})
 
   <span class="comment">;; terminate the event loop</span>
@@ -1592,7 +1617,7 @@ there is also support for futures (which are cancelled if the state containing t
 </div>
 </div>
 <div class="sect3">
-<h4 id="_custom_invocation_processors"><a class="anchor" href="#_custom_invocation_processors"></a><a class="link" href="#_custom_invocation_processors">3.9.2. Custom Invocation Processors</a></h4>
+<h4 id="_custom_invocation_processors"><a class="anchor" href="#_custom_invocation_processors"></a><a class="link" href="#_custom_invocation_processors">3.9.3. Custom Invocation Processors</a></h4>
 <div class="paragraph">
 <p>For example, suppose you want to install an invocation processor that can provide timer events on some interval.
 You could do something like:</p>
@@ -2060,7 +2085,7 @@ Fulcro app database.</p>
 <dd>
 <p>If the first element of the vector matches an entry in the local
 statecharts <code>:fulcro/actors</code> then <code>:fulcro/state</code> and the ident of that actor are spliced together
- in place of that keyword and the resulting path is treated as above.</p>
+in place of that keyword and the resulting path is treated as above.</p>
 </dd>
 </dl>
 </div>
@@ -2603,7 +2628,7 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2024-08-19 21:19:02 -0700
+Last updated 2025-01-12 12:13:10 -0800
 </div>
 </div>
 </body>

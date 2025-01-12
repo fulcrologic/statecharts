@@ -514,11 +514,13 @@
                         processor] :as invocation} (invocation-details env invocation)
                 parent-state-id (chart/nearest-ancestor-state statechart invocation)]
             (if processor
-              (let [param-map (reduce-kv
-                                (fn [acc k expr]
-                                  (assoc acc k (sp/run-expression! execution-model env expr)))
-                                {}
-                                params)
+              (let [param-map (if (map? params)
+                                (reduce-kv
+                                  (fn [acc k expr]
+                                    (assoc acc k (sp/run-expression! execution-model env expr)))
+                                  {}
+                                  params)
+                                (sp/run-expression! execution-model env params))
                     invokeid  (if explicit-id?
                                 id
                                 (str parent-state-id "." (new-uuid)))

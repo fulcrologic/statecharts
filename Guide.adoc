@@ -122,7 +122,7 @@ You can use the http://www.w3.org/TR/2015/REC-scxml-20150901/[SCXML guide] which
 good reference for documentation. The document structure in XML is nearly identical to the data structure
 of this library:
 
-[source, xml]
+[source,xml]
 -----
 <scxml>
   <state id="A"/>
@@ -153,8 +153,8 @@ state is active if it or ANY of its children are active. Thus, a parallel statec
 have a rather large set of IDs in its current configuration.
 
 Working Memory:: A map of data that contains the current configuration of the state chart, and other information
- necessary to know its current full state (which states have had their data model initialized, possible data model
- tracking, etc.).
+necessary to know its current full state (which states have had their data model initialized, possible data model
+tracking, etc.).
 
 DataModel:: An implementation of the data model protocol defines how the data model of your chart works. The simple
 implementation places the data in Working Memory, and treats lookups as paths into a single top-level map scoped
@@ -352,7 +352,6 @@ script elements:
   (script-fn [env data] ...)))
 -----
 
-
 == Working Memory and Identity
 
 The working memory of the state chart is plain EDN and contains no code.
@@ -374,6 +373,19 @@ while the state is still active, but it will also be cancelled if your chart lea
 Invocations can forward events to the target invocation, and can receive events back. An incoming event will be
 pre-processed by `finalize` elements and can update the data model before the event is further propagated through
 the chart. See the SCXML standard for a full description of how invocations work.
+
+=== Passing Invocation Data
+
+The `invoke` element has both a `:namelist` and `:params` argument. The former allows you to list data locations
+of the parent that should be copied to the child. `:params` is dynamic, and allows you to specify expressions that
+calculate values to inject into the child data model. These options can be used together, with params taking precedence.
+
+[source]
+-----
+(invoke {:namelist {[:area :x] [:target :y]}
+         :params (fn [env data] {[:other :y] 42
+         ...})
+-----
 
 === Invoking other State Charts or Futures
 
@@ -561,7 +573,7 @@ statecharts:
 * Use the Fulcro app's state database as the DataModel
 * Use core.async to automatically support an EventQueue
 * Support a "local data" area for the statechart session that won't accidentally collide
-  with other database concerns.
+with other database concerns.
 * Allow for the use of actors (a component abstraction) and aliases (to database locations)
 * Supply an extensible set of operations that executable elements can leverage:
 ** The ability to use Fulcro's load to populate the state database.
@@ -616,7 +628,7 @@ Two special concepts were take from Fulcro's own UI state machines: aliases and 
 purely on the data model by simply adding entries to a statechart's local data under the special keys:
 
 * `:fulcro/aliases` - A map from a keyword to a path. The path itself can be any legal DataModel path (see later)
- except for another alias.
+except for another alias.
 * `:fulcro/actors` - A map from a keyword to an `scf/actor`, which tracks the class and ident of a UI component.
 Can be used to find the UI component (for normalization/loads) and in data paths.
 
@@ -670,7 +682,7 @@ A vector starting with `:fulco/state` or `:fulcro/state-map`:: Indicates an abso
 Fulcro app database.
 A vector starting with an actor name:: If the first element of the vector matches an entry in the local
 statecharts `:fulcro/actors` then `:fulcro/state` and the ident of that actor are spliced together
- in place of that keyword and the resulting path is treated as above.
+in place of that keyword and the resulting path is treated as above.
 
 == Executable Content
 
@@ -739,7 +751,6 @@ statechart instance. Useful in the UI when you need to render content based on s
 is the result of a mutation result that was originally triggered by a `fops/invoke-remote`.
 `(m/declare-mutation)`:: Makes a function-like object that can be used to generate remote mutation calls
 in transactions for `invoke-remote`.
-
 
 === Content of `data` in Executable Content
 
@@ -936,7 +947,7 @@ For example, an XML reader that targets https://github.com/babashka/sci[sci] (th
 Clojure interpreter) might convert the XML (where `a` and `do-something` are implied
 values in the data and excution model):
 
-[source, xml]
+[source,xml]
 -----
 <if cond="(= 1 a)">
   (let [b (inc a)]
@@ -946,7 +957,7 @@ values in the data and excution model):
 
 into (scope and args still determined by the execution model selected):
 
-[source, clojure]
+[source,clojure]
 -----
 ;; String-based interpretation
 (script {:expr
@@ -978,16 +989,16 @@ which is a fine library modelled after xstate.
 This library exists for the following reasons:
 
 * At the time this library was created, https://github.com/lucywang000/clj-statecharts/[clj-statecharts] was missing features. In particular history nodes,
-  which we needed. I looked at clj-statecharts in order to try to add history, but some of the internal
-  decisions made it more difficult to add (with correct semantics) and the Eclipse license made it less
-  appealing for internal customization as a base in commercial software (see https://www.juxt.pro/blog/prefer-mit).
+which we needed. I looked at clj-statecharts in order to try to add history, but some of the internal
+decisions made it more difficult to add (with correct semantics) and the Eclipse license made it less
+appealing for internal customization as a base in commercial software (see https://www.juxt.pro/blog/prefer-mit).
 * To create an SCXML-like implementation that uses the algorithm defined
-  in the W3C Recommended document, and can (grow to) run (with minor transformations) SCXML docs that are
-  targeted to Clojure with the semantics defined there (such as they are).
+in the W3C Recommended document, and can (grow to) run (with minor transformations) SCXML docs that are
+targeted to Clojure with the semantics defined there (such as they are).
 * To define more refined abstract mechanisms such that the state charts can be associated to long-lived things
-  (such as a monetary transaction that happens over time) and
-  be customized to interface with things like durable queues for events (e.g. AWS SQS) and
-  reliable timers.
+(such as a monetary transaction that happens over time) and
+be customized to interface with things like durable queues for events (e.g. AWS SQS) and
+reliable timers.
 * MIT licensing instead of Eclipse.
 
 Other related libraries and implementations:

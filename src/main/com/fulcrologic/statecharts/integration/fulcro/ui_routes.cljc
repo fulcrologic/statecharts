@@ -242,7 +242,8 @@
    * target: The component registry key of the component that is the route target, and has the co-located statechart (or statechart-id).
       The :actor/component on the invoked chart will be this component, and the ident will be derived from the initialization
       of state (e.g. ro/initialize). See the initialization for `rstate` for details.
-   * invoke-params: A map of params to be merged into the invoke `params`
+   * invoke-params: A map of params to be merged into the invoke `params`. Must be a map whose keys are the target location paths, and whose values are expressions compatible with the execution model.
+   * namelist: Same as the options on `invoke`
    * finalize: Same as the option on `invoke`
    * autofoward: Same as the option on `invoke`
    * on-done: A (fn [env data & rest] ops) that will be run IF the invoked statechart hits a final state.
@@ -258,13 +259,13 @@
 
    The invoked component should specify an ro/idlocation so that events can be sent to it from within.
   "
-  [{:keys [id child-session-id route/target invoke-params finalize autoforward on-done exit-target statechart-id]
+  [{:keys [id child-session-id route/target invoke-params namelist finalize autoforward on-done exit-target statechart-id]
     :or   {invoke-params {}}
     :as   state-props} & children]
   (let [target-key (coerce-to-keyword target)
         id         (or id target-key)]
     (apply state (-> (assoc state-props :id id :route/target target-key)
-                   (dissoc :invoke-params :finalize :autoforward :on-done :exit-target :statechart-id))
+                   (dissoc :invoke-params :finalize :autoforward :namelist :on-done :exit-target :statechart-id))
       (on-exit {}
         (script-fn [& _]
           [(ops/delete [:route/idents target-key])]))
@@ -278,7 +279,7 @@
                                           {:fulcro/actors (fn [env data]
                                                             (let [Target (rc/registry-key->class target-key)
                                                                   ident  (get-in data [:route/idents target-key] (when (rc/has-ident? Target) (rc/get-ident Target {})))
-                                                                  actors (merge {:actor/component (scf/actor Target ident)} (?! (rc/component-options Target ro/actors)))]
+                                                                  actors (merge {:actor/component (scf/actor Target ident)} (?! (rc/component-options Target ro/actors) env data))]
                                                               actors))}
                                           invoke-params)
                            :autoforward (boolean autoforward)
@@ -297,6 +298,7 @@
                                                 :else (log/error "istate could not determine a statechart to invoke.")))
                                             (log/error "istate has no target")))}
                     child-session-id (assoc :id child-session-id)
+                    namelist (assoc :namelist namelist)
                     finalize (assoc :finalize finalize)))
       (transition (cond-> {:event :done.invoke.*}
                     exit-target (assoc :target exit-target))
