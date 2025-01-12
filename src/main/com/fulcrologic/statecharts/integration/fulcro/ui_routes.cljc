@@ -8,7 +8,6 @@
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
-    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
@@ -465,7 +464,8 @@
         render-child (when component (factory-fn component))]
     (if render-child
       (render-child current-route)
-      (log/error "No subroute to render for " (rc/component-name parent-component-instance)))))
+      (let [nm (rc/component-name parent-component-instance)]
+        (log/warn (str "No subroute to render for " nm ". Did you remember to use ui-current-subroute in its parent?"))))))
 
 (defn ui-parallel-route
   "Render ONE of the possible routes underneath a parallel routing node.
