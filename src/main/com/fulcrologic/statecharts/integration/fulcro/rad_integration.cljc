@@ -33,7 +33,7 @@
     (entry-fn [{:fulcro/keys [app]} data _ event-data]
       (log/debug "Starting report")
       (report/start-report! app (comp/registry-key->class (:route/target props)) {:route-params (cond-> (merge data event-data)
-                                                                                                  (set param-keys) (select-keys param-keys))})
+                                                                                                  (seq param-keys) (select-keys param-keys))})
       nil)))
 
 (defn leave-form
