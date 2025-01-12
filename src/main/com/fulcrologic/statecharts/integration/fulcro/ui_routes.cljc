@@ -126,6 +126,23 @@
     (swap! state-atom assoc-in (conj parent-ident join-key) target-ident)
     (rc/set-query! app Parent {:query new-query})))
 
+(defn- find-parent-route
+  "Find the node in the statechart that is the closest parent to the node with `id` which has a :route/target or :routing/root.
+   Returns the node or nil if none is found."
+  [env id]
+  (let [{::sc/keys [elements-by-id]} (senv/normalized-chart env)]
+    (loop [id id]
+      (let [pid       (get-in elements-by-id [id :parent])
+            parent    (get elements-by-id pid)
+            routable? (and parent
+                        (or
+                          (contains? parent :route/target)
+                          (contains? parent :routing/root)))]
+        (cond
+          (nil? parent) nil
+          routable? parent
+          :else (recur pid))))))
+
 (>defn update-parent-query!
   "Dynamically set the query of the parent of `target-id` such that it's query includes a join to the given target. For
    parallel routes the join key will be the registry key of the :route/target of state `target-id`,
@@ -133,11 +150,10 @@
   [{:fulcro/keys [app] :as env} data target-id]
   [::sc/processing-env map? :keyword => :nil]
   (let [{::sc/keys [elements-by-id]} (senv/normalized-chart env)
-        {parent-id    :parent
-         route-target :route/target} (get elements-by-id target-id)
+        {route-target :route/target} (get elements-by-id target-id)
         {:keys [parallel?
                 route/target
-                routing/root]} (elements-by-id parent-id)
+                routing/root]} (find-parent-route env target-id)
         parent-component-ref (or target root)               ; symbol, class, or keyword
         route-target         (coerce-to-keyword route-target)
         parent-registry-key  (coerce-to-keyword parent-component-ref)
