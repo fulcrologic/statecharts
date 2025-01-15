@@ -181,7 +181,7 @@
      (fn [{:fulcro/keys [app]} _dm _e event-data]
        (when path
          (let [{::keys [external?]} event-data
-               ks                      (set (keys event-data))
+               ks                      (log/spy :info (set (keys event-data)))
                event-has-route-params? (boolean (seq (set/intersection ks params)))
                path-params             (some-> (ru/current-url)
                                          (ru/current-url-state-params)
@@ -197,19 +197,27 @@
                                            :else {})
                                          params)]
            (when @history
-             (if external?
+             (if (log/spy :info external?)
                (rhist/replace-route! @history {:id id :route/path path :route/params actual-params})
                (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
              [(ops/assign [:routing/parameters id] actual-params)]))))}))
 
 (defn rstate
   "Create a routing state. Requires a :route/target attribute which should be
-   anything accepted by comp/registry-key->class.  If `id` is not specified it
-   will default to the keyword version of `target`. If `parallel?` is true, then
-   this node will be a parallel state, where all immediate children will be active at the
-   same time."
+   anything accepted by comp/registry-key->class.
+
+   The :route/path is a vector of strings that specifies the path of this route (ALPHA, may change to be nested)
+   The :route/params is a *set* of keywords that should be considered parameters that when seen as data in a
+   routing event to this state should be persisted in the URL if there is history tracking (also requires :route/path).
+   When both of these are specified then the system will pull the route params from the URL if the browser loads the given
+   path. This allows the stateful parameters of the nested states to be stored and restored via the URL.
+
+   If `id` is not specified it will default to the keyword version of `target`.
+
+   If `parallel?` is true, then this node will be a parallel state,
+   where all immediate children will be active at the same time."
   [{:keys       [id parallel?]
-    :route/keys [target path] :as props} & children]
+    :route/keys [target path params] :as props} & children]
   (let [target-key (coerce-to-keyword target)
         id         (or id target-key)]
     ;; TODO: See which kind of management the component wants. Simple routing, invocation
@@ -233,6 +241,9 @@
   "A state is a routing state that invokes a statechart on the target component. The `target` is any registry-compatible
    key, and that component in question must have an ro/statechart or ro/statechart-id option to designate which statechart
    will be invoked. The ro/statechart will be registered under the keyword version of `target`.
+
+   An `istate` is just like an `rstate` in terms of actual routing. See the docstring of `rstate` for :route/target,
+   :route/path, and :route/params.
 
    The `:fulcro/actors` in the statechart's data model will have :actor/component set to the target itself. The target
    will be initialized like it is for `rstate` (see ro/initialize, etc.).
