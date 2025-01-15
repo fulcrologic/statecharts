@@ -166,6 +166,9 @@
      :org.w3.scxml.event/invokeid - The ID assigned to this if it is an invocation
 
      Returns the resulting working memory (current state) of the machine.")
+  (exit! [this env wmem skip-done-event?]
+    "Exit the statechart, but make sure to run exit handlers. Will also send a parent done event (if there is a parent)
+     unless the skip-done-event? is true.")
   (process-event! [this env working-memory event]
     "Process an event.
 

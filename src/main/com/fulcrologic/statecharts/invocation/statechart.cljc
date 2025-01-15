@@ -42,10 +42,11 @@
                                                  :org.w3.scxml.event/invokeid invokeid})]
           (sp/save-working-memory! working-memory-store env child-session-id wmem)))
       true))
-  (stop-invocation! [this {::sc/keys [event-queue working-memory-store] :as env} {:keys [invokeid] :as data}]
+  (stop-invocation! [this {::sc/keys [event-queue processor working-memory-store] :as env} {:keys [invokeid] :as data}]
     (log/debug "Stop invocation" invokeid)
-    (let [source-session-id (env/session-id env)
-          child-session-id  invokeid]
+    (let [child-session-id invokeid
+          wmem             (sp/get-working-memory working-memory-store env child-session-id)]
+      (sp/exit! processor env wmem true)
       (sp/delete-working-memory! working-memory-store env child-session-id)
       true))
   (forward-event! [this {::sc/keys [event-queue] :as env} {:keys [type invokeid event]}]

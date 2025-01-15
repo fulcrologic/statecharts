@@ -673,15 +673,18 @@
   nil)
 
 (>defn exit-interpreter!
-  [{::sc/keys [statechart vwmem] :as env}]
-  [::sc/processing-env => nil?]
-  (let [states-to-exit (chart/in-exit-order statechart (::sc/configuration @vwmem))]
-    (doseq [state states-to-exit]
-      (run-exit-handlers! env state)
-      (cancel-active-invocations! env state)
-      (vswap! vwmem update ::sc/configuration disj state)
-      (when (and (chart/final-state? statechart state) (= :ROOT (chart/get-parent statechart state)))
-        (send-done-event! env state)))))
+  ([{::sc/keys [statechart vwmem] :as env} skip-done-event?]
+   [::sc/processing-env :boolean => nil?]
+   (let [states-to-exit (log/spy :debug (chart/in-exit-order statechart (::sc/configuration @vwmem)))]
+     (doseq [state states-to-exit]
+       (run-exit-handlers! env state)
+       (cancel-active-invocations! env state)
+       (vswap! vwmem update ::sc/configuration disj state)
+       (when (and (not skip-done-event?) (chart/final-state? statechart state) (= :ROOT (chart/get-parent statechart state)))
+         (send-done-event! env state)))))
+  ([{::sc/keys [statechart vwmem] :as env}]
+   [::sc/processing-env => nil?]
+   (exit-interpreter! env false)))
 
 (>defn before-event!
   "Steps that are run before processing the next event."

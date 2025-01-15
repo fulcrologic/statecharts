@@ -12,7 +12,12 @@
   (process-event! [_this env wmem event]
     (let [{::sc/keys [statechart-src]} wmem
           env (impl/processing-env env statechart-src wmem)]
-      (impl/process-event! env event))))
+      (impl/process-event! env event)))
+  (exit! [this env wmem skip-done-event?]
+    (let [{::sc/keys [statechart-src]} wmem
+          env (impl/processing-env env statechart-src wmem)]
+      (impl/exit-interpreter! env skip-done-event?)
+      nil)))
 
 (defn new-processor
   "Create a processor that can initialize and process events for the given machine definition.
