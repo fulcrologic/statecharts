@@ -71,7 +71,7 @@
    {:initial
     {::uism/handler (fn [env]
                       (let [{::uism/keys [event-data]} env
-                            {::form/keys [create?]} event-data
+                            {::keys [create?]} event-data
                             Form       (uism/actor-class env :actor/form)
                             form-ident (uism/actor->ident env :actor/form)
                             {{:keys [started]} ::form/triggers} (some-> Form (comp/component-options))]
