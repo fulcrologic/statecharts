@@ -165,13 +165,13 @@
                  ;; TODO: Decide when to properly set the field to marked
                  mark-complete? true]
              #?(:cljs
-               (when goog.DEBUG
-                 (when-not path
-                   (log/error "Unable to record attribute change. Path cannot be calculated."))
-                 (when (and ref? many? (not (every? eql/ident? value)))
-                   (log/error "Setting a ref-many attribute to incorrect type. Value should be a vector of idents:" qualified-key value))
-                 (when (and ref? (not many?) (not missing?) (not (eql/ident? value)))
-                   (log/error "Setting a ref-one attribute to incorrect type. Value should an ident:" qualified-key value))))
+                (when goog.DEBUG
+                  (when-not path
+                    (log/error "Unable to record attribute change. Path cannot be calculated."))
+                  (when (and ref? many? (not (every? eql/ident? value)))
+                    (log/error "Setting a ref-many attribute to incorrect type. Value should be a vector of idents:" qualified-key value))
+                  (when (and ref? (not many?) (not missing?) (not (eql/ident? value)))
+                    (log/error "Setting a ref-one attribute to incorrect type. Value should an ident:" qualified-key value))))
              (-> env
                (form/clear-server-errors)
                (cond->
