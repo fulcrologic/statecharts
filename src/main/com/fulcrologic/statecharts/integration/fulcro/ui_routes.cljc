@@ -10,6 +10,7 @@
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
+    [com.fulcrologic.fulcro.mutations :refer [defmutation]]
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
@@ -19,6 +20,7 @@
     [com.fulcrologic.statecharts.integration.fulcro.route-history :as rhist]
     [com.fulcrologic.statecharts.integration.fulcro.route-url :as ru]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes-options :as ro]
+    [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.protocols :as scp]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
@@ -65,7 +67,7 @@
         new-ns     (str "route-to." nspc)]
     (keyword new-ns nm)))
 
-(defn initialize-route!
+(defn initialize-target!
   "Logic that the statechart will run to initialize the target route component's state in the Fulcro database.
    This is controlled primarily by two options:
 
@@ -81,9 +83,9 @@
   [{:fulcro/keys [app] :as env} {::keys [target] :as data}]
   (let [state-map     (rapp/current-state app)
         event-data    (get-in data [:_event :data])
-        Target        (rc/registry-key->class target)
-        form?         (form? Target)
-        report?       (rad-report? Target)
+        Target        (rc/registry-key->class (log/spy :debug target))
+        form?         (log/spy :debug (form? Target))
+        report?       (log/spy :debug (rad-report? Target))
         options       (rc/component-options Target)
         initialize    (or (ro/initialize options)
                         (cond
@@ -91,14 +93,15 @@
                           report? :once
                           :else :once))
         initial-props (ro/initial-props options)
-        props         (if initial-props
-                        (?! initial-props env data)
-                        (if form?
-                          (let [{:keys [id]} event-data
-                                id-key (first (rc/get-ident Target {}))]
-                            {id-key id})
-                          (rc/get-initial-state Target (or event-data {}))))
-        ident         (rc/get-ident Target props)
+        props         (log/spy :info "initial-props"
+                        (if initial-props
+                          (?! initial-props env data)
+                          (if form?
+                            (let [{:keys [id]} event-data
+                                  id-key (first (rc/get-ident Target {}))]
+                              {id-key id})
+                            (rc/get-initial-state Target (or event-data {})))))
+        ident         (log/spy :info (rc/get-ident Target props))
         exists?       (some? (get-in state-map ident))]
     (when (or
             (and (= :once initialize) (not exists?))
@@ -107,24 +110,41 @@
       (merge/merge-component! app Target props))
     ident))
 
+(def ^:deprecated initialize-route! "renamed to initialize-target!" initialize-target!)
+
+(defmutation replace-join
+  "Mutation: [{:keys [Parent parent-ident join-key Target target-ident]}]
+
+   See `replace-join!` for basic usage or establish-join for a script node.."
+  [{:keys [Parent parent-ident join-key Target target-ident]}]
+  (action [{:keys [state]}]
+    (let [state-map @state
+          old-query (rc/get-query Parent state-map)
+          oq-ast    (eql/query->ast old-query)
+          nq-ast    (update oq-ast :children
+                      (fn [cs]
+                        (conj (vec (remove #(= join-key (:dispatch-key %)) cs))
+                          (eql/query->ast1 [{join-key (rc/get-query Target state-map)}]))))
+          new-query (eql/ast->query nq-ast)]
+      (when (and (not parent-ident) (rc/has-ident? Parent))
+        (log/error "Unable to fix join. Route will have no props because parent has no ident."
+          {:parent (rc/component-name Parent)
+           :target (rc/component-name Target)}))
+      (swap! state (fn [s]
+                     (-> s
+                       (rc/set-query* Parent {:query new-query})
+                       (assoc-in (conj parent-ident join-key) target-ident)))))))
+
 (defn replace-join!
-  "Logic to update the query of Parent such that `join-key` is an EQL join to `Target`."
+  "Logic to update the query of `Parent` such that `join-key` is an EQL join to `Target`. This function also updates
+   the data linkage in app state for that new join such that the data model of the parent at the `join-key` in
+   `parent-ident` points at the given `target-ident`."
   [app Parent parent-ident join-key Target target-ident]
-  (let [{:com.fulcrologic.fulcro.application/keys [state-atom]} app
-        state-map @state-atom
-        old-query (rc/get-query Parent state-map)
-        oq-ast    (eql/query->ast old-query)
-        nq-ast    (update oq-ast :children
-                    (fn [cs]
-                      (conj (vec (remove #(= join-key (:dispatch-key %)) cs))
-                        (eql/query->ast1 [{join-key (rc/get-query Target state-map)}]))))
-        new-query (eql/ast->query nq-ast)]
-    (when (and (not parent-ident) (rc/has-ident? Parent))
-      (log/error "Unable to fix join. Route will have no props because parent has no ident."
-        {:parent (rc/component-name Parent)
-         :target (rc/component-name Target)}))
-    (swap! state-atom assoc-in (conj parent-ident join-key) target-ident)
-    (rc/set-query! app Parent {:query new-query})))
+  (rc/transact! app [(replace-join {:Parent       Parent
+                                    :parent-ident parent-ident
+                                    :join-key     join-key
+                                    :Target       Target
+                                    :target-ident target-ident})]))
 
 (defn- find-parent-route
   "Find the node in the statechart that is the closest parent to the node with `id` which has a :route/target or :routing/root.
@@ -142,6 +162,83 @@
           (nil? parent) nil
           routable? parent
           :else (recur pid))))))
+
+(defn- valid-ident? [x]
+  (and
+    x
+    (vector? x)
+    (= 2 (count x))
+    (every? some? x)))
+
+(defn establish-join
+  "A function to changes the query of the given parent (which must have a constant ident),
+   initializes the child using the rules of `rstate`, and points the parent's data at that initialized child's
+   ident. Note that the initial props of the child combined with it's ident function must return the desired target
+   ident for this to work.
+
+   This allows you to control the view for a particular dynamic child of a component explicitly. Note that you can use `destroy-join`
+   as a script to explicitly tear down such an association, but it is better to have a script node on the new active state
+   that uses this script node instead.
+
+   Parent - The component class or registry key for the parent. Must have a constant ident, or you must specify `parent-ident`
+   Target - The component class or registry key for the target. Must have an ident that will return a valid value after initialization of component state.
+   parent-ident - The ident of the parent on which the join is to be placed.
+   parallel? - If true, then this function sets the query/ident so that the given Parent can use ui-parallel-route to
+    render the children; otherwise, it should renders the single child with ui-current-subroute.
+
+   See also `ui-current-subroute`, `ui-parallel-route`, `uo/initialize`, and `ui/initial-props`..
+  "
+  [{:fulcro/keys [app] :as env} data {:keys [Parent Target parallel? parent-ident]}]
+  (let [Target       (rc/registry-key->class Target)
+        target-key   (rc/class->registry-key Target)
+        ident        (log/spy :debug (initialize-target! env (assoc data ::target target-key)))
+        Parent       (rc/registry-key->class Parent)
+        parent-ident (log/spy :debug (or parent-ident (rc/get-ident Parent {})))
+        join-key     (if parallel? target-key :ui/current-route)]
+    (cond
+      (not Target) (log/error "No target for join")
+      (not Parent) (log/error "No parent for join")
+      (not (valid-ident? parent-ident)) (log/error "Could not get a valid ident for parent for replacing join!")
+      (not (valid-ident? ident)) (log/error "Could not derive a valid target ident")
+      :else (replace-join! app Parent parent-ident join-key Target ident))
+    nil))
+
+(defmutation remove-join
+  "Mutation. See destroy-join for a script node."
+  [{:keys [parent-ident target-ident join-key gc?]}]
+  (action [{:keys [state]}]
+    (swap! state (fn [s]
+                   (cond-> (update-in s parent-ident dissoc join-key)
+                     gc? (fns/remove-entity target-ident))))))
+
+(defn destroy-join
+  "A function that will remove a join from the some component via dynamic query manipulation. Follows the rules of how
+   this ns generally does UI routing.
+
+   Parent - The component class or registry key for the parent. Must have a constant ident.
+   Target - The component class or registry key for the target. Must have an ident that will return a valid value after initialization of component state.
+   parallel? - If true, then this function affects the query/ident of the given Parent as if it uses ui-parallel-route to
+    render the children; otherwise, it assumes there is a single child.
+   gc? - (default false). Remove the target entity from state. Normally just the ident is cleared.
+  "
+  [{:fulcro/keys [app]} data {:keys [Parent Target parent-ident parallel? gc?]}]
+  (let [state-map    (rapp/current-state app)
+        Target       (if (rc/component-class? Target) Target (rc/registry-key->class Target))
+        target-key   (rc/class->registry-key Target)
+        Parent       (rc/registry-key->class Parent)
+        parent-ident (or parent-ident (rc/get-ident Parent {}))
+        join-key     (if parallel? target-key :ui/current-route)
+        target-ident (log/spy :info (get-in state-map (conj parent-ident join-key)))]
+    (cond
+      (not Target) (log/error "No target for join")
+      (not Parent) (log/error "No parent for join")
+      (not (valid-ident? parent-ident)) (log/error "Could not get a valid ident for parent for replacing join!")
+      (not (valid-ident? target-ident)) (log/error "Could not derive a valid target ident")
+      :else (rc/transact! app [(remove-join {:target-ident target-ident
+                                             :join-key     join-key
+                                             :gc?          (boolean gc?)
+                                             :parent-ident parent-ident})]))
+    nil))
 
 (>defn update-parent-query!
   "Dynamically set the query of the parent of `target-id` such that it's query includes a join to the given target. For
@@ -197,7 +294,7 @@
                                            :else {})
                                          params)]
            (when @history
-             (if (log/spy :info external?)
+             (if external?
                (rhist/replace-route! @history {:id id :route/path path :route/params actual-params})
                (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
              [(ops/assign [:routing/parameters id] actual-params)]))))}))
@@ -226,8 +323,8 @@
                                                        :route/target target-key})
       (on-entry {}
         (establish-route-params-node (assoc props :id id))
-        (script {:expr (fn [env data & _]
-                         (let [ident (initialize-route! env (assoc data ::target target-key))]
+        (script {:expr (fn [{:fulcro/keys [app] :as env} data & _]
+                         (let [ident (initialize-target! env (assoc data ::target target-key))]
                            ;; FIXME: Route idents should be stored by path; otherwise we can only have one of each kind on-screen
                            ;; at a time.
                            [(ops/assign [:route/idents target-key] ident)]))})
@@ -282,8 +379,8 @@
           [(ops/delete [:route/idents target-key])]))
       (on-entry {}
         (establish-route-params-node (assoc state-props :id id))
-        (script {:expr (fn [env data & _]
-                         (let [ident (initialize-route! env (assoc data ::target target-key))]
+        (script {:expr (fn [{:fulcro/keys [app] :as env} data & _]
+                         (let [ident (initialize-target! env (assoc data ::target target-key))]
                            [(ops/assign [:route/idents target-key] ident)]))})
         (script {:expr (fn [env data & _] (update-parent-query! env data id))}))
       (ele/invoke (cond-> {:params      (merge
@@ -481,20 +578,27 @@
   "Render the current subroute. factory-fn is the function wrapper that generates a proper element (e.g. comp/factory),
    and parent-component-instance is usually `this`.
 
+   Renders nothing (or `default-render` if supplied) if the route isn't currently established (no data present).
+   `default-render` is a (fn []).
+
    NOTE: This will NOT properly render a parallel route. You must use `ui-parallel-route`"
-  [parent-component-instance factory-fn]
-  (let [this         parent-component-instance
-        q            (rc/get-query this (rapp/current-state this))
-        {:ui/keys [current-route]} (rc/props this)
-        {:keys [component]} (first
-                              (filter
-                                (fn [{:keys [dispatch-key]}] (= dispatch-key :ui/current-route))
-                                (:children (eql/query->ast q))))
-        render-child (when component (factory-fn component))]
-    (if render-child
-      (render-child current-route)
-      (let [nm (rc/component-name parent-component-instance)]
-        (log/warn (str "No subroute to render for " nm ". Did you remember to use ui-current-subroute in its parent?"))))))
+  ([parent-component-instance factory-fn] (ui-current-subroute parent-component-instance factory-fn (constantly nil)))
+  ([parent-component-instance factory-fn default-render]
+   (let [this         parent-component-instance
+         q            (rc/get-query this (rapp/current-state this))
+         {:ui/keys [current-route]} (rc/props this)
+         {:keys [component]} (first
+                               (filter
+                                 (fn [{:keys [dispatch-key]}] (= dispatch-key :ui/current-route))
+                                 (:children (eql/query->ast q))))
+         render-child (when component (factory-fn component))]
+     (cond
+       (and (not render-child) (fn? default-render)) (default-render)
+       (not render-child) (let [nm (rc/component-name parent-component-instance)]
+                            (log/warn (str "No subroute to render for " nm ". Did you remember to use ui-current-subroute in its parent?")))
+       (map? current-route) (render-child current-route)
+       (fn? default-render) (default-render)
+       :else (log/debug "Skipping subroute render because props are not present" {:parent (rc/component-name parent-component-instance)})))))
 
 (defn ui-parallel-route
   "Render ONE of the possible routes underneath a parallel routing node.
@@ -503,16 +607,26 @@
    The target-registry-key can be anything the component registry will recognize for the target you're trying
    to render.
 
+   Renders nothing if the route isn't currently established (no data present).
+
    NOTE: This will NOT properly render a standard route. You must use `ui-current-subroute`"
-  [parent-component-instance target-registry-key factory-fn]
-  (let [this          parent-component-instance
-        Target        (rc/registry-key->class target-registry-key)
-        k             (rc/class->registry-key Target)
-        current-route (get (rc/props this) k {})
-        render-child  (when Target (factory-fn Target))]
-    (if render-child
-      (render-child current-route)
-      (log/error "No subroute to render for" target-registry-key "in" (rc/component-name parent-component-instance)))))
+  ([parent-component-instance target-registry-key factory-fn]
+   (ui-parallel-route parent-component-instance target-registry-key factory-fn (constantly nil)))
+  ([parent-component-instance target-registry-key factory-fn default-render]
+   (let [this          parent-component-instance
+         Target        (rc/registry-key->class target-registry-key)
+         k             (rc/class->registry-key Target)
+         current-route (get (rc/props this) k {})
+         render-child  (when Target (factory-fn Target))]
+     (cond
+       (and (not render-child) (fn? default-render)) (default-render)
+       (not render-child) (log/warn "Skipping parallel subroute render because target was invalid"
+                            {:parent (rc/component-name parent-component-instance)
+                             :target target-registry-key})
+       (map? current-route) (render-child current-route)
+       (fn? default-render) (default-render)
+       :else (log/debug "No props to render" {:parent (rc/component-name parent-component-instance)
+                                              :target target-registry-key})))))
 
 (defn route-to!
   "Attempt to route to the given target."
@@ -606,14 +720,31 @@
   [app-ish]
   (scf/send! app-ish session-id :event.routing-info/close {}))
 
+(defn invocation-id
+  "Returns the invocation ID (session id) for an invoked component. You can pass the `this` from that component, or its component class."
+  [app-ish registry-key-or-class]
+  (let [target-key (rc/class->registry-key (rc/registry-key->class registry-key-or-class))
+        state-map  (rapp/current-state app-ish)]
+    (get-in state-map [::sc/local-data session-id :invocation/id target-key])))
+
+(defn send-to-invocation!
+  "Like send-to-self!, but you can name which component hosts the invoked statechart (in cases where you are trying
+   to send events from a child component or a sibling/parent).
+
+   TargetComponent is a component class or registry key.
+   "
+  ([this TargetComponent event-name] (send-to-invocation! this TargetComponent event-name {}))
+  ([this TargetComponent event-name event-data]
+   (let [session-id (invocation-id this TargetComponent)]
+     (when session-id
+       (scf/send! this session-id event-name event-data)))))
+
 (defn send-to-self!
   "Send an event to an invoked statechart that is co-locatied on `this`.
    as specified on the component via ro/idlocation (defaults to [:child-session-id])."
   ([this event-name] (send-to-self! this event-name {}))
   ([this event-name event-data]
-   (let [target-key (rc/class->registry-key (rc/component-type this))
-         state-map  (rapp/current-state this)
-         session-id (get-in state-map [::sc/local-data session-id :invocation/id target-key])]
+   (let [session-id (invocation-id this this)]
      (when session-id
        (scf/send! this session-id event-name event-data)))))
 

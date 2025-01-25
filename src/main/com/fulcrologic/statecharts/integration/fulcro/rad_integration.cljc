@@ -12,11 +12,12 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.report :as report]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :refer [entry-fn exit-fn]]
+    [com.fulcrologic.statecharts.elements :as ele :refer [entry-fn exit-fn]]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes :as uir]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]))
@@ -296,6 +297,36 @@
       form-ident
       {:actor/form (uism/with-actor-class form-ident form-class)}
       (merge params {::create? new?}))))
+
+(defn start-form
+  "A script node that will start a form. Expects event-data to contain :id and :params, which are passed on to the RAD
+   system. A tempid will cause a create; otherwise, an edit. Form should be a registry key for a RAD Form class (or
+   the component itself)."
+  [{:keys [Form]}]
+  (let [target-key (rc/class->registry-key Form)]
+    (ele/script
+      {:expr
+       (fn [{:fulcro/keys [app]} _ _ event-data]
+         (log/debug "Starting form wih " event-data)
+         (let [{:keys [id params]} event-data]
+           (start-form! app id (comp/registry-key->class target-key) params)
+           [(ops/assign [:form/ids target-key] id)]))})))
+
+(defn cleanup-form
+  "A script node that will exit a form state machine, and make sure that unsaved changes are undone. If you use this
+   script node then the assumption is you've integrated things to handle saving in a way that makes sense to the user."
+  [{:keys [Form]}]
+  (let [target-key (rc/class->registry-key Form)
+        Form       (rc/registry-key->class target-key)
+        id-key     (rc/component-options Form fo/id ao/qualified-key)]
+    (ele/script
+      {:expr
+       (fn [{:fulcro/keys [app]} data & _]
+         (let [id         (get-in data [:form/ids target-key])
+               form-ident [id-key id]]
+           (when id
+             (form/abandon-form! app form-ident))
+           [(ops/delete [:form/ids target-key])]))})))
 
 (defn form-state
   "Generates a ui routing rstate that starts an edit/create on a RAD form (based on the statechart event data). The
