@@ -225,7 +225,6 @@
     (apply (if parallel? parallel state) (merge props {:id           id
                                                        :route/target target-key})
       (on-entry {}
-        (establish-route-params-node (assoc props :id id))
         (script {:expr (fn [env data & _]
                          (let [ident (initialize-route! env (assoc data ::target target-key))]
                            ;; FIXME: Route idents should be stored by path; otherwise we can only have one of each kind on-screen
@@ -281,7 +280,6 @@
         (script-fn [& _]
           [(ops/delete [:route/idents target-key])]))
       (on-entry {}
-        (establish-route-params-node (assoc state-props :id id))
         (script {:expr (fn [env data & _]
                          (let [ident (initialize-route! env (assoc data ::target target-key))]
                            [(ops/assign [:route/idents target-key] ident)]))})
@@ -393,16 +391,19 @@
     :keys         [id] :as props} & route-states]
   (let [find-targets       (fn find-targets* [targets]
                              (mapcat
-                               (fn [{:keys [route/target children]}]
-                                 (into (if target [target] [])
+                               (fn [{:keys [route/target children] :as r}]
+                                 (into (if target [r] [])
                                    (find-targets* children)))
                                targets))
         all-targets        (find-targets route-states)
         direct-transitions (mapv
-                             (fn [t]
-                               (transition {:event  (route-to-event-name t)
-                                            :target t}
-                                 (ele/raise {:event :event.routing-info/close})))
+                             (fn [{:keys [id route/target] :as r}]
+                               (let [target-key (coerce-to-keyword target)
+                                     id (or id target-key)]
+                                 (transition {:event  (route-to-event-name target)
+                                              :target target}
+                                   (establish-route-params-node (assoc r :id id))
+                                   (ele/raise {:event :event.routing-info/close}))))
                              all-targets)]
     (apply state props
       (on-entry {}
