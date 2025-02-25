@@ -62,3 +62,29 @@
    (let [penv (processing-env env session-id)]
      (when penv
        (sp/get-at data-model penv data-path)))))
+
+(>defn send!
+  "Send an event to a particular statechart session.
+
+   event-name - The keyword name of the event
+   event-data - A map of data
+   options - A map with event options. Supported options are:
+     :delay - (implementation specific) delay before sending. Default implementation uses ms.
+     :type - (implementation specific) how to transport the event. The default is to deliver to statecharts in the local system.
+  "
+  ([{::sc/keys [event-queue] :as env} session-id event-name event-data options]
+   [::sc/env ::sc/session-id :keyword map? [:map {:closed true}
+                                            [:type {:optional true} :any]
+                                            [:delay {:optional true} :any]] => :boolean]
+   (sp/send! event-queue env (merge options
+                               {:event  event-name
+                                :target session-id
+                                :data   event-data})))
+  ([{::sc/keys [event-queue] :as env} session-id event-name event-data]
+   [::sc/env ::sc/session-id :keyword map? => :boolean]
+   (sp/send! event-queue env {:event  event-name
+                              :target session-id
+                              :data   event-data}))
+  ([{::sc/keys [event-queue] :as env} session-id event-name]
+   [::sc/env ::sc/session-id :keyword => :boolean]
+   (send! env session-id event-name {})))

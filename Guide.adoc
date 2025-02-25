@@ -364,6 +364,27 @@ can override via `initialize`). This is intended as part of the story to
 allow you to coordinate external event sources with working with
 instances of chart that are archived in durable storage while idle.
 
+== Accessing Running Charts from Outside the Chart
+
+While you *can* work with the core algorithms as pure function, you will normally set up a
+standard system environment (where you provide an event queue and working memory store). When working with such a
+system you may have many charts running (stored in the working memory store) and can send them events via the
+event queue.
+
+The `com.fulcrologic.statecharts.runtime` namespace includes functions which can be used to work with such a system
+from *outside* the chart itself.
+
+`current-configuration`:: Get the set of active states for by session id.
+`processing-env`:: Get a processing env (using a system env and session id)
+`session-data`:: Get internal statechart data from a particular statechart session.
+`send!`:: Send an event. The simple system has this function as well, and it is a standard part of the protocols, but
+          this wrapper makes it a little more convenient to use when you already have a system env map.
+
+WARNING: Beware the term "env". In this library a system environment is a map that contains a key for the various
+components of the system (e.g. the event queue, processor, execution model, etc.). A *processing env* is an
+system environment _which also includes_ the current details of a *particular session* and is the `env` you see in the lambdas
+in your chart.  The latter *can* be used anywhere the former is needed, but not vice-versa.
+
 == Invocations
 
 An invocation is an "external" service/chart/process that can be started when your state chart enters a state,
