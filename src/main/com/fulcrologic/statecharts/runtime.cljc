@@ -55,13 +55,12 @@
    "
   ([{::sc/keys [data-model working-memory-store] :as env} session-id]
    [[:map ::sc/data-model ::sc/working-memory-store] ::sc/session-id => :any]
-   (let [penv (processing-env env session-id)]
-     (when penv (sp/current-data data-model penv))))
+   (when-let [penv (processing-env env session-id)]
+     (sp/current-data data-model penv)))
   ([{::sc/keys [data-model working-memory-store] :as env} session-id data-path]
    [[:map ::sc/data-model ::sc/working-memory-store] ::sc/session-id vector? => :any]
-   (let [penv (processing-env env session-id)]
-     (when penv
-       (sp/get-at data-model penv data-path)))))
+   (when-let [penv (processing-env env session-id)]
+     (sp/get-at data-model penv data-path))))
 
 (>defn send!
   "Send an event to a particular statechart session.
