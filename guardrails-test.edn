@@ -1,6 +1,10 @@
-{:defn-macro          nil
- :throw?              true
- :emit-spec?          true
- :disable-exclusions? true
- :expound             {:show-valid-values? false
-                       :print-specs?       false}}
+{:defn-macro             nil
+ :throw?                 true
+ :emit-spec?             false
+ :disable-exclusions?    true
+ :guardrails/use-stderr? true
+ :guardrails/compact?    true
+ :guardrails/trace?      true
+ :guardrails/stack-trace :none                              ; or :prune, :full, or :none
+ :expound                {:show-valid-values? false
+                          :print-specs?       false}}

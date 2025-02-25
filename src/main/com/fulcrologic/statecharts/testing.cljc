@@ -165,11 +165,14 @@
   (ran-in-order? [_ frefs] (ran-in-order? (::sc/execution-model env) frefs)))
 
 (defn new-testing-env
-  "Returns a new testing `env` that can be used to run events against a state chart or otherwise
-   manipulate it for tests.
+  "Returns a new testing object (test environment) that can be used to run events against a state chart or otherwise
+   manipulate it for tests. This testing object INCLUDES the key `:env` which is a standard statechart *system env*.
 
-   `mocks` is a map from expression *value* (e.g. fn ref) to either a literal value or a `(fn [env])`, where
-   `env` will be the testing env with :ncalls set to the ordinal (from 1) number of times that expression
+   The configuration options can be used to provide overrides to how the processor and data model elements of the system
+   env are created. The `event-queue` defaults to a mock queue.
+
+   The `mocks` parameter is a map from expression *value* (e.g. fn ref) to either a literal value or a `(fn [env])`, where
+    the `env` in the mocks will be the *testing env* with :ncalls set to the ordinal (from 1) number of times that expression
    has been run.
 
    `validator` is a `(fn [machine working-memory] vector?)` that returns a list of problems with the
