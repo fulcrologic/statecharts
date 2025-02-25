@@ -20,8 +20,7 @@
     [com.fulcrologic.statecharts.algorithms.v20150901-impl :as impl]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.malli-specs]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.statecharts.malli-specs]))
 
 (>defn current-configuration
   "Returns the current configuration of the statechart with the given session-id. You MUST be using an implementation
