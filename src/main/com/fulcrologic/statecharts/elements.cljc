@@ -261,7 +261,7 @@
   "A macro that emits a `script` element, but looks more like a normal CLJC lambda:
 
   ```
-  (script-fn [env data] ...)
+  (script-fn [env data event params] ...)
   ```
 
   is shorthand for
