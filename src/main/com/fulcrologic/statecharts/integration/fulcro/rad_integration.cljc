@@ -35,6 +35,8 @@
     ;; Find the route that matches the path
     (let [{:route/keys [target]} (uir/state-for-path (scp/get-statechart sc-registry ::uir/chart) route)]
       (srhist/push-route! sc-hist {:target target :params params :route-params params})))
+  ;; NOTE: This is how RAD updates the parameters...this is very often called just to update the params,
+  ;; and it basically does assoc onto the params map it got from current-route.
   (-replace-route! [_ route params]
     (let [{:route/keys [target]} (uir/state-for-path (scp/get-statechart sc-registry ::uir/chart) route)]
       ;; TASK: Double-check that this is the format
@@ -47,7 +49,7 @@
     ;; TASK: Reformat this to RAD expected
     ;; {:route [...]
     ;;  :params {}}
-    (first (srhist/recent-history sc-hist))))
+    (second (last (srhist/recent-history sc-hist)))))
 
 (defn report-state
   "Creates a state whose :route/target is a RAD report. The report will be started on entry, and the :route-params
