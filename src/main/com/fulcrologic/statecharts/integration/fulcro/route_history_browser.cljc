@@ -109,7 +109,7 @@
              uid (or uid @current-uid)]
          (swap! uid->history assoc uid (assoc r :uid uid))
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
-  (current-route [this] (first (rh/recent-history this)))
+  (current-route [this] (second (last (rh/recent-history this))))
   (recent-history [_] @uid->history))
 
 (defn new-html5-history
