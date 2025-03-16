@@ -16,8 +16,7 @@
     [com.fulcrologic.statecharts.elements :as ele :refer [on-entry on-exit parallel script script-fn state transition]]
     [com.fulcrologic.statecharts.environment :as senv]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
-    [com.fulcrologic.statecharts.integration.fulcro.route-history :as rhist]
-    [com.fulcrologic.statecharts.integration.fulcro.route-url :as ru]
+    [com.fulcrologic.statecharts.integration.fulcro.route-history :as rh]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes-options :as ro]
     [com.fulcrologic.statecharts.protocols :as scp]
     [edn-query-language.core :as eql]
@@ -183,9 +182,7 @@
          (let [{::keys [external?]} event-data
                ks                      (log/spy :info (set (keys event-data)))
                event-has-route-params? (boolean (seq (set/intersection ks params)))
-               path-params             (some-> (ru/current-url)
-                                         (ru/current-url-state-params)
-                                         (get id))
+               {path-params :params} (some-> @history (rh/current-route) (get id))
                has-path-params?        (boolean
                                          (seq (set/intersection
                                                 (set (keys path-params))
@@ -198,8 +195,8 @@
                                          params)]
            (when @history
              (if (log/spy :info external?)
-               (rhist/replace-route! @history {:id id :route/path path :route/params actual-params})
-               (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
+               (rh/replace-route! @history {:id id :route/path path :route/params actual-params})
+               (rh/push-route! @history {:id id :route/path path :route/params actual-params}))
              [(ops/assign [:routing/parameters id] actual-params)]))))}))
 
 (defn rstate
@@ -346,17 +343,19 @@
 (defn record-failed-route! [env {:keys [_event]} & args]
   [(ops/assign ::failed-route-event _event)])
 
-(defn undo-url-change [env dm event-name {:route/keys [uid] :as popped-or-pushed-event-data}]
-  (let [id->node         (rhist/recent-history @history)
-        ids              (reverse (keys id->node))
-        most-recent      (first ids)
-        next-most-recent (second ids)
-        r                (get id->node most-recent)
-        back?            (= uid next-most-recent)]
-    (if back?
-      (rhist/push-route! @history r)
-      (rhist/replace-route! @history (get id->node uid)))
-    nil))
+(defn undo-route-change [env dm event-name {:route/keys [uid] :as popped-or-pushed-event-data}]
+  (if @history
+    (let [id->node         (rh/recent-history @history)
+          ids              (reverse (keys id->node))
+          most-recent      (first ids)
+          next-most-recent (second ids)
+          r                (get id->node most-recent)
+          back?            (= uid next-most-recent)]
+      (if back?
+        (rh/push-route! @history r)
+        (rh/replace-route! @history (get id->node uid)))
+      nil)
+    (log/error "No history installed. Cannot undo routing decision!")))
 
 (defn apply-external-route
   "Look at the URL and figure out which of the statechart states we need to be in,
@@ -365,7 +364,7 @@
     :fulcro/keys [app]} & _]
   (let [{::sc/keys [elements-by-id]} (scp/get-statechart statechart-registry ::chart)
         elements         (vals elements-by-id)
-        current-path     (ru/current-url-path)
+        current-path     (some-> @history (rh/current-route) :route)
         {target-state-id :id
          :route/keys     [target]} (first
                                      (filter
@@ -373,10 +372,10 @@
                                          (= path current-path))
                                        elements))
         route-event-name (when target (route-to-event-name target))
-        ;; FIXME: Don't tie to HTML
         route-params     (when route-event-name
-                           (get (ru/current-url-state-params (ru/current-url))
-                             target-state-id))]
+                           (some-> @history
+                             (rh/current-route)
+                             (get-in [:params target-state-id])))]
     (when route-event-name
       (scf/send! app ::session route-event-name (assoc route-params
                                                   ::external? true)))
@@ -425,7 +424,7 @@
       (transition {:event :event/external-route-change
                    :cond  busy?}
         (script {:expr record-failed-route!})
-        (script {:expr undo-url-change})
+        (script {:expr undo-route-change})
         (ele/raise {:event :event.routing-info/show}))
       (transition {:event :event/external-route-change}
         (script {:expr apply-external-route}))
@@ -535,26 +534,15 @@
         elements))))
 
 (defn start-routing!
-  "Installs the statechart and starts it."
+  "Installs the statechart and starts it. You should also install history (if you want it) with `install-history!`"
   [app statechart]
-  (vreset! history (rhist/new-html5-history app
-                     {:route->url (fn [{:keys       [id]
-                                        :route/keys [path params]}]
-                                    (-> (ru/current-url)
-                                      (ru/update-url-state-param id (constantly params))
-                                      (ru/new-url-path (str "/" (str/join "/" path)))))
-                      :url->route (fn []
-                                    (let [url        (ru/current-url)
-                                          id->params (ru/current-url-state-params url)
-                                          path       (ru/current-url-path url)
-                                          {:keys [id] :as state} (state-for-path statechart path)]
-                                      {:id           id
-                                       :route/path   path
-                                       :route/params (get id->params id)}))}))
   (update-chart! app statechart)
   (scf/start! app {:machine    ::chart
                    :session-id session-id
                    :data       {}}))
+
+(defn install-history! [history-impl]
+  (reset! history history-impl))
 
 (>defn has-routes?
   "Returns true if the state with the given ID contains routes."

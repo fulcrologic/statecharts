@@ -15,6 +15,7 @@
     [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.report :as report]
+    [com.fulcrologic.rad.report-options :as ro]
     [com.fulcrologic.rad.routing.history :as rhist]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.elements :refer [entry-fn exit-fn]]
@@ -29,7 +30,7 @@
   (push-route! [_ route] (srhist/push-route! sc-hist route))
   (replace-route! [_ route] (srhist/replace-route! sc-hist route))
   (recent-history [_] (srhist/recent-history sc-hist))
-  rhist/RouteHistory ; route is a vector of strings
+  rhist/RouteHistory                                        ; route is a vector of strings
   (-push-route! [_ route params]
     ;; Find the route that matches the path
     (let [{:route/keys [target]} (uir/state-for-path (scp/get-statechart sc-registry ::uir/chart) route)]
@@ -55,10 +56,11 @@
 
    See `rstate` for generate options for a routed state."
   [{:route/keys  [target path]
-    :report/keys [param-keys] :as props}]
+    :report/keys [param-keys] :as props}] ; TASK: Ugly duplication of param keys...Yuck. Don't want it. Use report component or don't prune keys
   (uir/rstate (merge {} props)
     (entry-fn [{:fulcro/keys [app]} data _ event-data]
       (log/debug "Starting report")
+      ;; TASK: Restore params (from route history system)
       (report/start-report! app (comp/registry-key->class (:route/target props)) {:route-params (cond-> (merge data event-data)
                                                                                                   (seq param-keys) (select-keys param-keys))})
       nil)))
@@ -316,7 +318,7 @@
    UISM from this ns as a base."
   [app id form-class params]
   (let [{::attr/keys [qualified-key]} (comp/component-options form-class fo/id)
-        machine    (or (comp/component-options form-class ::machine) uir-form-machine)
+        machine    (or (comp/component-options form-class fo/machine) uir-form-machine)
         new?       (tempid/tempid? id)
         form-ident [qualified-key id]]
     (uism/begin! app machine
