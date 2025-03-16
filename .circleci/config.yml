@@ -11,7 +11,7 @@ jobs:
       - restore_cache:
           key: cljs-{{ checksum "deps.edn" }}-{{ checksum "package.json" }}
       - run: yarn install --frozen-lockfile
-      - run: npx shadow-cljs -A:dev -v compile ci-tests
+      - run: npx shadow-cljs -A:sc-dev -v compile ci-tests
       - run: ls -l target
       - run: npx karma start --single-run
       - save_cache:
@@ -26,7 +26,7 @@ jobs:
       - checkout
       - restore_cache:
           key: clj-{{ checksum "deps.edn" }}
-      - run: clojure -A:dev:test:clj-tests -J-Dguardrails.enabled=true -J-Dguardrails.config=guardrails-test.edn
+      - run: clojure -A:sc-dev:test:clj-tests -J-Dguardrails.enabled=true -J-Dguardrails.config=guardrails-test.edn
       - save_cache:
           paths:
             - ~/.m2
