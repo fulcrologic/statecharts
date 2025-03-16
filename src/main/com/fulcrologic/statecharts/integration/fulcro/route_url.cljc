@@ -54,15 +54,4 @@
 
 (defn replace-url! [href] #?(:cljs (.replaceState (.-history js/window) nil "" href)))
 
-(comment
-  (-> (.-href (.-location js/window))
-    (new-url-path "/")
-    (update-url-state-param :state/foo assoc :x 1)
-    (update-url-state-param :state/bar assoc :y 2)
-    (update-url-state-param :state/foo update :x inc)
-    (push-url!)
-    )
-  (current-url-state-params (.-href (.-location js/window)))
-  (new-url-path (.-href (.-location js/window)) "/bax")
-  )
 

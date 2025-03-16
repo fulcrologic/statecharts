@@ -15,11 +15,38 @@
     [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.report :as report]
+    [com.fulcrologic.rad.routing.history :as rhist]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.elements :refer [entry-fn exit-fn]]
+    [com.fulcrologic.statecharts.integration.fulcro.route-history :as srhist]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes :as uir]
+    [com.fulcrologic.statecharts.protocols :as scp]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]))
+
+(deftype RadCompatibleRouteHistory [sc-registry sc-hist]
+  srhist/RouteHistory
+  (push-route! [_ route] (srhist/push-route! sc-hist route))
+  (replace-route! [_ route] (srhist/replace-route! sc-hist route))
+  (recent-history [_] (srhist/recent-history sc-hist))
+  rhist/RouteHistory ; route is a vector of strings
+  (-push-route! [_ route params]
+    ;; Find the route that matches the path
+    (let [{:route/keys [target]} (uir/state-for-path (scp/get-statechart sc-registry ::uir/chart) route)]
+      (srhist/push-route! sc-hist {:target target :params params :route-params params})))
+  (-replace-route! [_ route params]
+    (let [{:route/keys [target]} (uir/state-for-path (scp/get-statechart sc-registry ::uir/chart) route)]
+      ;; TASK: Double-check that this is the format
+      (srhist/replace-route! sc-hist {:target target :params params :route-params params})))
+  (-back! [_] (some->> (srhist/recent-history sc-hist) (second) (srhist/replace-route! sc-hist)))
+  (-undo! [_ new-route params] "not necessary with statecharts")
+  (-add-route-listener! [_ listener-key f] "not necessary with statecharts")
+  (-remove-route-listener! [_ listener-key] "not necessary with statecharts")
+  (-current-route [_]
+    ;; TASK: Reformat this to RAD expected
+    ;; {:route [...]
+    ;;  :params {}}
+    (first (srhist/recent-history sc-hist))))
 
 (defn report-state
   "Creates a state whose :route/target is a RAD report. The report will be started on entry, and the :route-params
