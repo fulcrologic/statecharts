@@ -11,6 +11,7 @@
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.container :as container]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.options-util :refer [?!]]
@@ -27,27 +28,52 @@
 
 (deftype RadCompatibleRouteHistory [sc-registry sc-hist]
   srhist/RouteHistory
-  (push-route! [_ route] (srhist/push-route! sc-hist route))
-  (replace-route! [_ route] (srhist/replace-route! sc-hist route))
-  (recent-history [_] (srhist/recent-history sc-hist))
+  (-push-route! [history route] (srhist/push-route! route))
+  (-replace-route! [history route] (srhist/replace-route! route))
+  (-back! [history] (srhist/back!))
+  (-current-route [history] (srhist/current-route))
+  (-recent-history [history] (srhist/recent-history))
   rhist/RouteHistory                                        ; route is a vector of strings
   (-push-route! [_ route params]
     ;; Find the route that matches the path
     (let [{:route/keys [target]} (uir/state-for-path (scp/get-statechart sc-registry ::uir/chart) route)]
-      (srhist/push-route! sc-hist {:target target :params params :route-params params})))
+      (srhist/-push-route! sc-hist {:target target :params params :route-params params})))
   (-replace-route! [_ route params]
     (let [{:route/keys [target]} (uir/state-for-path (scp/get-statechart sc-registry ::uir/chart) route)]
       ;; TASK: Double-check that this is the format
-      (srhist/replace-route! sc-hist {:target target :params params :route-params params})))
-  (-back! [_] (some->> (srhist/recent-history sc-hist) (second) (srhist/replace-route! sc-hist)))
+      (srhist/-replace-route! sc-hist {:target target :params params :route-params params})))
+  (-back! [_] (srhist/-back! sc-hist))
   (-undo! [_ new-route params] "not necessary with statecharts")
   (-add-route-listener! [_ listener-key f] "not necessary with statecharts")
   (-remove-route-listener! [_ listener-key] "not necessary with statecharts")
-  (-current-route [_]
-    ;; TASK: Reformat this to RAD expected
-    ;; {:route [...]
-    ;;  :params {}}
-    (first (srhist/recent-history sc-hist))))
+  (-current-route [_] (srhist/-current-route sc-hist)))
+
+(defn target->route
+  "Find the latest route by the given target. Returns nil if not found."
+  [target]
+  (reduce (fn [acc [_ {:keys [id] :as route}]]
+            (if (= id target)
+              route
+              acc))
+    nil
+    (srhist/recent-history)))
+
+(defn container-state
+  "Creates a state whose :route/target is a RAD container. The container will be started on entry, and the :route-params
+   for the report will be a merge of the current statechart session data with the event data (which has precedence). If
+   you set `container/param-keys` to a collection of keywords, then the route params will be selected from just those keys.
+
+   See `rstate` for generate options for a routed state."
+  [{:route/keys  [target path]
+    :container/keys [param-keys] :as props}] ; TASK: Ugly duplication of param keys...Yuck. Don't want it. Use report component or don't prune keys
+  (uir/rstate (merge {} props)
+    (entry-fn [{:fulcro/keys [app]} data _ event-data]
+      (log/debug "Starting container")
+      ;; TASK: Restore params (from route history system)
+      ;; Thinking of using (target->route) to get the route params. Not sure this is the correct path.
+      (container/start-container! app (comp/registry-key->class (:route/target props)) {:route-params (cond-> (merge data event-data)
+                                                                                                        (seq param-keys) (select-keys param-keys))})
+      nil)))
 
 (defn report-state
   "Creates a state whose :route/target is a RAD report. The report will be started on entry, and the :route-params
@@ -61,8 +87,8 @@
     (entry-fn [{:fulcro/keys [app]} data _ event-data]
       (log/debug "Starting report")
       ;; TASK: Restore params (from route history system)
-      (report/start-report! app (comp/registry-key->class (:route/target props)) {:route-params (cond-> (merge data event-data)
-                                                                                                  (seq param-keys) (select-keys param-keys))})
+      (report/start-report! app (comp/registry-key->class target) {:route-params (cond-> (merge data event-data)
+                                                                                   (seq param-keys) (select-keys param-keys))})
       nil)))
 
 (defn leave-form
@@ -334,16 +360,16 @@
    The busy detection of UI routing will automatically detect busy for RAD forms.
 
    Leaving this state will ensure the form is abandoned. So, route override will undo the unsaved changes."
-  [props]
+  [{:route/keys  [target path] :as props}]
   (uir/rstate props
     (entry-fn [{:fulcro/keys [app]} data _ event-data]
       (log/debug "Starting form" event-data)
       (let [{:keys [id params]} event-data]
-        (start-form! app id (comp/registry-key->class (:route/target props)) params))
+        (start-form! app id (comp/registry-key->class target) params))
       nil)
     (exit-fn [{:fulcro/keys [app]} {:route/keys [idents]} & _]
       ;; Make sure if we abandoned the form that we undo the changes
-      (when-let [form-ident (get idents (rc/class->registry-key (:route/target props)))]
+      (when-let [form-ident (get idents (rc/class->registry-key target))]
         (form/abandon-form! app form-ident)
         [(ops/delete [:route/idents form-ident])]))))
 

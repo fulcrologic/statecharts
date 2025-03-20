@@ -50,8 +50,4 @@
        (set! (.-search url) (.toString search-params))
        (.toString url))))
 
-(defn push-url! [href] #?(:cljs (.pushState (.-history js/window) nil "" href)))
-
-(defn replace-url! [href] #?(:cljs (.replaceState (.-history js/window) nil "" href)))
-
 

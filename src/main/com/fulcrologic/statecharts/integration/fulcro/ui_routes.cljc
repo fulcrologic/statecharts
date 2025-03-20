@@ -4,19 +4,18 @@
    ALPHA. This namespace's API is subject to change."
   (:require
     [clojure.set :as set]
-    [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
-    [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
+    [com.fulcrologic.guardrails.malli.core :refer [=> >defn ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.elements :as ele :refer [on-entry on-exit parallel script script-fn state transition]]
     [com.fulcrologic.statecharts.environment :as senv]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
-    [com.fulcrologic.statecharts.integration.fulcro.route-history :as rh]
+    [com.fulcrologic.statecharts.integration.fulcro.route-history :as rhist]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes-options :as ro]
     [com.fulcrologic.statecharts.protocols :as scp]
     [edn-query-language.core :as eql]
@@ -26,6 +25,7 @@
 (defn form?
   "Returns true if the given component looks like a Fulcro form using form-state."
   [Component] (boolean (rc/component-options Component :form-fields)))
+
 (defn rad-report?
   "Returns true if the given component looks like a RAD report."
   [Component] (boolean (rc/component-options Component :com.fulcrologic.rad.report/source-attribute)))
@@ -33,8 +33,6 @@
 (def session-id
   "The global statechart session ID that is used for the application statechart."
   ::session)
-
-(defonce history (volatile! nil))
 
 (defn ?!
   "Run if the argument is a fn. This function can accept a value or function. If it is a
@@ -180,23 +178,23 @@
      (fn [{:fulcro/keys [app]} _dm _e event-data]
        (when path
          (let [{::keys [external?]} event-data
-               ks                      (log/spy :info (set (keys event-data)))
-               event-has-route-params? (boolean (seq (set/intersection ks params)))
-               {path-params :params} (some-> @history (rh/current-route) (get id))
-               has-path-params?        (boolean
-                                         (seq (set/intersection
-                                                (set (keys path-params))
-                                                params)))
-               actual-params           (select-keys
-                                         (cond
-                                           event-has-route-params? event-data
-                                           has-path-params? path-params
-                                           :else {})
-                                         params)]
-           (when @history
+                ks                      (log/spy :info (set (keys event-data)))
+                event-has-route-params? (boolean (seq (set/intersection ks params)))
+                {path-params :route/params} (rhist/current-route)
+                has-path-params?        (boolean
+                                          (seq (set/intersection
+                                                 (set (keys path-params))
+                                                 params)))
+                actual-params           (select-keys
+                                          (cond
+                                            event-has-route-params? event-data
+                                            has-path-params? path-params
+                                            :else {})
+                                          params)]
+           (when (rhist/active-history)
              (if (log/spy :info external?)
-               (rh/replace-route! @history {:id id :route/path path :route/params actual-params})
-               (rh/push-route! @history {:id id :route/path path :route/params actual-params}))
+               (rhist/replace-route! {:id id :route/path path :route/params actual-params})
+               (rhist/push-route! {:id id :route/path path :route/params actual-params}))
              [(ops/assign [:routing/parameters id] actual-params)]))))}))
 
 (defn rstate
@@ -344,16 +342,17 @@
   [(ops/assign ::failed-route-event _event)])
 
 (defn undo-route-change [env dm event-name {:route/keys [uid] :as popped-or-pushed-event-data}]
-  (if @history
-    (let [id->node         (rh/recent-history @history)
+  (if (rhist/history-support?)
+    (let [history          (rhist/active-history)
+          id->node         (-> history :uid->history deref)
           ids              (reverse (keys id->node))
           most-recent      (first ids)
           next-most-recent (second ids)
           r                (get id->node most-recent)
           back?            (= uid next-most-recent)]
       (if back?
-        (rh/push-route! @history r)
-        (rh/replace-route! @history (get id->node uid)))
+        (rhist/push-route! r)
+        (rhist/replace-route! (get id->node uid)))
       nil)
     (log/error "No history installed. Cannot undo routing decision!")))
 
@@ -364,18 +363,17 @@
     :fulcro/keys [app]} & _]
   (let [{::sc/keys [elements-by-id]} (scp/get-statechart statechart-registry ::chart)
         elements         (vals elements-by-id)
-        current-path     (some-> @history (rh/current-route) :route)
-        {target-state-id :id
-         :route/keys     [target]} (first
+        current-path     (some-> (rhist/current-route) :route/path)
+        {:route/keys     [target]} (first
                                      (filter
                                        (fn [{:route/keys [path]}]
                                          (= path current-path))
                                        elements))
         route-event-name (when target (route-to-event-name target))
         route-params     (when route-event-name
-                           (some-> @history
-                             (rh/current-route)
-                             (get-in [:params target-state-id])))]
+                           (some->
+                             (rhist/current-route)
+                             :route/params))]
     (when route-event-name
       (scf/send! app ::session route-event-name (assoc route-params
                                                   ::external? true)))
@@ -445,6 +443,7 @@
                                             {::force? true})}))
     (log/debug "There was no prior routing request that failed"))
   nil)
+
 (def routing-info-state
   (state {:id :region/routing-info}
     (state {:id :routing-info/idle}
@@ -514,7 +513,9 @@
       (log/error "No subroute to render for" target-registry-key "in" (rc/component-name parent-component-instance)))))
 
 (defn route-to!
-  "Attempt to route to the given target."
+  "Attempt to route to the given target.
+
+  `target` - Can be a component class, registry key, or keyword."
   ([app-ish target] (route-to! app-ish target {}))
   ([app-ish target data] (scf/send! app-ish session-id (route-to-event-name target) data)))
 
@@ -526,6 +527,7 @@
   (scf/register-statechart! app ::chart statechart))
 
 (defn state-for-path [{::sc/keys [elements-by-id] :as statechart} current-path]
+  "Returns the state that represents the given path in the statechart."
   (let [elements (vals elements-by-id)]
     (first
       (filter
@@ -533,16 +535,25 @@
           (= path current-path))
         elements))))
 
-(defn start-routing!
-  "Installs the statechart and starts it. You should also install history (if you want it) with `install-history!`"
-  [app statechart]
-  (update-chart! app statechart)
-  (scf/start! app {:machine    ::chart
-                   :session-id session-id
-                   :data       {}}))
+(>defn start-routing!
+  "Installs the statechart and starts it. You should also install history (if you want it) with `install-history!`
 
-(defn install-history! [history-impl]
-  (reset! history history-impl))
+  Options include:
+  `:history` - A history implementation that will be used to store the current route. If not supplied, the system will
+               not store the current route.
+  `:data` - The initial data for the statechart. This is the data that will be used to initialize the root state of the
+            statechart."
+  ([app statechart]
+   [::scf/fulcro-appish ::sc/statechart => (? ::sc/session-id)]
+   (start-routing! app statechart {}))
+  ([app statechart options]
+   [::scf/fulcro-appish ::sc/statechart :map => (? ::sc/session-id)]
+   (update-chart! app statechart)
+   (if-let [history-impl (:history options)]
+     (rhist/install-route-history! history-impl))
+   (scf/start! app {:machine    ::chart
+                    :session-id session-id
+                    :data       (or (:data options) {})})))
 
 (>defn has-routes?
   "Returns true if the state with the given ID contains routes."
