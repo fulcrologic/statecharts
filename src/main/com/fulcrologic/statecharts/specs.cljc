@@ -22,7 +22,7 @@
 (s/def ::sc/id-ordinals (s/map-of ::sc/id nat-int?))
 (s/def ::sc/state-element (s/and ::sc/element #(boolean (#{:state :parallel :final} (:node-type %)))))
 (s/def ::sc/parallel-element (s/and ::sc/element #(= :parallel (:node-type %))))
-(s/def ::sc/elements-by-id (s/map-of keyword? ::sc/element))
+(s/def ::sc/elements-by-id (s/map-of ::sc/id ::sc/element))
 (s/def ::sc/element-or-id (s/or :element ::sc/element :id ::sc/id))
 (s/def ::sc/running? boolean?)
 (s/def ::sc/configuration (s/every ::sc/id :kind set?))
