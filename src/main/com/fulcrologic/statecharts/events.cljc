@@ -89,3 +89,15 @@
 (def cancel-event
   "An event name that will cause the state machine to exit."
   ::cancel)
+
+(defn invoke-done-event
+  [invokeid]
+  (cond
+    (qualified-keyword? invokeid)
+    (keyword (str "done.invoke." (namespace invokeid)) (name invokeid))
+  
+    (keyword? invokeid)
+    (keyword (str "done.invoke." (name invokeid)))
+  
+    :else
+    (keyword (str "done.invoke." invokeid))))

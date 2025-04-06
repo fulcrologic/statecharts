@@ -669,7 +669,7 @@
                                      :sendid            session-id
                                      :source-session-id session-id
                                      :invoke-id         invokeid
-                                     :event             (keyword (str "done.invoke." invokeid))})))))
+                                     :event             (evts/invoke-done-event invokeid)})))))
   nil)
 
 (>defn exit-interpreter!

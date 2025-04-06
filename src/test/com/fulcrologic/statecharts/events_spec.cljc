@@ -44,4 +44,10 @@
       (evts/name-match? :x/a.b (evts/new-event :a.b )) => false
       (evts/name-match? :x/a.b (evts/new-event :x/a.b )) => true)))
 
-
+(specification "invoke-done-event"
+  (assertions "Prepends done.invoke to invoke id"
+    (evts/invoke-done-event :foo) => :done.invoke.foo
+    (evts/invoke-done-event :foo/bar) => :done.invoke.foo/bar
+    (evts/invoke-done-event "foo") => :done.invoke.foo
+    (evts/invoke-done-event 1) => :done.invoke.1
+    (evts/invoke-done-event (parse-uuid "b6883c0a-0342-4007-9966-bc2dfa6b109e")) => :done.invoke.b6883c0a-0342-4007-9966-bc2dfa6b109e))

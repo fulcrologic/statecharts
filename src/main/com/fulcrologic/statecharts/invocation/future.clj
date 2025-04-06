@@ -11,6 +11,7 @@
    "
   (:require
     [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
@@ -23,7 +24,7 @@
     (log/debug "Start future " invokeid src params)
     (let [source-session-id (env/session-id env)
           child-session-id  (str source-session-id "." invokeid)
-          done-event-name   (keyword (str "done.invoke." invokeid))]
+          done-event-name   (evts/invoke-done-event invokeid)]
       (if-not (fn? src)
         (sp/send! event-queue env {:target            source-session-id
                                    :sendid            child-session-id
