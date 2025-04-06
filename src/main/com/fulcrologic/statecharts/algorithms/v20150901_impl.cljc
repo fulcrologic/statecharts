@@ -495,7 +495,7 @@
   [{::sc/keys [statechart
                invocation-processors] :as env} invocation]
   (let [{:keys [type typeexpr src srcexpr] :as invocation} (chart/element statechart invocation)
-        type (!? env type typeexpr)
+        type (or (!? env type typeexpr) :statechart)
         src  (or src (!? env nil srcexpr))]
     (assoc invocation
       :type type
