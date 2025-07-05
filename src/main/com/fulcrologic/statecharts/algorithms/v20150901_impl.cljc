@@ -663,12 +663,14 @@
           {:org.w3.scxml.event/keys [invokeid]
            ::sc/keys                [parent-session-id]} @vwmem]
       (when (and invokeid parent-session-id)
-        (let [session-id (env/session-id env)]
+        (let [session-id (env/session-id env)
+              done-data  (compute-done-data! env state)]
           (log/debug "Sending done event from" session-id "to" parent-session-id "for" invokeid)
           (sp/send! event-queue env {:target            parent-session-id
                                      :sendid            session-id
                                      :source-session-id session-id
                                      :invoke-id         invokeid
+                                     :data              done-data
                                      :event             (evts/invoke-done-event invokeid)})))))
   nil)
 
