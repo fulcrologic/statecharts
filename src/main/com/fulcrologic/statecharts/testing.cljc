@@ -56,8 +56,8 @@
       (swap! expressions-seen conj expr)
       (swap! call-counts update expr (fnil inc 0))
       (cond
-        (fn? (get @mocks expr)) (let [expr    (get @mocks expr)
-                                      env     (assoc env :ncalls (get @call-counts expr))
+        (fn? (get @mocks expr)) (let [env     (assoc env :ncalls (get @call-counts expr))
+                                      expr    (get @mocks expr)
                                       data    (sp/current-data data-model env)
                                       result  (log/spy :trace "expr => " (expr env data))
                                       update? (vector? result)]
