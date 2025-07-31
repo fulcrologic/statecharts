@@ -609,7 +609,7 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <h2 id="_getting_started"><a class="anchor" href="#_getting_started"></a><a class="link" href="#_getting_started">1. Getting Started</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>A statechart is defined as a (nested) map. Some of this content&#8217;s behavior is <a href="#Goals">configurable</a>.
+<p>A state chart is defined as a (nested) map. Some of this content&#8217;s behavior is <a href="#Goals">configurable</a>.
 The simplest setup is to use Clojure for the executable code and a simple flat data model that scopes all state charts
 to the session (running instance of state chart).</p>
 </div>
@@ -831,18 +831,18 @@ cross-referencing with its documentation.</p>
 <div class="paragraph">
 <p>The pure functional form for the charts is interesting and useful as a building-block, but if you want
 a fully-function SCXML-compatible system, you needs something that can run, deliver delayed events, send
-events from one statechart session to another, start/stop nested statecharts, etc.</p>
+events from one state chart session to another, start/stop nested state charts, etc.</p>
 </div>
 <div class="paragraph">
 <p>In order for this to work you must have a number of things: an event queue, invocation processor(s),
-a data/execution model, a working memory storage facility, a statechart registry, and an event loop.</p>
+a data/execution model, a working memory storage facility, a state chart registry, and an event loop.</p>
 </div>
 <div class="paragraph">
 <p>That&#8217;s a lot of different things to set up!</p>
 </div>
 <div class="paragraph">
 <p>The <code>com.fulcrologic.statecharts.simple</code> namespace can set up all of these things for you, as long
-as you simple want to run statecharts all in the same JVM in RAM. That namespace also includes helper
+as you simple want to run state charts all in the same JVM in RAM. That namespace also includes helper
 functions for starting a new session on a chart, and sending events to arbitrary sessions.</p>
 </div>
 <div class="admonitionblock note">
@@ -867,7 +867,7 @@ have to implement the various protocols for each of the above elements to build 
 <p>Create a <code>(simple/simple-env)</code></p>
 </li>
 <li>
-<p>Register your charts with the statechart registry in that env with <code>(simple/register! env k chart)</code></p>
+<p>Register your charts with the state chart registry in that env with <code>(simple/register! env k chart)</code></p>
 </li>
 <li>
 <p>Run an event loop. The <code>com.fulcrologic.statecharts.event-queue.core-async-event-loop/run-event-loop!</code>
@@ -883,7 +883,7 @@ uses <code>core.async</code> to run such a loop for you.</p>
 </div>
 <div class="paragraph">
 <p>Below is an example that uses these steps, but also overrides one of the components in the env
-(the working memory store) so it can output messages as the statechart changes state:</p>
+(the working memory store) so it can output messages as the state chart changes state:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -1062,7 +1062,7 @@ of this library:</p>
 <dl>
 <dt class="hdlist1">Atomic State</dt>
 <dd>
-<p>A state that does not have substates.</p>
+<p>A state that does not have child states.</p>
 </dd>
 <dt class="hdlist1">Compound State</dt>
 <dd>
@@ -1070,13 +1070,13 @@ of this library:</p>
 </dd>
 <dt class="hdlist1">Parallel State</dt>
 <dd>
-<p>A state that has more than one compound substate, all of which is active at the same time, and
+<p>A state that has more than one compound child state, all of which are active at the same time, and
 thus have a child state that is active.</p>
 </dd>
 <dt class="hdlist1">Configuration</dt>
 <dd>
 <p>When used in the context of a state chart, the configuration is the list of all active states. A
-state is active if it or ANY of its children are active. Thus, a parallel statechart with hierarchical states may
+state is active if it or ANY of its children are active. Thus, a parallel state chart with hierarchical states may
 have a rather large set of IDs in its current configuration.</p>
 </dd>
 <dt class="hdlist1">Working Memory</dt>
@@ -1100,7 +1100,7 @@ with the contextual data for their location.</p>
 <dt class="hdlist1">External Event</dt>
 <dd>
 <p>An event that came from the external API, either by you calling <code>process-event</code> or some other
-actor code doing so (invocations, sends from external charts, etc.).</p>
+actor code doing so (invocations, sends from external charts, etc.)</p>
 </dd>
 <dt class="hdlist1">Internal Event</dt>
 <dd>
@@ -1111,7 +1111,7 @@ executable content position.</p>
 <dt class="hdlist1">EventQueue</dt>
 <dd>
 <p>A FIFO queue for external event delivery. The event queue is responsible for holding onto pending
-External Events to "self", possibly other statechart sessions (instances of other charts),
+External Events to "self", possibly other state chart sessions (instances of other charts),
 remote services (e.g. send an email), and for delayed delivery. The default implementation is a "manually polled" queue
 that does <strong>not</strong> support most of
 these features, and the delayed event delivery is manual (e.g. you have to poll it, or ask it when the next one should
@@ -1120,39 +1120,39 @@ how you would use these in a more serious/production environment.</p>
 </dd>
 <dt class="hdlist1">Processor</dt>
 <dd>
-<p>An implementation of the statechart algorithm. This library comes with an implementation that follows
+<p>An implementation of the state chart algorithm. This library comes with an implementation that follows
 (as closely as possible) the SCXML recommended standard from 2015. You may provide your own.</p>
 </dd>
 <dt class="hdlist1">InvocationProcessor</dt>
 <dd>
 <p>A protocol representing things that can be invoked while
-in a state. Implementations are provided for statechart invocations, and
+in a state. Implementations are provided for state chart invocations, and
 (in CLJ) futures. It is a simple matter to expand the list of supported types.</p>
 </dd>
 <dt class="hdlist1">WorkingMemoryStore</dt>
 <dd>
 <p>A protocol that represents a place to put the working
-memory of a statechart. This is used when you want an autonomous system that
+memory of a state chart. This is used when you want an autonomous system that
 can "freeze" and "thaw" running sessions as events are received. Such a store
 could be in RAM (implementation provided) or in something more durable
 (Redis, SQL, Datomic, Filesystem).</p>
 </dd>
 <dt class="hdlist1">StatechartRegistry</dt>
 <dd>
-<p>A protocol that allows a statechart to be saved/retrieved
+<p>A protocol that allows a state chart to be saved/retrieved
 by a well-known name. An implementation is provided for tracking them
 in RAM, but you could also choose an execution model that allows your charts
 to be serializable, and then store the charts in something more durable.</p>
 </dd>
 <dt class="hdlist1">Session</dt>
 <dd>
-<p>The combination of the content of the DataModel and Working Memory. I.e. all of the data you&#8217;d need in order
+<p>The combination of the content of the DataModel and Working Memory. I.e. the data you&#8217;d need in order
 to resume working from where you last left off. Sessions typically have a unique ID, which could be used to store
 sessions into durable storage when they are "idle", and are used for cross-session events.</p>
 </dd>
 <dt class="hdlist1">Conditional Element</dt>
 <dd>
-<p>In statecharts there is a node type (represented as a diamond) that represents a state in which the chart
+<p>In state charts there is a node type (represented as a diamond) that represents a state in which the chart
 never "rests", but instead immediately transitions to another node based on predicate expressions. In this
 library (and SCXML) this is modelled with a state that has more than one transition, NONE of which have
 and <code>:event</code> qualifier (meaning they are exited as soon as they are entered, assuming there is a valid transition).</p>
@@ -1280,7 +1280,7 @@ match at the same time.</p>
 <div class="paragraph">
 <p>The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that
 these are often URLs. The default implementation of the event queue in this library only supports
-targeting other statecharts (see Send Types below), and when using the default send type, the target is
+targeting other state charts (see Send Types below), and when using the default send type, the target is
 expected to simply be a <code>session-id</code>, where <code>session-id</code>  is a unique identifier, such as a GUUID.</p>
 </div>
 <div class="paragraph">
@@ -1292,7 +1292,7 @@ expected to simply be a <code>session-id</code>, where <code>session-id</code>  
 <div class="paragraph">
 <p>The SCXML standard (section 6.2.5) defines types as a URI as well. The internal implementations in this library
 do not enforce this, but this library <strong>does</strong> recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
-as a desire to talk to another statechart session (and is the only/default predefined value).</p>
+as a desire to talk to another state chart session (and is the only/default predefined value).</p>
 </div>
 </div>
 <div class="sect3">
@@ -1485,7 +1485,7 @@ from <strong>outside</strong> the chart itself.</p>
 </dd>
 <dt class="hdlist1"><code>session-data</code></dt>
 <dd>
-<p>Get internal statechart data from a particular statechart session.</p>
+<p>Get internal state chart data from a particular state chart session.</p>
 </dd>
 <dt class="hdlist1"><code>send!</code></dt>
 <dd>
@@ -1540,7 +1540,7 @@ calculate values to inject into the child data model. These options can be used 
 <div class="sect3">
 <h4 id="_invoking_other_state_charts_or_futures"><a class="anchor" href="#_invoking_other_state_charts_or_futures"></a><a class="link" href="#_invoking_other_state_charts_or_futures">3.10.2. Invoking other State Charts or Futures</a></h4>
 <div class="paragraph">
-<p>The library has a built-in <code>InvocationProcessor</code> that knows how to start other statecharts via an <code>invoke</code>, and in CLJ
+<p>The library has a built-in <code>InvocationProcessor</code> that knows how to start other state charts via an <code>invoke</code>, and in CLJ
 there is also support for futures (which are cancelled if the state containing the invoke is exited).</p>
 </div>
 <div class="paragraph">
@@ -1780,11 +1780,11 @@ an <code>invoke</code> can send such events. So, the timer service here is sendi
 <h2 id="Convenience"><a class="anchor" href="#Convenience"></a><a class="link" href="#Convenience">4. Shorthand Convenience</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Making your statechart definition cleaner is a simple matter, since it
+<p>Making your state chart definition cleaner is a simple matter, since it
 is nothing more than a nested data structure.</p>
 </div>
 <div class="paragraph">
-<p>One thing to note is that every element of the statechart can accept a
+<p>One thing to note is that every element of the state chart can accept a
 nested sequence of children, and it will automatically flatten them. This
 means you can write helper functions that emit sequences of children, which
 in turn can use other helpers that might emit sequences.</p>
@@ -1899,7 +1899,7 @@ do some action. For example, <code>send</code> is executable content of this <co
 <p>The standard allows for a compliant implementation to include extra executable content, but since this library is in Clojure you have the power of macros and functions, which XML does not.</p>
 </div>
 <div class="paragraph">
-<p>The internals allow you to return a collection of elements from a function, which will be "spliced" in place. This allows you to easily create macros and functions that can make your statecharts much easier to write. Some examples in the library source code are the
+<p>The internals allow you to return a collection of elements from a function, which will be "spliced" in place. This allows you to easily create macros and functions that can make your state charts much easier to write. Some examples in the library source code are the
 com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like <code>com.fulcrologic.statecharts.integration.fulcro.ui-routes/rstate</code> in the Fulcro UI Routing support.</p>
 </div>
 </div>
@@ -1908,8 +1908,8 @@ com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like 
 <h2 id="_integration_with_fulcro"><a class="anchor" href="#_integration_with_fulcro"></a><a class="link" href="#_integration_with_fulcro">6. Integration with Fulcro</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>The Fulcro integraion for statecharts has the following general enhancements over the standard
-statecharts:</p>
+<p>The Fulcro integration for state charts has the following general enhancements over the standard
+state charts:</p>
 </div>
 <div class="ulist">
 <ul>
@@ -1920,7 +1920,7 @@ statecharts:</p>
 <p>Use core.async to automatically support an EventQueue</p>
 </li>
 <li>
-<p>Support a "local data" area for the statechart session that won&#8217;t accidentally collide
+<p>Support a "local data" area for the state chart session that won&#8217;t accidentally collide
 with other database concerns.</p>
 </li>
 <li>
@@ -1968,19 +1968,19 @@ with other database concerns.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; 1. Install statecharts on the app. Should be done once at startup, but this is an idempotent operation.</span>
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; 1. Install state charts on the app. Should be done once at startup, but this is an idempotent operation.</span>
 (scf/install-fulcro-statecharts! app)
 
 <span class="comment">;; 2. Define your charts</span>
 (<span class="keyword">def</span> <span class="function">chart</span> (chart/statechart {}
          <span class="keyword">..</span><span class="keyword">.</span>))
 
-<span class="comment">;; 3. Register your chart under a well-known name. NOTE: The statecharts have to be installed *before* calling register!</span>
+<span class="comment">;; 3. Register your chart under a well-known name. NOTE: The state charts have to be installed *before* calling register!</span>
 (scf/register-statechart! app <span class="symbol">::chart</span> chart)
 
 <span class="keyword">..</span><span class="keyword">.</span>
 
-<span class="comment">;; 4. Start some statechart. The session-id can be a unique uuid, or a well known thing like a keyword. Be careful, though,</span>
+<span class="comment">;; 4. Start some state chart. The session-id can be a unique uuid, or a well known thing like a keyword. Be careful, though,</span>
 <span class="comment">;; because starting a machine using an existing ID will overwrite the existing one.</span>
 (scf/start! app {<span class="symbol">:machine</span> <span class="symbol">::chart</span>        <span class="comment">; registered chart name</span>
                  <span class="symbol">:session-id</span> <span class="symbol">:some-id</span>})  <span class="comment">; globally unique session id</span></code></pre>
@@ -1990,11 +1990,11 @@ with other database concerns.</p>
 <div class="sect2">
 <h3 id="_the_data_model"><a class="anchor" href="#_the_data_model"></a><a class="link" href="#_the_data_model">6.2. The Data Model</a></h3>
 <div class="paragraph">
-<p>The Fulcro statecharts data model has a number of features to help you work with Fulcro applications.</p>
+<p>The Fulcro state charts data model has a number of features to help you work with Fulcro applications.</p>
 </div>
 <div class="paragraph">
 <p>Two special concepts were take from Fulcro&#8217;s own UI state machines: aliases and actors. These are implemented
-purely on the data model by simply adding entries to a statechart&#8217;s local data under the special keys:</p>
+purely on the data model by simply adding entries to a state chart&#8217;s local data under the special keys:</p>
 </div>
 <div class="ulist">
 <ul>
@@ -2020,7 +2020,7 @@ Can be used to find the UI component (for normalization/loads) and in data paths
 <p>Actor keywords may only appear as the first element of a path.</p>
 </li>
 <li>
-<p>Aliases are NOT used within paths. They define a path. Therefore arguments that would normally
+<p>Aliases are NOT used within paths. They define a path. Therefore, arguments that would normally
 take a vector to describe a data path will usually accept an alias keyword instead.</p>
 </li>
 </ul>
@@ -2029,7 +2029,7 @@ take a vector to describe a data path will usually accept an alias keyword inste
 <h4 id="_initializing_the_data_model"><a class="anchor" href="#_initializing_the_data_model"></a><a class="link" href="#_initializing_the_data_model">6.2.1. Initializing the Data Model</a></h4>
 <div class="paragraph">
 <p>You can use the initial data in <code>sp/start!</code> or a top-level <code>data-model</code> element to put data into the
-local storage of your statechart. This is particularly useful for specifying things like aliases
+local storage of your state chart. This is particularly useful for specifying things like aliases
 on the chart itself, but defining actors at runtime:</p>
 </div>
 <div class="listingblock">
@@ -2048,7 +2048,7 @@ on the chart itself, but defining actors at runtime:</p>
 </div>
 <div class="paragraph">
 <p>The above code defines a chart that will have <code>:fulcro/aliases</code> on the local data model
-because of the statechart definition, and will have a runtime value for the <code>:fulcro/actors</code> based
+because of the state chart definition, and will have a runtime value for the <code>:fulcro/actors</code> based
 on data that was passed during start. Anything initialized this way will go into the local data
 store (which is a path based on the session id in the app database).</p>
 </div>
@@ -2061,7 +2061,7 @@ the data model.</p>
 <h4 id="_data_locations"><a class="anchor" href="#_data_locations"></a><a class="link" href="#_data_locations">6.2.2. Data Locations</a></h4>
 <div class="paragraph">
 <p>There are four primary ways to address data in the data model, and
-the standard statechart operations such as <code>op/assign</code> already support these abstract paths:</p>
+the standard state chart operations such as <code>op/assign</code> already support these abstract paths:</p>
 </div>
 <div class="dlist">
 <dl>
@@ -2069,12 +2069,12 @@ the standard statechart operations such as <code>op/assign</code> already suppor
 <dd>
 <p>IF this keyword exists in the <code>:fulcro/aliases</code> map, then the value
 of that alias (which can be a path that contains any of the other things in this list) is used
-to find the location; otherwise the keyword is relative in the root of the LOCAL data for the statechart.</p>
+to find the location; otherwise the keyword is relative in the root of the LOCAL data for the state chart.</p>
 </dd>
 <dt class="hdlist1">A vector starting with <code>:ROOT</code> (or a keyword that doesn&#8217;t match the other cases)</dt>
 <dd>
 <p>A path in the
-local data of the statechart. Same as using a path without <code>:ROOT</code>. Included to be
+local data of the state chart. Same as using a path without <code>:ROOT</code>. Included to be
 compatible with the standard location support.</p>
 </dd>
 <dt class="hdlist1">A vector starting with <code>:fulco/state</code> or <code>:fulcro/state-map</code></dt>
@@ -2085,7 +2085,7 @@ Fulcro app database.</p>
 <dt class="hdlist1">A vector starting with an actor name</dt>
 <dd>
 <p>If the first element of the vector matches an entry in the local
-statecharts <code>:fulcro/actors</code> then <code>:fulcro/state</code> and the ident of that actor are spliced together
+state charts <code>:fulcro/actors</code> then <code>:fulcro/state</code> and the ident of that actor are spliced together
 in place of that keyword and the resulting path is treated as above.</p>
 </dd>
 </dl>
@@ -2095,13 +2095,13 @@ in place of that keyword and the resulting path is treated as above.</p>
 <div class="sect2">
 <h3 id="_executable_content"><a class="anchor" href="#_executable_content"></a><a class="link" href="#_executable_content">6.3. Executable Content</a></h3>
 <div class="paragraph">
-<p>The executable content nodes (predicates and other expressions) in the statechart can be functions of
+<p>The executable content nodes (predicates and other expressions) in the state chart can be functions of
 two arguments: <code>env</code> (the processing environment) and <code>data</code>.</p>
 </div>
 <div class="paragraph">
-<p>You can get the current statechart session ID using the processing environment, and you can also
-pull the various components of the statechart system from there (e.g. <code>(::sc/event-queue env)</code>). The
-<code>data</code> argument includes ALL of the statechart local data (including the special <code>:fulcro/aliases</code>
+<p>You can get the current state chart session ID using the processing environment, and you can also
+pull the various components of the state chart system from there (e.g. <code>(::sc/event-queue env)</code>). The
+<code>data</code> argument includes ALL the state chart local data (including the special <code>:fulcro/aliases</code>
 and <code>:fulcro/actors</code>, which have special meaning but are really just normal local data). The <code>data</code>
 will also include the standard <code>:_event</code> (which is a map that has things like <code>:target</code>) and
 an extended key for <code>:fulcro/state-map</code> which has the current value of the Fulcro state database.</p>
@@ -2164,9 +2164,9 @@ is useful for adding a lookup ref to a UI component whose rendering depends on c
 </dd>
 <dt class="hdlist1"><code>(scf/statechart-session-ident session-id)</code></dt>
 <dd>
-<p>Get the ident of the statechart session itself. This
+<p>Get the ident of the state chart session itself. This
 is useful for adding a lookup ref to a UI component whose rendering depends on changes to the
-statechart&#8217;s configuration.</p>
+state chart&#8217;s configuration.</p>
 </dd>
 <dt class="hdlist1"><code>(resolve-aliases data)</code></dt>
 <dd>
@@ -2189,12 +2189,12 @@ counterpart of the named actor, if known.</p>
 </dd>
 <dt class="hdlist1"><code>(scf/send! app-ish session-id event optional-data)</code></dt>
 <dd>
-<p>Send an event to a running statechart.</p>
+<p>Send an event to a running state chart.</p>
 </dd>
 <dt class="hdlist1"><code>(scf/current-configuration app-ish session-id)</code></dt>
 <dd>
 <p>Returns the current configuration (active states) of the given
-statechart instance. Useful in the UI when you need to render content based on state, but remember to add
+state chart instance. Useful in the UI when you need to render content based on state, but remember to add
 <code>(scf/statechart-session-ident session-id)</code> to any component query where that is necessary (to ensure render updates).</p>
 </dd>
 <dt class="hdlist1"><code>(scf/mutation-result data)</code></dt>
@@ -2218,7 +2218,7 @@ in transactions for <code>invoke-remote</code>.</p>
 <div class="ulist">
 <ul>
 <li>
-<p>The local data of the statechart (at the top level).</p>
+<p>The local data of the state chart (at the top level).</p>
 </li>
 <li>
 <p>The special standard (from SCXML) <code>:_event</code> that is the event that is being processed, which in turn has:</p>
@@ -2228,7 +2228,7 @@ in transactions for <code>invoke-remote</code>.</p>
 <p><code>:data</code> that contains any data sent <strong>with</strong> the event.</p>
 </li>
 <li>
-<p><code>:target</code> The session ID of the statechart</p>
+<p><code>:target</code> The session ID of the state chart</p>
 </li>
 </ul>
 </div>
@@ -2253,25 +2253,25 @@ in transactions for <code>invoke-remote</code>.</p>
 <p><code>:fulcro/app</code>                - The Fucro app itself.</p>
 </li>
 <li>
-<p><code>::sc/statechart-registry</code>   - The statechart Registry instance</p>
+<p><code>::sc/statechart-registry</code>   - The state chart Registry instance</p>
 </li>
 <li>
-<p><code>::sc/data-model</code>            - The statechart DataModel instance</p>
+<p><code>::sc/data-model</code>            - The state chart DataModel instance</p>
 </li>
 <li>
-<p><code>::sc/event-queue</code>           - The statechart EventQueue instance</p>
+<p><code>::sc/event-queue</code>           - The state chart EventQueue instance</p>
 </li>
 <li>
-<p><code>::sc/working-memory-store</code>  - The statechart working memory store</p>
+<p><code>::sc/working-memory-store</code>  - The state chart working memory store</p>
 </li>
 <li>
-<p><code>::sc/processor</code>             - The statechart processing algorithm</p>
+<p><code>::sc/processor</code>             - The state chart processing algorithm</p>
 </li>
 <li>
 <p><code>::sc/invocation-processors</code> - The supported invocation processors</p>
 </li>
 <li>
-<p><code>::sc/execution-model</code>       - The CLJC statechart ExecutionModel</p>
+<p><code>::sc/execution-model</code>       - The CLJC state chart ExecutionModel</p>
 </li>
 </ul>
 </div>
@@ -2280,18 +2280,18 @@ in transactions for <code>invoke-remote</code>.</p>
 <div class="sect2">
 <h3 id="_react_hooks"><a class="anchor" href="#_react_hooks"></a><a class="link" href="#_react_hooks">6.5. React Hooks</a></h3>
 <div class="paragraph">
-<p>There is support for using a statechart as a co-located element of a hooks-based
+<p>There is support for using a state chart as a co-located element of a hooks-based
 component.</p>
 </div>
 <div class="paragraph">
-<p>The basic idea is that the statechart will be started when the component
+<p>The basic idea is that the state chart will be started when the component
 uses it, and when the component leaves the screen the chart is sent
 an <code>:event/unmounted</code>. If the chart reaches a top-level final state, then
 it will be GC&#8217;d from state.</p>
 </div>
 <div class="paragraph">
 <p>The session ID of the chart is auto-assigned a random UUID, but you can specify
-a known session ID to allow for a statechart to survive the component mount/unmount
+a known session ID to allow for a state chart to survive the component mount/unmount
 cycle.</p>
 </div>
 <div class="paragraph">
@@ -2446,14 +2446,14 @@ the number of times that expression has run since the test env was created.</p>
 <h3 id="_starting_in_a_specific_configuration"><a class="anchor" href="#_starting_in_a_specific_configuration"></a><a class="link" href="#_starting_in_a_specific_configuration">7.3. Starting in a Specific Configuration</a></h3>
 <div class="paragraph">
 <p>Most of your tests will need the chart to be in some particular state as part of your setup. You <strong>could</strong> get there
-by triggering a sequence of events while having all of the mocks in perfect condition, but this creates a fragile
+by triggering a sequence of events while having the mocks in perfect condition, but this creates a fragile
 test where changes to the structure of the chart break a bunch of tests. The testing helpers include
 <code>(testing/goto-configuration! env data-ops config)</code> that allows you to set up the data model and configuration.</p>
 </div>
 <div class="paragraph">
 <p>The <code>data-ops</code> is a vector of Data Model operations (e.g. ops/assign) to run on the data model. and <code>config</code> is
 a valid configuration (set of active states) for the chart.
-Unfortunately, the configuration of a statechart is non-trivial (it must include all active states in a complex
+Unfortunately, the configuration of a state chart is non-trivial (it must include all active states in a complex
 hierarchy) and will change when you refactor the chart. So, another helper <code>testing/configuration-for-states</code> allows you
 to get a list of <strong>all</strong> of the states that would be active <strong>given</strong> the deepest desired leaf state(s).</p>
 </div>
@@ -2629,7 +2629,7 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-07-31 07:00:35 -0700
+Last updated 2025-07-31 07:42:34 -0700
 </div>
 </div>
 </body>
