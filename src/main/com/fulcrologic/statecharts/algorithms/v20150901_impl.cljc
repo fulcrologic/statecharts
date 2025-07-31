@@ -675,7 +675,7 @@
   nil)
 
 (>defn exit-interpreter!
-  ([{::sc/keys [statechart vwmem] :as env} skip-done-event?]
+  ([{::sc/keys [working-memory-store statechart vwmem] :as env} skip-done-event?]
    [::sc/processing-env :boolean => nil?]
    (let [states-to-exit (log/spy :debug (chart/in-exit-order statechart (::sc/configuration @vwmem)))]
      (doseq [state states-to-exit]
@@ -683,7 +683,9 @@
        (cancel-active-invocations! env state)
        (vswap! vwmem update ::sc/configuration disj state)
        (when (and (not skip-done-event?) (chart/final-state? statechart state) (= :ROOT (chart/get-parent statechart state)))
-         (send-done-event! env state)))))
+         (send-done-event! env state)))
+     (when working-memory-store
+       (sp/delete-working-memory! working-memory-store env (session-id env)))))
   ([{::sc/keys [statechart vwmem] :as env}]
    [::sc/processing-env => nil?]
    (exit-interpreter! env false)))
