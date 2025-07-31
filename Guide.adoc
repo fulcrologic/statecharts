@@ -535,56 +535,10 @@ do some action. For example, `send` is executable content of this `on-entry` nod
      (send ...)))
 -----
 
-The standard allows for a compliant implementation to include extra executable content, but
-this library takes that one step further and allows *you* to define new executable content elements.
+The standard allows for a compliant implementation to include extra executable content, but since this library is in Clojure you have the power of macros and functions, which XML does not.
 
-Each node in the data graph of the statecharts in this library (which are just nested maps)
-has a `:node-type` entry (in the case of send, its value is `:send`). The implementation of v20150901
-allows you to extend the set of node types that "do things" as executable content. All you need to do
-is create a map that has a new (preferably namespaced) node type, and then create a defmethod that
-handles that type:
-
-[source]
------
-(ns my-node-types
-  (:require
-    [com.fulcrologic.statecharts.algorithms.v20150901-impl :as impl]))
-
-(defn my-exec [opts]
-  (merge opts {:node-type ::my-exec}))
-
-(defmethod impl/execute-element-content! ::my-exec [env element] ...)
------
-
-and you can use your `(my-exec {...})` anywhere executable content is allowed in the state chart. The
-helper function `impl/execute!` should be used to run any child nodes (if your node allows other
-executable children).
-
-[source]
------
-(ns my-node-types
-  (:require
-    [com.fulcrologic.statecharts.algorithms.v20150901-impl :as impl]))
-
-(defn log-and-run [& children]
-  (merge opts {:node-type ::log-and-run
-               :children (vec children)}))
-
-(defmethod impl/execute-element-content! ::log-and-run [env element]
-  (log/debug "Running: " element)
-  ;; The `execute!` method will run executable children of an element (which will call execute-element-content! on
-  ;; each of them)
-  (impl/execute! env element))
-
-;; ...
-
-(statechart {}
-  (state {}
-    (log-and-run
-       (send {})
-       (log {})
-       (raise {}))))
------
+The internals allow you to return a collection of elements from a function, which will be "spliced" in place. This allows you to easily create macros and functions that can make your statecharts much easier to write. Some examples in the library source code are the
+com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like `com.fulcrologic.statecharts.integration.fulcro.ui-routes/rstate` in the Fulcro UI Routing support.
 
 = Integration with Fulcro
 
