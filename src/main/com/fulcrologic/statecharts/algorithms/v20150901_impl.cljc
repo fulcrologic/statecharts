@@ -685,7 +685,8 @@
        (when (and (not skip-done-event?) (chart/final-state? statechart state) (= :ROOT (chart/get-parent statechart state)))
          (send-done-event! env state)))
      (when working-memory-store
-       (sp/delete-working-memory! working-memory-store env (session-id env)))))
+       (sp/delete-working-memory! working-memory-store env (session-id env)))
+     nil))
   ([{::sc/keys [statechart vwmem] :as env}]
    [::sc/processing-env => nil?]
    (exit-interpreter! env false)))
