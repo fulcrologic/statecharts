@@ -1,16 +1,15 @@
 (ns com.fulcrologic.statecharts.integration.fulcro.ui-routes-test
   (:require
-    [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry parallel script state transition]]
+    [com.fulcrologic.statecharts.elements :refer [on-entry script state]]
     [com.fulcrologic.statecharts.event-queue.event-processing :refer [process-events]]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
-    [com.fulcrologic.statecharts.protocols :as scp]
-    [com.fulcrologic.statecharts.testing :as testing]
+    [com.fulcrologic.statecharts.integration.fulcro :as scf]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes :as uir]
-    [fulcro-spec.core :refer [=> assertions behavior specification]]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.statecharts.testing :as testing]
+    [fulcro-spec.core :refer [=> assertions behavior specification]]))
 
 (let [b (volatile! false)]
   (defn set-busy! [v] (vreset! b v) nil)
@@ -22,6 +21,16 @@
 (defonce entry-count (volatile! 0))
 (defn entered! [& _]
   (vswap! entry-count inc))
+
+;; Route components for testing path-for-target
+(comp/defsc RouteProducts [this props] {})
+(comp/defsc RouteProductDetail [this props] {})
+(comp/defsc RouteProductEdit [this props] {})
+(comp/defsc RouteProductReviews [this props] {})
+(comp/defsc RouteReviewDetail [this props] {})
+(comp/defsc RouteUsers [this props] {})
+(comp/defsc RouteUserDetail [this props] {})
+(comp/defsc RouteUserProfile [this props] {})
 
 (def application-chart
   (chart/statechart {}
@@ -36,6 +45,35 @@
               (on-entry {}
                 (script {:expr entered!})))))))
     (state {:id :state/other})))
+
+(def path-test-chart
+  "A statechart with nested routing states that have path vectors"
+  (chart/statechart {}
+    (uir/routing-regions
+      (uir/routes {:id           :region/routes
+                   :routing/root `Foo}
+        (uir/rstate {:route/target `RouteProducts
+                     :route/path   ["products"]}
+          (uir/rstate {:route/target `RouteProductDetail
+                       :route/path   [:product-id]})
+          (uir/rstate {:route/target `RouteProductEdit
+                       :route/path   [:product-id "edit"]})
+          (uir/rstate {:route/target `RouteProductReviews
+                       :route/path   [:product-id "reviews"]}
+            (uir/rstate {:route/target `RouteReviewDetail
+                         :route/path   [:review-id]})))
+        (uir/rstate {:route/target `RouteUsers
+                     :route/path   ["users"]}
+          (uir/rstate {:route/target `RouteUserDetail
+                       :route/path   [:user-id]})
+          (uir/rstate {:route/target `RouteUserProfile
+                       :route/path   [:user-id "profile"]}))))))
+
+(defn test-app-with-chart [chart]
+  (let [app (rapp/headless-synchronous-app Foo)]
+    (scf/install-fulcro-statecharts! app)
+    (uir/update-chart! app chart)
+    app))
 
 (specification "has-routes?"
   (assertions
@@ -111,3 +149,46 @@
         (testing/in? env :route/routeA1) => true
         "Clears the failed route"
         (::uir/failed-route-event (testing/data env)) => nil))))
+
+(specification "path-for-target" :group3 :focus
+  (let [app (test-app-with-chart path-test-chart)]
+
+    (behavior "returns paths without parameters"
+      (assertions
+        ;"Simple nested path"
+        ;(uir/path-for-target app RouteProducts) => ["products"]
+
+        "Deep nested path with mixed string/keyword segments"
+        (uir/path-for-target app RouteProductEdit) => ["products" :product-id "edit"]
+
+        ;"Deepest nested path"
+        ;(uir/path-for-target app RouteReviewDetail) => ["products" :product-id "reviews" :review-id]
+
+        ;"Different branch - users"
+        ;(uir/path-for-target app RouteUserDetail) => ["users" :user-id]
+
+        ;"User profile path"
+        #_#_#_(uir/path-for-target app RouteUserProfile) => ["users" :user-id "profile"]))
+
+    #_#_(behavior "replaces keywords with parameter values when provided"
+          (assertions
+            "Single parameter replacement"
+            (uir/path-for-target app RouteProductDetail {:product-id 123}) => ["products" "123"]
+
+            "Multiple parameters replacement"
+            (uir/path-for-target app RouteReviewDetail {:product-id "abc" :review-id "xyz"})
+            => ["products" "abc" "reviews" "xyz"]
+
+            "Mixed parameters and static strings"
+            (uir/path-for-target app RouteProductEdit {:product-id "def"}) => ["products" "def" "edit"]
+
+            "User profile with parameter"
+            (uir/path-for-target app RouteUserProfile {:user-id "john"}) => ["users" "john" "profile"]))
+
+            (behavior "handles missing parameters gracefully"
+              (assertions
+                "Missing parameter keeps keyword"
+                (uir/path-for-target app RouteProductDetail {:other-param "ignored"}) => ["products" :product-id]
+
+                "Partial parameter replacement"
+                (uir/path-for-target app RouteReviewDetail {:product-id "123"}) => ["products" "123" "reviews" :review-id]))))

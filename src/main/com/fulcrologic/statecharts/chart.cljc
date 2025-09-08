@@ -140,6 +140,13 @@
     :else
     (get-in chart [::sc/elements-by-id element-or-id])))
 
+(>defn elements
+  "Returns the elements in the chart that match the given predicate `pred`"
+  [chart pred]
+  [::sc/statechart ifn? => (? [:every ::sc/element])]
+  (let [all (vals (::sc/elements-by-id chart))]
+    (filterv pred all)))
+
 (>defn element-id
   [chart element-or-id]
   [::sc/statechart (? ::sc/element-or-id) => (? ::sc/id)]

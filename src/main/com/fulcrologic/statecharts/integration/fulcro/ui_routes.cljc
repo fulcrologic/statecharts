@@ -12,6 +12,7 @@
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
     [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.elements :as ele :refer [on-entry on-exit parallel script script-fn state transition]]
     [com.fulcrologic.statecharts.environment :as senv]
@@ -323,7 +324,12 @@
           form-props (when form-ident (fns/ui->props (rapp/current-state app) FormClass form-ident))]
       (and form-props (fs/dirty? form-props)))))
 
-(defn busy? [{:fulcro/keys [app] :as env} {:keys [_event] :as data} & args]
+(defn busy?
+  "Returns true if any of the active states are routes that have a `busy?` helper which returns true when asked.
+
+   The incoming data arg's :_event can include a ::uir/force? true to override busy indications (will always return
+   false if forced)"
+  [{:fulcro/keys [app] :as env} {:keys [_event] :as data} & args]
   (if (-> _event :data ::force?)
     false
     (let [state-ids (senv/current-configuration env)
@@ -526,6 +532,11 @@
   [app statechart]
   (scf/register-statechart! app ::chart statechart))
 
+(defn routing-statechart
+  "Returns the current version of the routing statechart installed on the app."
+  [app-ish]
+  (scf/lookup-statechart app-ish ::chart))
+
 (defn state-for-path [{::sc/keys [elements-by-id] :as statechart} current-path]
   (let [elements (vals elements-by-id)]
     (first
@@ -533,6 +544,12 @@
         (fn [{:route/keys [path]}]
           (= path current-path))
         elements))))
+
+(defn target-for-path
+  "Return the Target class component for a given routing `path`."
+  [statechart path]
+  (let [{:route/keys [target]} (state-for-path statechart path)]
+    (some->> target (rc/registry-key->class))))
 
 (defn start-routing!
   "Installs the statechart and starts it."
@@ -623,3 +640,43 @@
         session-id (get-in state-map [::sc/local-data session-id :invocation/id target-key])]
     (when session-id
       (scf/current-configuration this session-id))))
+
+(defn normalized-target [t] (rc/class->registry-key (rc/registry-key->class t)))
+
+(defn path-for-target
+  "Return the full path (from root) to the given routing target. If `params` are supplied, then any
+   keywords appearing in the resulting path will be replaced with the stringified value from
+   `params`.
+
+   WARNING: Building a statechart that uses the same target component in multiple paths
+   causes this function to be non-deterministic. Your routing charts should use unique
+   components for each route."
+  ([app-ish target] (path-for-target app-ish target {}))
+  ([app-ish target params]
+   (let [app           (rc/any->app app-ish)
+         params        (enc/map-vals str params)
+         chart         (routing-statechart app)
+         t             (normalized-target target)
+         target-node   (first
+                         (chart/elements chart (fn [{:route/keys [target]}]
+                                                 (and
+                                                   target
+                                                   (= (normalized-target target) t)))))
+         path-segments (loop [n    target-node
+                              path (list)]
+                         (let [parent       (chart/element chart (chart/get-parent-state chart n))
+                               path-segment (:route/path n)]
+                           (cond
+                             (and parent path-segment)
+                             (recur parent (cons path-segment path))
+
+                             parent (recur parent path)
+
+                             path-segment (cons path-segment path)
+
+                             :else path)))
+         path          (vec
+                         (mapcat
+                           (fn [eles] (mapv #(get params % %) eles))
+                           path-segments))]
+     path)))
