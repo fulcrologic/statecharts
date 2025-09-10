@@ -1,0 +1,268 @@
+= Statechart Routing Design
+:author: Tony Kay
+:lang: en
+:encoding: UTF-8
+:doctype: book
+:source-highlighter: coderay
+:source-language: clojure
+:toc: left
+:toclevels: 3
+:sectlinks:
+:sectanchors:
+:leveloffset: 1
+:sectnums:
+:imagesdir: /assets/img
+:scriptsdir: js
+:imagesoutdir: docs/assets/img
+:favicon: docs/assets/favicon.ico
+
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+ifdef::env-github[]
+toc::[]
+endif::[]
+
+= General Requirements/Goals
+
+* The user/programmer should be able to express arbitrary movement.
+* Systems should be composable as much as possible: Sub-charts with routes, invocations with routes.
+* Some level of URL integration should be possible for browser usage, but sane limitations should apply to reduce complexity.
+** Complete arbitrary composition of statecharts leads to scenarios where URL representation is quite difficult or even insane.
+*** IS possible to "fix" this problem with the user coding explcit top-level transitions that resolve conflicts. E.g. auto-detect when there is ambiguity that is not resolved by a manual top-level transition.
+* "Current" route can somehow deny movement (unsaved changes)
+* Minimal logic in UI. Very statechart centric.
+
+== Challenges
+
+Invocations involve multiple running charts which have a structural relation to the "root" or "parent" chart, but the active instance of the chart (and its definition) are *external* by definition. This means that structural navigation of the statechart hits a natural visibility boundary at any invocation. Of course this can be resolved because we can look up the invoked chart and continue structural navigation.
+
+
+* Statechart invocations that have "routes".
+** Should we structurally navigate across this composition for URL integration?
+*** Is it reasonable to leave it out, or is this likely to be a major way large applications are structured?
+** Probably should NOT accept state children on an invocation route, because then we cannot structurally navigate routing across the invocation boundary. NOT sure that even makes sense.
+** Composition across chart boundaries
+* "External" routing events (bookmarks, user triggered popstate events)
+
+
+= Operation
+
+== Initialization
+
+Putting a new thing on screen in Fulcro means you have to consider the data that will be displayed by that component. There are two basic categories: components that have well-known local starting data (which may or may not need to be reset on re-entry) and components whose data is derived in some (possibly async) way (i.e. loading).
+
+The routing system's job is to manage the dynamic query of some container component (declared on the statechart), the query join (current data route) of that component,
+and the job would not be complete without placing a proper ident at that same join point in application state (one could also argue that one could leverage alternative things like React hooks for UI composition, but that doesn't change much).
+
+The lifecycle of a target therefore must at a minimum include a way to put data into the state database.
+
+We could leave this completely up to the hand-written elements of your chart, simply by supporting an event that allows a route target to change their target ident. Such support is always required (the child might be a form that edits different instances of the same entity, where the ident changes as you move from entity to entity).
+
+Such an event would be sufficient to handle all kinds of cases, but it misses one critical one: as the route is entered, the UI will try to render *something* and over time we may or may not have a pre-existing (from a prior entry) link there.
+
+Even then, technically, as long as the state chart does *some* kind of synchronous state manipulation in entry handlers, the chart author can ensure things will be exactly as they desire.
+
+So, the question becomes: is there some portion of this that needed by almost all routes, is trivial to implement consistently, and prevents some minor hassles or bugs that the user would have to defensively work against.
+
+=== The Argument for Zero Help
+
+Statecharts have on-entry and on-exit. They can easily be coded to handle exactly what is needed for any route simply by including the proper logic. The invocation support even lets that complete sub-chart be co-designed (and co-located) with an individual component.
+
+The user can easily write their own "helper" chart elements that pre-combine things of arbitrary complexity (much like the rstate nodes do in this ns). So, repeated kinds of cases can pretty easily be pre-coded and re-used.
+
+Designing a generic initialization system for all possible use-cases is therefore overreach.
+
+
+=== The Argument for Routing-Centric Built-ins
+
+Supplying a set of configuration options on the component (as RAD does) provides a great way to handle a lot of common cases. Unfortunately, real-world cases get complex quickly (cancelling routes, async behaviors, timing, etc.). Initialization is just one part of that, but it's kind of integral.
+
+Simple initialization cases do exist though:
+
+* Putting data in state for a component that has `:initial-state` and a constant `:ident`. This is what would have normally happened during app startup, but doesn't because of the lack of need to do query composition at route container nodes.
+* Putting data in state that can be computationally generated synchronously. E.g. creating a new tempid, and merging that data to the app state.
+
+Providing this minimum level of integration gets the base target into app state with existing mechanisms, assuming it can be done computationally.
+
+One additional element that is trivial to implement and would be useful is having an option that specifies *when* this initialization happens:
+
+* never - for cases where you handle it yourself
+* once - for cases where it just has to happen once as it would in normal operation
+* always - re-initialize it every time it becomes a new route
+
+Other cases could be supported with "never" and custom chart elements.
+
+The basic implementation is as follows:
+
+* ro/initialize - An option to say :never, :once, :always
+* ro/initial-props - A `(fn [env data ...])` with a statechart call signature that can generate the inital tree to be merged. The default for this calls `(get-initial-state TargetClass event-data)`.
+
+The initialization routine can merge the resulting tree, and use `(get-ident TargetClass data)` to get the necessary ident for putting in the parent entity join location.
+
+This covers the trivially useful (synchronous) cases.
+
+
+=== Component Centric Possibilities
+
+In an effort to be somewhat complete, we'll consider if there are additional cases that deserve special built-in treatment at the routing layer.
+
+Fulcro leverages component-centric normalization, loading, and initialization in general. As such, it makes sense to consider how the lifecycle of components will interact with the ideas in UI routing: where you are choosing something to render from some UI context.
+
+Arguments against further support include:
+
+* It violates the single-responsibility principle. Routing is about choosing a thing to show, not implementing the intricasies of I/O and interaction.
+* The act of asynchronous interaction with components is inherently complex in arbitrary ways: route cancellation, load aborts, user feedback on slow interaction, etc.
+
+Arguments *for* further support:
+
+* You very commonly want:
+** Self-aborting loads
+** User feedback when routing is slow for some reason
+** The ability for the user to attempt an abort.
+** Centralization of these kinds of concerns so you don't pepper bugs all over the app
+
+But, I would note that these kinds of standardizations can be written as supporting element types that can simply be embedded in your chart. For example a node that comprises the elements for starting and tracking a load, with the elements of timing and abort via states, entry/exit, and delayed events.
+
+The whole point of developing this system is to move as much logic as possible into charts.
+
+So, there is a good argument for providing at least some example reusable "subcharts" that combine these elements together in a nice reusable way.
+
+== Route Denial/Control
+
+Route denial is a tough one. Chaging the route is something a user can trigger globally in many ways (back button, click link) and some UI elements want to prevent the user from losing unsaved changes.
+
+Having a "default" way to handle this is a great user convenience, but it can get rapidly complex when you consider things like "how and where do I show a message?", and "how do I allow a set of subroutes, but deny others".
+
+Again, the most general solution is to code it all in the chart, but there are some patterns we could pre-define to save the user some work.
+
+=== Component Centric
+
+One way to implement this is to put expressions on the individual target components
+
+[source]
+-----
+(defsc Route [this props]
+  {ro/busy? (fn [& args] true/false) ...
+-----
+
+and then when a routing command is issued, we ask the active routes (found via the current configuration and the statechart definition) if any of them are busy, and use a single catch-all transition at the top of the chart with a cond:
+
+[source]
+-----
+(transition {:event :route-to.*
+             :cond any-active-target-busy?
+             :target :state/show-route-denied})
+-----
+
+A high-level parallel node houses a "route denied machine" that tracks when we should show a message (which the show-route-denied event moves to).
+
+This allows the "modal" nature of a "unsaved changes" message to be supported in a global way, and the helpers can save the attempted route for override (e.g. yes, route anyway).
+
+Pros:
+
+* Compositional logic
+* Local components declare local logic to indicate route denial
+* One top-level state for handling the messaging to the user
+
+Cons:
+
+* What does the busy handler get as args?
+* Not statechart-centric...pushes logic to component (cond isn't visible in the chart)
+* Traceability...who denied the route???
+* The definition of the "route denied" region in the parallel state might need to be more complex (e.g. is it a modal, or a toast that fades? Do we allow them to double-click a route to go anyway? Etc.). Letting the user replace it would be a necessity. Is that easy to document/explain/plug in?
+
+=== Statechart Centric
+
+Instead of (or possibly in addition to?) the above, this can easily be coded AS a catch-all transition in the state that might deny routes itself.
+
+Statechart transition semantics indicate that in a duplicate transition match the deepest one wins. So we can acutally *have* the global handling *and* a chart-centric handling of these cases.
+
+[source]
+-----
+(transition {:event :route-to.*})
+(uir/rstate {:id :route/a}
+    (rstate {:route/target `X}) ; form wizard page 1
+    (rstate {:route/target `Y}) ; form wizard page 2
+    (rstate {:route/target `Z}) ; form wizard page 3
+    (transition {:event :route-to.X.* :target `X}) ; unconditional local routing
+    (transition {:event :route-to.Y.* :target `Y})
+    (transition {:event :route-to.Z.* :target `Z})
+    (transition {:event :route-to.* ; disallow global routing
+                 :cond (is-form-state-dirty-predicate :form.actor/name)
+                 :target :state/local-state-handling-denial}
+       (script {:src (fn [] [(assign :show-warning? true)])})))
+-----
+
+It seems like this is compatible with the prior solution, so providing both is trivial, and it is also trivial for the user to write their own wrapper function to make this succinct:
+
+[source]
+-----
+(on-route I-am-busy? [(fop/assoc-alias :ui/busy? true)])
+-----
+
+==== Predicate Expressions
+
+It is important to note that an event doesn't, per se, contain information about where in the statechart it was delivered; so, helper functions (or closures) would need to be used to determine those details.
+
+You could also do this introspection at evaluation (of the chart) if you design a top-down syntactic notation for the overall grouping. E.g. options on an `rstate` node.
+
+[source]
+-----
+(rstate {:busy-predicate is-form-dirty? ...})
+-----
+
+which expands to the transition node, but includes details about the parent in an extra arg as a partial over the predicate. `(partial is-form-dirty? RouteA21)`.
+
+== Composition
+
+== URL Integration
+
+Ideas:
+
+* Place the URL pattern on top-level acceptable transitions
+** Hurts composition/refactoring
+** Might be quite useful for resolving ambiguity in arbitrary constructions
+
+Possible Scheme: Generate direct top-level transitions for all possible unique paths, and warn about any that are not resolvable. Programmer can place manual top-level annotated transitions (or annotate the node that causes the ambiguity) to supply the URL resolution.
+
+=== Chart Ambiguity Resolution
+
+[source]
+-----
+    ;; Any Parallel section MUST resolve ambiguity by
+    ;; putting an explicit path on EXACTLY ONE child.
+    (parallel {:id :state/p}
+      (uir/rstate {:route/target `RouteA1
+                   :id :state/a1
+                   :initial      :route/a}
+        ;; eventless transition can be used to re-establish substates here.
+        (transition {:cond if-url-param-infers-other :target :other})
+        (uir/rstate {:id :route/a})
+        (uir/rstate {:id :other}
+          (on-entry {} (script {:src remove-other-param-to-url})))
+          (on-exit {} (script {:src remove-other-param-to-url}))))
+      (uir/rstate {:route/target `RouteA2
+                   :id :state/a2
+                   :route/path   ["c"]}
+        (uir/rstate {:id         :route/c
+                     :route/path "A"})
+        (uir/istate {:route/target     `RouteA21
+                     :route/path       ["B"]
+                     :exit-target      ::RouteA1
+                     :child-session-id ::route-a21})
+-----
+
+The implementation of this is to generate top-level transitions for the composed path:
+
+[source]
+-----
+["c" "A"] <-> #url "/c/A" <-> {:target :route/c}
+-----
+
+which unambiguously defines the subset configuration `#{:state/p :state/a1 :state/a3 :route/c}` as the *target* for an *incoming* URL "/c/A". Note that during operation the actual configuration subset that is guaranteed is #{:state/p :state/a2}. That does mean that the internal operation is *not necessarily* represented by the URL (which was the known problem). Further resolution could be done by the implementation (user level) parameters on the URL, with on-entry handlers.

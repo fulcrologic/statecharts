@@ -1,6 +1,19 @@
 (ns com.fulcrologic.statecharts.integration.fulcro.ui-routes
   "A composable statechart-driven UI routing system.
 
+   Statechart have arbitrary nesting and parallelism. This routing system attempts to support that by allowing
+   you to nest routable states, and also place siblings within a parallel element. It allows you to specify
+   which UI component corresponds to the immediate UI parent of a route so that any amount of UI composition
+   can happen in the actual UI between routable areas.
+
+   ## Parallel Routes
+
+   When you use parallel routes, it is important to put the :route/path on the parallel node, and NOT on any of the
+   child sibling routes (since they will all be active at once). You MAY place additional children in such a tree, but
+   they should not include :route/path since they are not directly routeable and must be re-established via your own
+   logic on entry to the parallel route. Using a statechart `history` support is one way to preserve the
+   overall setup, but such support is not bookmarkable.
+
    ALPHA. This namespace's API is subject to change."
   (:require
     [clojure.set :as set]
@@ -8,6 +21,7 @@
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
+    [com.fulcrologic.fulcro.routing.system :as rsys]
     [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn]]
@@ -17,7 +31,6 @@
     [com.fulcrologic.statecharts.elements :as ele :refer [on-entry on-exit parallel script script-fn state transition]]
     [com.fulcrologic.statecharts.environment :as senv]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
-    [com.fulcrologic.statecharts.integration.fulcro.route-history :as rhist]
     [com.fulcrologic.statecharts.integration.fulcro.route-url :as ru]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes-options :as ro]
     [com.fulcrologic.statecharts.protocols :as scp]
@@ -35,8 +48,6 @@
 (def session-id
   "The global statechart session ID that is used for the application statechart."
   ::session)
-
-(defonce history (volatile! nil))
 
 (defn ?!
   "Run if the argument is a fn. This function can accept a value or function. If it is a
@@ -197,10 +208,16 @@
                                            has-path-params? path-params
                                            :else {})
                                          params)]
-           (when @history
+           (when (rsys/current-routing-system app)
              (if (log/spy :info external?)
-               (rhist/replace-route! @history {:id id :route/path path :route/params actual-params})
-               (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
+               ;; TASK: Fix this. The statechart has already fixed/controlled the UI.
+               ;; We're in the state...there's nothing to do in the routing system except control the URL
+               ;; and respond to external events...
+               (log/info "FIX URL, external")
+               (log/info "FIX URL, internal")
+               #_#_(rsys/replace-route! app {:route path :params actual-params})
+               (rsys/route-to! app {:route path :params actual-params})
+               )
              [(ops/assign [:routing/parameters id] actual-params)]))))}))
 
 (defn rstate
@@ -353,7 +370,9 @@
   [(ops/assign ::failed-route-event _event)])
 
 (defn undo-url-change [env dm event-name {:route/keys [uid] :as popped-or-pushed-event-data}]
-  (let [id->node         (rhist/recent-history @history)
+  ;; TASK: undo url change
+  (log/info "FIX URL")
+  #_(let [id->node         (rhist/recent-history @history)
         ids              (reverse (keys id->node))
         most-recent      (first ids)
         next-most-recent (second ids)
@@ -552,9 +571,10 @@
     (some->> target (rc/registry-key->class))))
 
 (defn start-routing!
-  "Installs the statechart and starts it."
+  "Installs the top-level (root) statechart on the fulcro app and starts it."
   [app statechart]
-  (vreset! history (rhist/new-html5-history app
+  ;; TASK: need to store active routed state in URL somehow...path is probably the right thing
+  #_(vreset! history (rhist/new-html5-history app
                      {:route->url (fn [{:keys       [id]
                                         :route/keys [path params]}]
                                     (-> (ru/current-url)
