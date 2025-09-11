@@ -223,13 +223,137 @@ which expands to the transition node, but includes details about the parent in a
 
 == URL Integration
 
-Ideas:
+=== Requirements
 
-* Place the URL pattern on top-level acceptable transitions
-** Hurts composition/refactoring
-** Might be quite useful for resolving ambiguity in arbitrary constructions
+* Statechart is single-source of truth for URL
+** Popstate events are properly handled and the history morphed to reflect reality
+* The URL is an unambiguous representation of a single `:route-to.target/Thing` event, for which there is a top-level transition.
+* The mappings between states and URL can be composed with annotations on the states in the model.
+** Shorter URL paths can represent the "entry point" into an entire subchart, which of course will make substates active automatically.
+*** Such Automatically activated states with URL elements must synchronize with the URL after statechart stabilization. The sub-sequence of URL transitions while a statechart is internally processing (e.g. flowing through states and substates that contribute to the URL), along with the original user input URL, need not be preserved (e.g. intermediate URLs are replaced instead of pushed). Only the final stable URL is preserved (back button nav wouldn't work if it hits these intermediate states).
 
-Possible Scheme: Generate direct top-level transitions for all possible unique paths, and warn about any that are not resolvable. Programmer can place manual top-level annotated transitions (or annotate the node that causes the ambiguity) to supply the URL resolution.
+=== Browser URL Notes
+
+The history API of browsers is not exactly ideal, because in that API the concept of forward/back navigation is hidden behind a single "popstate" event which simply hands you the one element (of a non-visible stack of states) that you are supposed to display. This means that you don't get a "forward" or "back" event, but it isn't that hard to implement what we need.
+
+For any given *external* routing event (user changes the URL via bookmark, page load, forward, or back button, or we call the js forward()/back() API) we have:
+
+* The js state that we stored (if it is a forward/back), or no state if it is an initial load of the URL (browser specific on what we get in this initial event). From the MDN docs:
+"Browsers tend to handle the popstate event differently on page load. Chrome (prior to v34) and Safari always emit a popstate event on page load, but Firefox doesn't."
+
+There is *no way* to block user forward/back. It is up to our implementation to deduce this action and handle it.
+
+The browser interface to history is meant for you to store js "state" with history entries that tell you unambiguously where you are. In a complex application where statecharts may make decisions that invalidate some prior stored state (e.g. a particular URL runs a side effect that could move you to a different state) it makes no sense to try to treat this state as a functional-programming immutable value. The assumptions of the API are that your URL refers to some bit of data that you have fetched and are possibly caching.
+
+In an SPA, the URL is "roughly" stating a desire to be in some particular portion of a complex application, but the state of that subsection is nondeterministic, and the URL is at-best a hand-waving motion "go over there".
+
+So, let's restate what the URL browser history supplies to us in terms of (statechart-specific) semantic importance:
+
+Events from the actions of a user:
+
+* A desire to move the chart into some particular configuration (we target a particular state, and other states in the configuration follow as a natural course of the chart's design). E.g. user uses a bookmark to load the application.
+* An popstate event from the browser to "go backward" or "go forward"
+
+Actions produced by the internals of the application that affect the URL/history:
+
+* Add something to history (pushState).
+* Rewrite the current URL (replaceState).
+* Internal desire to move forward/back in an abstract sense.
+
+The forward/back actions could be internal or external. In the internal case there is nothing to undo, but in the external there is (the browser manipulated the URL).
+
+The natural join point of these concerns is in the external event queue handler, since the statechart will do nothing without an event from there (even timed events come into that queue.)
+
+[source]
+-----
+(defn process-event! [external-event]
+   (do-statechart-actions! external-event)
+   (notify-url-integration!))
+-----
+
+==== Popstate Facade
+
+In order to convert popstate events into our desired semantics, we propose this approach:
+
+* The act of changing the URL from internals is expressed either as a push or replace (as normal)
+** Our implementation of history keeps track of a sequence number:
+*** On push, incrememt
+*** On replace, do nothing
+*** On popstate *success* (not undo), reset sequence number to what was received.
+** The sequence number is always stored as the `state`
+
+When we receive a popstate event, look at the current sequence number:
+
+* If it went up, it was an external forward
+* If it went down, it was an external back
+
+Send the proper event, wait for stabilization, and then:
+
+* On undo: call history forward() or back() in the opposite direction.
+* Otherwise: Reset current sequence number to what we popped.
+
+This allows us to sense the semantic action and have the statechart act on it, and the URL is usable mainly for bookmark support and validation for "undo".
+
+===== Tricky Cases
+
+Case 1:
+
+The user presses back, the statechart changes, the detection fails, and we issue an "undo" (forward).
+
+Actual Result: In this case we lose the "forward" action because the browser has been asked (by undo) to reverse it already. The final "synchronization" of the URL will use replaceState to fix the URL to match the resulting state (perhaps only the params changed), but this violates the user's expectation of being able to reverse a navigation action. This is a minor annoyance and should be rare.
+
+Case 2:
+
+External timed events happen which are *not* explicit routing events, but URL synchronization is built to happen after each chart stabilization. This could pollute the history with a huge number of "useless" states.
+
+Resolution: The automatic URL synchronization should always use replaceState, so that we are not accumulating history.
+
+Case 3:
+
+Semantic use of forward/back is desired, but it doesn't track in the path portion of the URL (e.g. changes URL parameter page=2 to page=3). We want history entries. The history entry in question cannot be restored via a bookmark (e.g. jumping to wizard page 3 makes no sense from a bookmark).
+
+Resolution: In the actual chart, tracking the page as a parameter can be automated, and the forward/back events can be handled while in the substates. The URL should end up matching, preventing "undo" events. A bookmark will enter the system, and establish the upper-level state, but of course the substates won't be willing to interpret the page number, and will instead enter at page 1. When the statechart stabilizes the URL is seamlessly replaced with the parameter reset to `page=1`.
+
+=== Implementation Notes
+
+Our desire to have routes that indicate they are busy and block routing means we need a way to "undo" a particular user action. We can do this by calling the forward() or back() method (in the opposite diretion of the user) if we can detect the direction of their navigation, but this generates additional PopStateEvents.
+
+Any given routing request from the browser (forward/back) comes with a URL. Our requirement that we can find a 1-to-1 mapping from a URL to a desired event means that we can unambiguously determine the desired location, but without analyzing the chart (or having a stateful "fact" that says "routing blocked") there is no way for an externally-written system to automatically "deny" (and undo) routing.
+
+So, the important points are:
+
+* External events (forward/back) MIGHT need to be immediately reversed (cannot be blocked).
+* The statechart should be the arbiter or URL correctness
+* We want to preserve the ability of a user to go forward after a back, if possible (e.g. should not pushState after a back in order to undo, but issuing the call to `forward()` also has to be evaluated to ensure the URL matches where the statechart lands). The assumption on an undo is that the statechart didn't move, so this validation should always prove correct except in the presence of bugs (e.g. the URL was already out of sync with the chart somehow).
+
+The support we need:
+
+* A function that can convert a URL into an unambiguous target state.
+* A function that can be called after the statechart stabilizes to replace the URL with the final resting place of the chart.
+* Some kind of predicate that can determine if a chart was affected by a popstate event, so that user navigation can be undone to preserve the ability to go "forward" after a "back".
+
+The most difficult part here the preservation of forward/back semantics. A chart can be defined with "stable" routing states, but within those states might be substates that leverage things like URL parameters to establish specifics. For example, a wizard nested in a parallel region won't *have* an unambiguous route to cover all possible combinations via a path, but it could leverage the query params to store information that allows re-establishing something like "which page" the wizard was on. These could be stored in the history, and a popstate event might simply be asking to go back a page in the wizard. This would have no visible effect on the chart's "stable routing state" (the parent parallel node) but also would not be an explicit denial of routing.
+
+The implementation, in general, is made much easier if the application can simply be asked "is routing currently blocked"? This would allow URL integration to immediately "undo" a user back/forward popstate event. Unfortunately, if we want to use transition composition to choose what is and is not blocked, this global mechanism doesn't really integrate well.
+
+What if we convert the popstate event into an `:event/forward`, `:event/back`, or `:event/page-loaded`?
+
+Then the statechart in question could leverage those as-is, and we can leave the manipulation of browser history up to the best-efforts of the URL integration component (e.g. it figures out the optimal thing to do: pushState, replaceState, back, forward).
+
+In this scheme, basically the popstate event handler:
+
+* Derives the statechart URL from the statechart as-is
+* Sends the event with the URL.
+** The default forward/back/page loaded handlers use the URL and just raise the appropriate route-to event.
+* Waits for the statechart to stabilize (TBD).
+* Derives the statechart URL from the statechart again, and compares it to the current URL
+** If it didn't change, undo.
+** Else use replaceState to synchronize the URL
+
+==== Synchronization
+
+For all of this to work correctly, the URL synchronization needs to happen consistently, but we have to be careful because the timing of the sync has to be sensitive to the above evaluation of external routing events.
+
 
 === Chart Ambiguity Resolution
 
