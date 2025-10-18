@@ -231,6 +231,9 @@ which expands to the transition node, but includes details about the parent in a
 * The mappings between states and URL can be composed with annotations on the states in the model.
 ** Shorter URL paths can represent the "entry point" into an entire subchart, which of course will make substates active automatically.
 *** Such Automatically activated states with URL elements must synchronize with the URL after statechart stabilization. The sub-sequence of URL transitions while a statechart is internally processing (e.g. flowing through states and substates that contribute to the URL), along with the original user input URL, need not be preserved (e.g. intermediate URLs are replaced instead of pushed). Only the final stable URL is preserved (back button nav wouldn't work if it hits these intermediate states).
+* Live on-screen components can contribute to the URL parameters (e.g. report search criteria, current page, selected row, etc.)
+** This parameter integration MUST allow for ui-driven events that indicate a change (since those UI interactions may not involve the statechart system).
+** The parameter list of the URL SHOULD be derivable from the complete statechart AND application state, or the ability of the URL integration will not be able to properly rewrite the URL (unless it only rewrites the path)?
 
 === Browser URL Notes
 
@@ -313,6 +316,50 @@ Case 3:
 Semantic use of forward/back is desired, but it doesn't track in the path portion of the URL (e.g. changes URL parameter page=2 to page=3). We want history entries. The history entry in question cannot be restored via a bookmark (e.g. jumping to wizard page 3 makes no sense from a bookmark).
 
 Resolution: In the actual chart, tracking the page as a parameter can be automated, and the forward/back events can be handled while in the substates. The URL should end up matching, preventing "undo" events. A bookmark will enter the system, and establish the upper-level state, but of course the substates won't be willing to interpret the page number, and will instead enter at page 1. When the statechart stabilizes the URL is seamlessly replaced with the parameter reset to `page=1`.
+
+NOTE: The page parameter CAN be leveraged by the statechart, so if it were possible to jump to page 3, then eventless transitions on the target node could include a condition that interprets the parameter and does the right thing. Page is probably a bad example because you certainly would not typically have states for an arbtrarily large number of pages, but for a wizard with 3 pages a set of 3 states with 3 transitions isn't overly complicated. So, there are two kinds of cases: the parameter is truly just data used by an ultimate target state (which page is this ONE state showing), and the other is where the parameter is attempting to disambiguate a particular statechart configuration that a single path in a URL cannot represent.
+
+=== URL Parameters
+
+Changing (trackable) states in the statechart will affect the PATH component of the URL. All other internal tracking will use the query section of the URL, since those elements are not *required* to be something that can be restored; however, there are at least two categories of URL parameters: Those used by the statechart for structural reasons (e.g. which page of a wizard), and parameters that are used by the application's internal functionality (which page of a report am I on, which row is selected, what date range did the user pick).
+
+The first of these two (structural parameters) can be encoded on the chart itself.
+
+The second of these two represents either:
+
+* Information stored only on the URL for bookmarking purposes.
+* A reflection of internal data from components.
+
+In Fulcro we will mostly that the latter is what we want, since we don't want to *rely* on a URL (which is only available in a browser) to store interesting state.
+
+The question becomes: How do we allow our URL support mechanism to derive this "extra" information during the final phase (post-stabilization generation of the current URL)?
+
+In RAD, for example, parameters are stored in two primary locations: on the active component (e.g. Report instance state), or in a normalized table of parameters that have globally unique names. In Fulcro in general these are really the only two options: The data you care about is in some constant (global) location, or it is co-located with the normalized component that cares about it at some particular sub-path(s).
+
+The main routing system *does* track the ident of the route targets:
+
+* If the component uses the initialization system, the ident is saved into the local data of the chart.
+* If it doesn't we can assume the target has a constant ident and it was pre-normalized for us.
+
+In either case for unambiguous targets, we know where to find their state in the Fulcro state map. And of course, global locations in the state map are just that: global.
+
+However, it is possible that some substates in a chart might want to store particular data (derived from app state) in the URL. If the routing system has explicit knowledge of their ident (they are an rstate), then we can find them, but if they are active states related to on-screen components how do we find the location of the data in order to include it?
+
+=== Crossing Invocations
+
+Deriving the "current URL" involes starting at the overall root UI Routing session:
+
+* Determine which of the states in the active config contribute to the PATH ()
+* Determine if any of them have active child invocations
+
+==== Invocation Dependencies
+
+What if a nested invocation requires data from a parent context, and that parent context resolves that data via on-entry handlers that are async?
+
+In fact, how do we deal with routing asynchrony in general? If a sub-route somehow relies on setup that is done by some parent node in the chart, but that setup is async. The chart will enter all the states at once.
+
+NOTE: working on the real structure which requires each node to pass the "remainder" route to child...so we cascade through the routing, and when it terminates, THAT is when we update the final URL and consider "routing done". We need to be able to interrupt this, of course (aborting loads, etc.).
+
 
 === Implementation Notes
 

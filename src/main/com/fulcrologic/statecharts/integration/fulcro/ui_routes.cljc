@@ -119,25 +119,6 @@
       (merge/merge-component! app Target props))
     ident))
 
-(defn replace-join!
-  "Logic to update the query of Parent such that `join-key` is an EQL join to `Target`."
-  [app Parent parent-ident join-key Target target-ident]
-  (let [{:com.fulcrologic.fulcro.application/keys [state-atom]} app
-        state-map @state-atom
-        old-query (rc/get-query Parent state-map)
-        oq-ast    (eql/query->ast old-query)
-        nq-ast    (update oq-ast :children
-                    (fn [cs]
-                      (conj (vec (remove #(= join-key (:dispatch-key %)) cs))
-                        (eql/query->ast1 [{join-key (rc/get-query Target state-map)}]))))
-        new-query (eql/ast->query nq-ast)]
-    (when (and (not parent-ident) (rc/has-ident? Parent))
-      (log/error "Unable to fix join. Route will have no props because parent has no ident."
-        {:parent (rc/component-name Parent)
-         :target (rc/component-name Target)}))
-    (swap! state-atom assoc-in (conj parent-ident join-key) target-ident)
-    (rc/set-query! app Parent {:query new-query})))
-
 (defn- find-parent-route
   "Find the node in the statechart that is the closest parent to the node with `id` which has a :route/target or :routing/root.
    Returns the node or nil if none is found."
@@ -175,8 +156,8 @@
         parent-ident         (get-in data [:route/idents parent-registry-key] (when (rc/has-ident? Parent) (rc/get-ident Parent {})))
         target-ident         (get-in data [:route/idents route-target])]
     (if parallel?
-      (replace-join! app Parent parent-ident route-target Target target-ident)
-      (replace-join! app Parent parent-ident :ui/current-route Target target-ident)))
+      (rc/replace-join! app Parent parent-ident route-target Target target-ident)
+      (rc/replace-join! app Parent parent-ident :ui/current-route Target target-ident)))
   nil)
 
 (defn establish-route-params-node

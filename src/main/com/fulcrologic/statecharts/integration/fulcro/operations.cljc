@@ -50,12 +50,18 @@
    ::sc/ok-event - Event to send when the load completes without error (overrides :ok-action)
    ::sc/error-event - Event to send with load runs into an error (overrides :error-action)
    ::sc/target-alias - Target the load at a statechart alias (overrides :target)
+
+   Default ok event is `:event.loading/ok` and the default error event is `:error.loading` (to
+   match top-level wildcards around errors).
    "
-  [query-root component-or-actor {:keys [] :as options}]
-  {:op                 :fulcro/load
-   :query-root         query-root
-   :component-or-actor component-or-actor
-   :options            options})
+  [query-root component-or-actor options]
+  (let [default-options {::sc/ok-event    :event.loading/ok
+                         ::sc/error-event :event.loading/error}
+        options         (merge default-options options)]
+    {:op                 :fulcro/load
+     :query-root         query-root
+     :component-or-actor component-or-actor
+     :options            options}))
 
 (defn set-actor
   "Change an actor to a new class/ident.
