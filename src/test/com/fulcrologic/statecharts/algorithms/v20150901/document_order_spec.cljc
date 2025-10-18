@@ -13,7 +13,7 @@
                   (transition {:target :c, :event :t}))
                 (state {:id :b})
                 (state {:id :c}))
-        env (testing/new-testing-env {:statechart chart} {})]
+        env   (testing/new-testing-env {:statechart chart} {})]
     (testing/start! env)
     (assertions (testing/in? env :a) => true)
     (testing/run-events! env :t)

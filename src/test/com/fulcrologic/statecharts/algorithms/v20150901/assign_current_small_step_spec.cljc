@@ -28,7 +28,7 @@
                   (transition {:target :f}))
                 (state {:id :c})
                 (state {:id :f}))
-        env   (testing/new-testing-env {:statechart chart
+        env   (testing/new-testing-env {:statechart      chart
                                         :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
@@ -54,7 +54,7 @@
                     (assign {:location :i :expr (fn [_ {:keys [i]}] (inc i))}))
                   (transition {:target :c :cond (fn [_ {:keys [i]}] (= i 100))}))
                 (state {:id :c}))
-        env   (testing/new-testing-env {:statechart chart
+        env   (testing/new-testing-env {:statechart      chart
                                         :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
@@ -90,7 +90,7 @@
                   (transition {:target :f}))
                 (state {:id :e})
                 (state {:id :f}))
-        env   (testing/new-testing-env {:statechart chart
+        env   (testing/new-testing-env {:statechart      chart
                                         :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
@@ -126,7 +126,7 @@
                   (transition {:event :t3 :target :f}))
                 (state {:id :d})
                 (state {:id :f}))
-        env   (testing/new-testing-env {:statechart chart
+        env   (testing/new-testing-env {:statechart      chart
                                         :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)
@@ -175,7 +175,7 @@
 
                 (state {:id :c})
                 (state {:id :f}))
-        env   (testing/new-testing-env {:statechart chart
+        env   (testing/new-testing-env {:statechart      chart
                                         :mocking-options {:run-unmocked? true}} {})]
 
     (testing/start! env)

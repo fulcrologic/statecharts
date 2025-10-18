@@ -1,12 +1,11 @@
 (ns com.fulcrologic.statecharts.runtime-test
   (:require
-    [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.simple :as simple]
-    [com.fulcrologic.statecharts.runtime :as rt]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :as ele :refer [on-entry state transition]]
-    [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
     [com.fulcrologic.statecharts.event-queue.event-processing :as ep]
+    [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [com.fulcrologic.statecharts.runtime :as rt]
     [com.fulcrologic.statecharts.testing :as testing]
     [fulcro-spec.core :refer [=> assertions specification]]))
 

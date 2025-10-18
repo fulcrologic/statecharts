@@ -1,0 +1,1 @@
+{"tasks" [{"task" "Create server/core.clj with Ring handlers", "done" false, "stage" 3} {"task" "Create server.clj public API (start-server!, stop-server!)", "done" false, "stage" 3} {"task" "Test server from REPL", "done" false, "stage" 3}]}

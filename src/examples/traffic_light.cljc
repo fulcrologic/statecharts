@@ -2,7 +2,7 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :refer [statechart]]
-    [com.fulcrologic.statecharts.elements :refer [state parallel transition]]
+    [com.fulcrologic.statecharts.elements :refer [parallel state transition]]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]

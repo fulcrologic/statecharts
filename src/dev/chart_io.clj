@@ -110,7 +110,7 @@
       []
       element)))
 
-(def node-type->tag {:statechart    :scxml
+(def node-type->tag {:statechart :scxml
                      :on-exit    :onexit
                      :data-model :datamodel
                      :on-entry   :onentry})

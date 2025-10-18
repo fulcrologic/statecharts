@@ -1,16 +1,12 @@
 (ns com.fulcrologic.statecharts.integration.fulcro.ui-routes-test
   (:require
-    [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :as ele :refer [on-entry parallel script state transition]]
+    [com.fulcrologic.statecharts.elements :refer [on-entry script state]]
     [com.fulcrologic.statecharts.event-queue.event-processing :refer [process-events]]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
-    [com.fulcrologic.statecharts.protocols :as scp]
-    [com.fulcrologic.statecharts.testing :as testing]
     [com.fulcrologic.statecharts.integration.fulcro.ui-routes :as uir]
-    [fulcro-spec.core :refer [=> assertions behavior specification]]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.statecharts.testing :as testing]
+    [fulcro-spec.core :refer [=> assertions behavior specification]]))
 
 (let [b (volatile! false)]
   (defn set-busy! [v] (vreset! b v) nil)

@@ -1,11 +1,9 @@
 (ns scion-tests-converter
-  (:require [clojure.java.io :as io]
+  (:require [camel-snake-kebab.core :as csk]
+            [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [scxml-converter :refer [translate-scxml]]
-            [clojure.data.json :as json]
-            [cljfmt.main :as cljfmt]
-            [cljfmt.core :as cljfmt-core]
-            [camel-snake-kebab.core :as csk]
             [zprint.core :as zp]))
 
 (defn make-assertions [states]
@@ -30,21 +28,21 @@
         statechart-props (-> chart-props
                            (select-keys [:initial])
                            statechart-initial->maybe-keyword)
-        test-body (into [(make-assertions (:initialConfiguration test))]
-                     (mapcat make-event-and-assertions (:events test)))
-        template  `(~'specification ~test-name
-                     (~'let [~'chart (~'chart/statechart ~statechart-props
-                                   ~@chart-body)
-                           ~'env   (~'testing/new-testing-env {:statechart ~'chart} {})]
+        test-body        (into [(make-assertions (:initialConfiguration test))]
+                           (mapcat make-event-and-assertions (:events test)))
+        template         `(~'specification ~test-name
+                            (~'let [~'chart (~'chart/statechart ~statechart-props
+                                              ~@chart-body)
+                                    ~'env (~'testing/new-testing-env {:statechart ~'chart} {})]
 
-                       (~'testing/start! ~'env)
+                              (~'testing/start! ~'env)
 
-                       ~@test-body))]
+                              ~@test-body))]
     template))
 
 (defn port-test [[test-name {:keys [scxml json] :as v}]]
   (let [translated-scxml (translate-scxml scxml {:ns-alias nil})
-        test (json/read-str json :key-fn keyword)]
+        test             (json/read-str json :key-fn keyword)]
     (println json)
     (make-test-code test-name translated-scxml test)))
 
@@ -75,7 +73,7 @@
 
 (defn port-tests [root-dir dir]
   (let [directory (io/file (str root-dir dir))
-        files (file-seq directory)
+        files     (file-seq directory)
         contents  (->> (reduce
                          (fn [acc file]
                            (if (.isDirectory file)
@@ -96,6 +94,6 @@
     (spit filename (zp/zprint-file-str contents "" {:width 80}))))
 
 (comment
-  (port-tests  "/Users/retro/Projects/scion-test-framework/test/" "parallel+interrupt")
+  (port-tests "/Users/retro/Projects/scion-test-framework/test/" "parallel+interrupt")
   ;;
   )

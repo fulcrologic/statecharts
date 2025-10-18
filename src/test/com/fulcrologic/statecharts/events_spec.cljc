@@ -39,10 +39,10 @@
   (component "Events as event-name"
     (assertions
       "Use the event name for matching"
-      (evts/name-match? :a (evts/new-event :a.b )) => true
-      (evts/name-match? :a.b (evts/new-event :a.b )) => true
-      (evts/name-match? :x/a.b (evts/new-event :a.b )) => false
-      (evts/name-match? :x/a.b (evts/new-event :x/a.b )) => true)))
+      (evts/name-match? :a (evts/new-event :a.b)) => true
+      (evts/name-match? :a.b (evts/new-event :a.b)) => true
+      (evts/name-match? :x/a.b (evts/new-event :a.b)) => false
+      (evts/name-match? :x/a.b (evts/new-event :x/a.b)) => true)))
 
 (specification "invoke-done-event"
   (assertions "Prepends done.invoke to invoke id"

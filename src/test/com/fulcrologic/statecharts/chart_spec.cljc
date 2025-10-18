@@ -120,10 +120,10 @@
       (assertions
         "Returns a vector of the state IDs in (depth-first) document order"
         (chart/in-document-order m #{:s2 :t1 :s1.1.1 :s1.1 :s0}) => [:s0
-                                                                  :t1
-                                                                  :s1.1
-                                                                  :s1.1.1
-                                                                  :s2]
+                                                                     :t1
+                                                                     :s1.1
+                                                                     :s1.1.1
+                                                                     :s2]
         "Can be forced to use breadth-first"
         (chart/in-document-order mb #{:s2 :t1 :s1.1.1 :s1.1 :s0}) => [:s0 :s2 :t1 :s1.1 :s1.1.1])))
 

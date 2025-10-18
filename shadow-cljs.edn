@@ -1,15 +1,31 @@
 {:deps     {:aliases [:dev :test]}
- :nrepl    {:port 9000}
+ :nrepl    {:port 9050}
  :jvm-opts ["-Xmx2G"]
- :dev-http {9001 "resources/public"}
+ :http     {:port 9635}
+ :dev-http {9001 "resources/public"
+            8090 "resources/public/viz"}
  :builds   {:test     {:target           :browser-test
                        :test-dir         "resources/public"
                        :ns-regexp        "-(test|spec)$"
-                       :compiler-options {:static-fns      false}}
+                       :compiler-options {:static-fns false}}
 
             :ci-tests {:target           :karma
                        :js-options       {:js-provider :shadow}
-                       :compiler-options {:static-fns      false}
+                       :compiler-options {:static-fns false}
                        :output-to        "target/ci.js"
-                       :ns-regexp        "-(test|spec)$"}}}
+                       :ns-regexp        "-(test|spec)$"}
+
+            :viz      {:target           :browser
+                       :output-dir       "resources/public/viz/js"
+                       :asset-path       "/js"
+                       :modules          {:main {:init-fn com.fulcrologic.statecharts.visualization.app.main/init}}
+                       :dev              {:source-map       true
+                                          :compiler-options {:recompile-dependents true
+                                                             :external-config      {:guardrails {}
+                                                                                    :fulcro     {:html-source-annotations? true}}}}
+                       :devtools         {:http-root  "resources/public/viz"
+                                          :http-port  8090
+                                          :preloads [com.fulcrologic.devtools.chrome-preload]
+                                          :after-load com.fulcrologic.statecharts.visualization.app.main/refresh}
+                       :compiler-options {:infer-externs :auto}}}}
 

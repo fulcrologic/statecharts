@@ -11,8 +11,8 @@
    "
   (:require
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.environment :as env]
+    [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
 

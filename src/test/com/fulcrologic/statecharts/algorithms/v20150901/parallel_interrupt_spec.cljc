@@ -20,9 +20,9 @@
     (assertions
       (testing/in? env :c) => true
       (testing/in? env :d) => true)
-  (testing/run-events! env :t)
-  (assertions
-    (testing/in? env :a1) => true)) )
+    (testing/run-events! env :t)
+    (assertions
+      (testing/in? env :a1) => true)))
 
 (specification
   "test1"
@@ -144,7 +144,7 @@
                         (state {:id :i, :initial :i1}
                           (state {:id :i1}
                             (transition {:target :l,
-                                         :event :t}))
+                                         :event  :t}))
                           (state {:id :i2}))
                         (state {:id :j}))
                       (state {:id :h}))
@@ -183,7 +183,7 @@
                         (state {:id :i, :initial :i1}
                           (state {:id :i1}
                             (transition {:target :i2,
-                                         :event :t}))
+                                         :event  :t}))
                           (state {:id :i2}))
                         (state {:id :j}))
                       (state {:id :h}))

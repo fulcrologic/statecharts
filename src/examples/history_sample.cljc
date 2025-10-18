@@ -1,11 +1,11 @@
 (ns history-sample
   (:require
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.elements :refer [state transition history]]
+    [com.fulcrologic.statecharts.chart :refer [statechart]]
+    [com.fulcrologic.statecharts.elements :refer [history state transition]]
     [com.fulcrologic.statecharts.events :refer [new-event]]
     [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.simple :as simple]
-    [com.fulcrologic.statecharts.chart :refer [statechart]]))
+    [com.fulcrologic.statecharts.simple :as simple]))
 
 (def sample
   (statechart {}

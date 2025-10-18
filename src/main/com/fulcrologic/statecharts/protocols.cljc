@@ -205,7 +205,10 @@
      key, and is what you would look the definition up by. If your invocation support uses this
      system, then the `invoke` element's `src` will match the `src` passed here.")
   (get-statechart [this src]
-    "Retrieve the definition of a statechart that is known by the well-known key `src`."))
+    "Retrieve the definition of a statechart that is known by the well-known key `src`.")
+  (all-charts [this]
+    "Return a map of all registered statechart definitions, where keys are the `src` identifiers
+     and values are the statechart definitions."))
 
 (defprotocol WorkingMemoryStore
   (get-working-memory [this env session-id] "Get the working memory for a state machine with session-id")

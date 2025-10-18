@@ -3,10 +3,9 @@
   be used for playing with and diagramming using XState tools."
   (:require
     [camel-snake-kebab.core :as csk]
+    [clojure.string :as str]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.chart :as chart]
-    [taoensso.timbre :as log]
-    [clojure.string :as str]))
+    [com.fulcrologic.statecharts.chart :as chart]))
 
 (defn jssym [n]
   (when n

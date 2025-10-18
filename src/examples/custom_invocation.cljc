@@ -4,7 +4,7 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :refer [statechart]]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :refer [state transition script-fn invoke]]
+    [com.fulcrologic.statecharts.elements :refer [invoke script-fn state transition]]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as loop]
     [com.fulcrologic.statecharts.events :as evts]

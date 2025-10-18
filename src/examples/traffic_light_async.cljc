@@ -3,12 +3,12 @@
    sent events and mutates in place (and handles timers in CLJC) via core.async."
   (:require
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.elements :refer [state parallel transition on-entry Send]]
+    [com.fulcrologic.statecharts.chart :refer [statechart]]
+    [com.fulcrologic.statecharts.elements :refer [Send on-entry parallel state transition]]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as loop]
     [com.fulcrologic.statecharts.events :as evts]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
-    [com.fulcrologic.statecharts.chart :refer [statechart]]
     [com.fulcrologic.statecharts.util :refer [extend-key]]))
 
 (def nk

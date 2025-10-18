@@ -184,7 +184,7 @@
    "
   [{:keys [statechart processor-factory data-model-factory event-queue validator session-id mocking-options]
     :or   {data-model-factory new-flat-model
-           event-queue (new-mock-queue)
+           event-queue        (new-mock-queue)
            validator          configuration-problems}} mocks]
   (assert statechart "Statechart is supplied")
   (let [data-model (data-model-factory)
@@ -263,7 +263,7 @@
 
 (defn current-configuration
   [{:keys                                      [session-id]
-    {::sc/keys [working-memory-store] :as env} :env} ]
+    {::sc/keys [working-memory-store] :as env} :env}]
   (let [wmem (sp/get-working-memory working-memory-store env session-id)]
     (get wmem ::sc/configuration)))
 

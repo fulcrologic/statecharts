@@ -95,9 +95,9 @@
   (cond
     (qualified-keyword? invokeid)
     (keyword (str "done.invoke." (namespace invokeid)) (name invokeid))
-  
+
     (keyword? invokeid)
     (keyword (str "done.invoke." (name invokeid)))
-  
+
     :else
     (keyword (str "done.invoke." invokeid))))

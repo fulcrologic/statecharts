@@ -1,6 +1,5 @@
 (ns scxml-converter
   (:require
-    [clojure.pprint :refer [pprint]]
     [clojure.string :as str]
     [hickory.core :as hc]))
 
@@ -10,15 +9,15 @@
                 :initial  keyword
                 :type     keyword
                 :location keyword
-                :target (fn [t]
-                          (let [targets (str/split t #" ")]
-                            (if (= 1 (count targets))
-                              (keyword (first targets))
-                              (mapv keyword targets))))})
+                :target   (fn [t]
+                            (let [targets (str/split t #" ")]
+                              (if (= 1 (count targets))
+                                (keyword (first targets))
+                                (mapv keyword targets))))})
 
 (def tag-coercions
-  {"onentry" "on-entry"
-   "onexit" "on-exit"
+  {"onentry"   "on-entry"
+   "onexit"    "on-exit"
    "datamodel" "data-model"})
 
 

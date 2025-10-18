@@ -16,11 +16,11 @@
    these functions as well (in other words these functions work both outside AND inside of a statechart),
    though they assume you're passing a processing environment (and ignore the processing keys)."
   (:require
-    [com.fulcrologic.guardrails.malli.core :refer [>defn => ?]]
-    [com.fulcrologic.statecharts.algorithms.v20150901-impl :as impl]
+    [com.fulcrologic.guardrails.malli.core :refer [=> >defn ?]]
     [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.malli-specs]))
+    [com.fulcrologic.statecharts.algorithms.v20150901-impl :as impl]
+    [com.fulcrologic.statecharts.malli-specs]
+    [com.fulcrologic.statecharts.protocols :as sp]))
 
 (>defn current-configuration
   "Returns the current configuration of the statechart with the given session-id. You MUST be using an implementation

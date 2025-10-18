@@ -8,7 +8,9 @@
   (register-statechart! [_ src statechart-definition]
     (swap! charts assoc src statechart-definition))
   (get-statechart [_ src]
-    (get @charts src)))
+    (get @charts src))
+  (all-charts [_]
+    @charts))
 
 (defn new-registry []
   (->LocalMemoryRegistry (atom {})))

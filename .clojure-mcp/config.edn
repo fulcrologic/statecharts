@@ -1,0 +1,7 @@
+{ ; :allowed-directories ["." "../fulcro"]
+ :emacs-notify false
+ :write-file-guard :full-read
+ :cljfmt false
+ :bash-over-nrepl true
+ :scratch-pad-load true  ; Default: false
+ :scratch-pad-file ".scratch_pad.edn"}
