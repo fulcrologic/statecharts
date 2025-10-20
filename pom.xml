@@ -4,7 +4,7 @@
     <groupId>com.fulcrologic</groupId>
     <artifactId>statecharts</artifactId>
     <packaging>jar</packaging>
-    <version>1.2.23-SNAPSHOT</version>
+    <version>1.2.23</version>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -23,7 +23,7 @@
         <url>https://github.com/fulcrologic/statecharts</url>
         <connection>scm:git:git://github.com/fulcrologic/statecharts.git</connection>
         <developerConnection>scm:git:ssh://git@github.com/fulcrologic/statecharts.git</developerConnection>
-        <tag>statecharts-1.2.5</tag>
+        <tag>statecharts-1.2.23</tag>
     </scm>
     <distributionManagement>
         <repository>
