@@ -4,10 +4,15 @@
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.rad.picker-options :as po]
+    [com.fulcrologic.rad.report :as report]
+    [com.fulcrologic.rad.report :refer [defsc-report]]
+    [com.fulcrologic.rad.report-options :as ro]
     [com.fulcrologic.fulcro.dom :as dom]
     [com.fulcrologic.fulcro.mutations :refer [defmutation]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.visualization.visualizer :as viz]
+    [com.fulcrologic.statecharts.visualization.app.model.chart :as m.chart]
     [taoensso.timbre :as log]))
 
 (declare ChartViewer)
@@ -59,8 +64,8 @@
            :post-mutation-params {:chart-id chart-id}})))))
 
 (defsc ChartListItem [this {chart-id   ::sc/id
-                            chart-name :chart/name}]
-  {:query [::sc/id :chart/name]
+                            chart-name :chart/label}]
+  {:query [::sc/id :chart/label]
    :ident ::sc/id}
   (dom/option {:value (str chart-id)} chart-name))
 
@@ -68,16 +73,16 @@
 
 (defsc ChartViewer [this {:ui/keys    [visualizer session-id current-configuration session-state]
                           ::sc/keys   [id elements-by-id id-ordinals ids-in-document-order]
-                          :chart/keys [name]
+                          :chart/keys [label]
                           :keys       [initial initial? node-type children] :as props}]
   {:query [{:ui/visualizer (comp/get-query viz/Visualizer)}
            :ui/session-id
            :ui/current-configuration
            {:ui/session-state (comp/get-query SessionState)}
-           ::sc/id :chart/name ::sc/elements-by-id ::sc/id-ordinals ::sc/ids-in-document-order
+           ::sc/id :chart/label ::sc/elements-by-id ::sc/id-ordinals ::sc/ids-in-document-order
            :id :node-type :children :initial :initial?]
    :ident ::sc/id}
-  (js/console.log "ChartViewer render - id:" id "name:" name "has elements:" (boolean elements-by-id)
+  (js/console.log "ChartViewer render - id:" id "name:" label "has elements:" (boolean elements-by-id)
     "session-id:" session-id "config:" current-configuration)
   (dom/div {:style {:marginTop     "2rem"
                     :width         "100%"
@@ -93,7 +98,7 @@
                        :fontWeight   "600"
                        :color        "#333"
                        :marginBottom "1rem"}}
-        (str "Chart: " name))
+        (str "Chart: " label))
 
       ;; Session ID input
       (dom/div {:style {:marginBottom  "1rem"
@@ -201,6 +206,38 @@
       (ui-chart-viewer selected-chart))))
 
 (def ui-chart-selector (comp/factory ChartSelector))
+
+(defsc-report StatechartReport [this props]
+  {ro/source-attribute ::sc/all-charts
+   ro/query-inclusions [:ui/selected-chart]
+   ro/columns [m.chart/id m.chart/label]
+   ro/run-on-mount? true
+   ro/control-layout {}
+   ro/controls {:current/session-id {:type                          :picker
+                                     :local?                        true
+                                     :label                         "Category"
+                                     :default-value                 ""
+                                     :action                        (fn [this]
+                                                                      ;(report/current-control-parameters)
+                                                                      )
+                                     po/cache-time-ms               30000
+                                     po/cache-key                   :all-category-options
+                                     po/query-key                   :category/all-categories
+                                     ;po/query-component             category/Category
+                                     po/options-xform               (fn [_ categories]
+                                                                      (into [{:text "All" :value ""}]
+                                                                        (map
+                                                                          (fn [{:category/keys [label]}]
+                                                                            {:text label :value label}))
+                                                                        categories))}} }
+  (dom/select {}
+    (mapv
+      (fn [{::sc/keys [id]
+            :chart/keys [label]}]
+        (dom/option {}
+          (str label)))
+      (report/current-rows this)))
+  )
 
 (defsc Root [this {:ui/keys [chart-selector]}]
   {:query         [{:ui/chart-selector (comp/get-query ChartSelector)}]

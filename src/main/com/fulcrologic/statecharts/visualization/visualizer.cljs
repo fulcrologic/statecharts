@@ -6,7 +6,6 @@
     [clojure.string]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.dom :as dom]
-    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.react.hooks :as hooks]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
@@ -79,7 +78,9 @@
   (let [resolved-chart (if (map? chart-or-id)
                          chart-or-id
                          (scf/lookup-statechart this chart-or-id))
-        chart-key      (hash (sort (map :id (filter #(#{:state :parallel} (:node-type %)) (vals (::sc/elements-by-id resolved-chart))))))]
+        chart-key      (hash (sort (map :id (filter #(#{:state :parallel} (:node-type %)) (vals (::sc/elements-by-id resolved-chart))))))
+        [states set-states!] (hooks/use-state [])
+        [transitions set-transitions!] (hooks/use-state [])]
     (hooks/use-effect
       (fn []
         (log/debug "use-chart-elements running with chart-key:" chart-key)
@@ -122,10 +123,11 @@
                               (vals elements-by-id)))]
           (log/debug "Extracted states:" (count states) "states with IDs:" (mapv :id states))
           (log/debug "Extracted transitions:" (count transitions) "with labels:" (mapv :label-text transitions))
-          (m/set-value!! this :ui/states states)
-          (m/set-value!! this :ui/transitions transitions))
+          (set-states! states)
+          (set-transitions! transitions))
         js/undefined)
-      [chart-key])))
+      [chart-key])
+    [states transitions]))
 
 (defn have-dom-nodes? [states] (every? (fn [s] (some? (.-current (:ref (meta s))))) states))
 
@@ -151,7 +153,7 @@
                   (set-sizes! id->sz))))
             0))
         js/undefined)
-      [(hash states)])
+      [(hash (mapv :id states))])
     node-id->size))
 
 (defn use-edge-label-sizes [transitions]
@@ -189,7 +191,7 @@
                     (set-sizes! id->sz)))))
             0))
         js/undefined)
-      [(hash transition-refs)])
+      [(hash (keys transition-refs))])
     {:label-id->size  label-id->size
      :transition-refs transition-refs}))
 
@@ -252,6 +254,7 @@
           (let [chart     (assoc resolved-chart :width 2000 :height 2000)
                 elk-input (chart->elk-tree chart node-id->size label-id->size)]
             (async/go
+              (log/info "Running layout")
               (let [layout          (async/<! (elk/layout! elk-input))
                     node-id->layout (to-layout-map layout)
                     layout          (update layout :edges update-edge-points node-id->layout)]
@@ -261,24 +264,15 @@
       [(hash node-id->size) (hash label-id->size) chart-key])
     layout))
 
-(defsc Visualizer [this {:ui/keys [layout states transitions node-id->position] :as props}
-                   {:keys [session-id chart-id chart current-configuration]}]
-  {:query         [:ui/chart-id
-                   :ui/chart
-                   :ui/layout
-                   :ui/states
-                   :ui/transitions
-                   :ui/node-id->position
-                   [::sc/session-id '_]]
-   :initial-state {:ui/chart-id          :param/chart-id
-                   :ui/node-id->position {}}
-   :ident         :ui/chart-id
+(defsc Visualizer [this _ {:keys [session-id chart current-configuration]}]
+  {:query         [[::sc/session-id '_]]
+   :initial-state {}
+   :ident         (fn [] [:component/id ::Visualizer])
    :use-hooks?    true}
-  (log/debug "Visualizer render - chart-id:" chart-id "chart from computed:" chart "chart :id:" (:id chart))
-  (use-chart-elements this (or chart chart-id))
-  (let [node-id->size (use-state-sizes states)
+  (let [[states transitions] (use-chart-elements this chart)
+        node-id->size (use-state-sizes states)
         {:keys [label-id->size transition-refs]} (use-edge-label-sizes transitions)
-        {:keys [layout node-id->layout]} (use-elk-layout this (or chart chart-id) node-id->size label-id->size)
+        {:keys [layout node-id->layout]} (use-elk-layout this chart node-id->size label-id->size)
         active?       (if session-id
                         (scf/current-configuration this session-id)
                         (or current-configuration #{}))]

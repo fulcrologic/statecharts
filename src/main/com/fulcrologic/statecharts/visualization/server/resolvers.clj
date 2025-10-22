@@ -3,9 +3,20 @@
   (:require
     [clojure.walk :as walk]
     [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.protocols :as scp]
     [com.wsscode.pathom.connect :as pc]
     [taoensso.timbre :as log]))
+
+(defmulti search-for-sessions
+  "Multimethod used by session resolver to find matching session IDs for interacting live with a
+   running statechart.
+
+   Must return a VECTOR of {::sc/session-id id :session/label str}."
+  (fn [env chart-registry-key search-string] chart-registry-key))
+(defmethod search-for-sessions :default [env k _]
+  (log/debug "No multimethod for finding sessions for chart " k)
+  [])
 
 (pc/defresolver registered-charts-resolver
   "Returns a list of all registered statecharts.
@@ -13,7 +24,7 @@
   Uses the StatechartRegistry from the Pathom environment to fetch available charts.
   Returns an empty list if no registry is configured."
   [env _]
-  {::pc/output [{::sc/all-charts [::sc/id :chart/name]}]}
+  {::pc/output [{::sc/all-charts [::sc/id :chart/label]}]}
   (let [registry (::sc/statechart-registry env)]
     (if registry
       (try
@@ -21,8 +32,8 @@
         (let [all-charts (scp/all-charts registry)
               chart-ids  (keys all-charts)
               charts     (for [chart-id chart-ids]
-                           {::sc/id     chart-id
-                            :chart/name (name chart-id)})]
+                           {::sc/id      chart-id
+                            :chart/label (str chart-id)})]
           {::sc/all-charts charts})
         (catch Exception e
           (log/error e "Error fetching registered charts")
@@ -49,7 +60,7 @@
   Functions in the chart definition are replaced with :fn placeholders for serialization."
   [env {chart-id ::sc/id}]
   {::pc/input  #{::sc/id}
-   ::pc/output [::sc/id :chart/name ::sc/elements-by-id ::sc/id-ordinals ::sc/ids-in-document-order
+   ::pc/output [::sc/id :chart/label ::sc/elements-by-id ::sc/id-ordinals ::sc/ids-in-document-order
                 :id :node-type :children :initial :initial?]}
   (let [registry (::sc/statechart-registry env)]
     (if registry
@@ -60,7 +71,7 @@
               ;; Remove functions before serializing to Transit
               remove-functions
               ;; Add convenience name field
-              (assoc :chart/name (str chart-id)))
+              (assoc :chart/label (str chart-id)))
             (do
               (log/warn "Chart not found:" chart-id)
               nil)))
@@ -97,8 +108,31 @@
         (log/warn "No working memory store found in environment")
         nil))))
 
+(pc/defresolver search-for-sessions-resolver
+  "Input query parameter {:search-string ... :chart registry-key}.
+
+   Uses the search-for-sessions multimethod to find running chart session IDs. "
+  [env _]
+  {::pc/output [{::sc/matching-sessions [::sc/session-id :session/label]}]}
+  (let [{:keys [search-string chart]} (:query-params env)
+        hits (search-for-sessions env chart search-string)]
+    {::sc/matching-sessions hits}))
+
+(pc/defmutation send-event [{::sc/keys [working-memory-store processor] :as env}
+                            {::sc/keys [session-id]
+                             :keys     [event]}]
+  {::pc/output [::sc/session-id]}
+  (if (and working-memory-store processor session-id event)
+    (let [old-state (sp/get-working-memory working-memory-store env session-id)
+         new-state (sp/process-event! processor env old-state event)]
+     (sp/save-working-memory! working-memory-store env session-id new-state))
+    (log/warn "No event sent. Env is incomplete or session-id/event are missing from params."))
+  {::sc/session-id session-id})
+
 (def resolvers
   "Vector of all resolvers for the visualization API."
   [registered-charts-resolver
    chart-definition-resolver
-   session-state-resolver])
+   search-for-sessions-resolver
+   session-state-resolver
+   send-event])

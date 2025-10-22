@@ -13,7 +13,11 @@
   (:require
     [clojure.java.io :as io]
     [cognitect.transit :as transit]
+    [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as loop]
+    [com.fulcrologic.statecharts.simple :as simple]
     [com.fulcrologic.statecharts.visualization.pathom :as pathom]
+    [demo-registry]
     [ring.adapter.jetty :as jetty]
     [ring.util.response :as response]
     [taoensso.timbre :as log])
@@ -153,17 +157,13 @@
     (log/info "Visualization server stopped")))
 
 (comment
-  ;; Example usage in REPL:
-  (def server (start-server! {:port 8080}))
-
-  ;; Later:
   (stop-server! server)
 
   ;; With env containing protocols:
-  (require 'demo-registry)
-  (require 'com.fulcrologic.statecharts.working-memory-store.local-memory-store)
-  (let [my-registry (demo-registry/create-example-registry)]
+  (let [my-registry (demo-registry/create-example-registry)
+        env         (simple/simple-env {::sc/statechart-registry my-registry})]
+    (def loop-atom (loop/run-event-loop! env))
     (def server
       (start-server!
         {:port 8081
-         :env  {:com.fulcrologic.statecharts/statechart-registry my-registry}}))))
+         :env  env}))))
