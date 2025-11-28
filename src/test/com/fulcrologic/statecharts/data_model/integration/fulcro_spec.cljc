@@ -25,9 +25,9 @@
 (defn test-app []
   (let [a (app/fulcro-app)]
     (app/set-root! a Root {:initialize-state? true})
-    (scf/install-fulcro-statecharts! a)
+    ;; Use :event-loop? false so we can process events manually for deterministic testing
+    (scf/install-fulcro-statecharts! a {:event-loop? false})
     a))
-
 
 (specification "General Operation"
   (let [app            (test-app)

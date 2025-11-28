@@ -46,32 +46,6 @@ This is a Clojure/ClojureScript (CLJC) implementation of SCXML-compliant state c
 - Supports distributed systems via serializable working memory
 - MIT licensed
 
-## Build & Test Commands
-
-### Running Tests
-
-**CLJ tests (with guardrails enabled):**
-```bash
-clojure -A:dev:test:clj-tests -J-Dguardrails.config=guardrails-test.edn -J-Dguardrails.enabled
-```
-
-**CLJS tests:**
-```bash
-yarn install
-npx shadow-cljs -A:dev compile ci-tests
-npx karma start --single-run
-```
-
-**Development mode (watch mode):**
-```bash
-clojure -A:dev:test:clj-tests -J-Dguardrails.config=guardrails-test.edn -J-Dguardrails.enabled --watch --fail-fast --no-capture-output
-```
-
-**Run single test namespace:**
-```bash
-clojure -A:dev:test:clj-tests -J-Dguardrails.enabled=true -m kaocha.runner --focus <test-namespace>
-```
-
 ### Building Documentation
 
 ```bash
