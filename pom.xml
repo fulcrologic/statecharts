@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.fulcrologic</groupId>
     <artifactId>statecharts</artifactId>
@@ -66,70 +67,27 @@
         <dependency>
             <groupId>org.clojure</groupId>
             <artifactId>clojure</artifactId>
-            <version>1.12.1</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.elk</groupId>
-            <artifactId>org.eclipse.elk.graph.json</artifactId>
-            <version>0.9.1</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.elk</groupId>
-            <artifactId>org.eclipse.elk.graph</artifactId>
-            <version>0.9.1</version>
-            <optional>true</optional>
+            <version>1.12.4</version>
         </dependency>
         <dependency>
             <groupId>com.fulcrologic</groupId>
             <artifactId>guardrails</artifactId>
-            <version>1.2.9</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.elk</groupId>
-            <artifactId>org.eclipse.elk.alg.layered</artifactId>
-            <version>0.9.1</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.elk</groupId>
-            <artifactId>org.eclipse.elk.alg.common</artifactId>
-            <version>0.9.1</version>
-            <optional>true</optional>
+            <version>1.2.16</version>
         </dependency>
         <dependency>
             <groupId>com.taoensso</groupId>
             <artifactId>timbre</artifactId>
-            <version>6.0.4</version>
+            <version>6.8.0</version>
         </dependency>
         <dependency>
             <groupId>metosin</groupId>
             <artifactId>malli</artifactId>
-            <version>0.13.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.elk</groupId>
-            <artifactId>org.eclipse.elk.core</artifactId>
-            <version>0.9.1</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>com.fulcrologic</groupId>
-            <artifactId>fulcro-inspect</artifactId>
-            <version>1.0.2</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>com.fulcrologic</groupId>
-            <artifactId>fulcro-devtools-remote</artifactId>
-            <version>0.2.5</version>
-            <optional>true</optional>
+            <version>0.20.0</version>
         </dependency>
         <dependency>
             <groupId>org.clojure</groupId>
             <artifactId>core.async</artifactId>
-            <version>1.6.681</version>
+            <version>1.8.741</version>
         </dependency>
     </dependencies>
 </project>

@@ -196,7 +196,7 @@
    The statechart is stored in the Fulcro state atom under [::id session-id], and is removed if the statechart reaches
    a final state.
 
-   Returns the new session-id of the statechart."
+Returns the new session-id of the statechart."
   [app-ish {:keys [machine session-id data]
             :or   {session-id (new-uuid)
                    data       {}}}]
@@ -227,6 +227,9 @@
            has working memory saved to the Fulcro app database. Allows you to do things like make statechart
            data durable across sessions.
   `:on-delete` - A `(fn [session-id])` that is called when a statechart reaches a final state and is removed.
+  `:event-loop?` - If true (the default), start the async core.async event loop to process statechart events
+        automatically. If false, you must process events manually by calling `process-events!`. Set to false
+        for deterministic testing or when you want external control over event processing.
 
    IMPORTANT: The execution model for Fulcro calls expressions with 4 args: env, data, event-name, and event-data. The
    last two are available in `:_event` of `data`, but are passed as addl args for convenience. If you use this
@@ -242,11 +245,12 @@
   ([app]
    [::fulcro-app => ::sc/env]
    (install-fulcro-statecharts! app {}))
-  ([app {:keys [extra-env on-save on-delete]}]
+  ([app {:keys [extra-env on-save on-delete event-loop?] :or {event-loop? true}}]
    [::fulcro-app [:map
                   [:extra-env {:optional true} map?]
                   [:on-save {:optional true} fn?]
-                  [:on-delete {:optional true} fn?]] => ::sc/env]
+                  [:on-delete {:optional true} fn?]
+                  [:event-loop? {:optional true} :boolean]] => ::sc/env]
    (let [runtime-atom (:com.fulcrologic.fulcro.application/runtime-atom app)]
      (when-not (contains? @runtime-atom ::sc/env)
        (let [dm                 (impl/new-fulcro-data-model app)
@@ -276,9 +280,11 @@
                                         ::sc/processor             (alg/new-processor)
                                         ::sc/invocation-processors [(i.statechart/new-invocation-processor)]
                                         ::sc/execution-model       ex}
-                                  extra-env)]
-         (swap! runtime-atom assoc ::sc/env (assoc env :events-running-atom
-                                                       (cael/run-event-loop! env 16)))))
+                                  extra-env)
+             env-with-loop      (if event-loop?
+                                  (assoc env :events-running-atom (cael/run-event-loop! env 16))
+                                  env)]
+         (swap! runtime-atom assoc ::sc/env env-with-loop)))
      (register-statechart! app impl/master-chart-id impl/application-chart)
      (start! app {:machine    impl/master-chart-id
                   :session-id impl/master-chart-id
@@ -301,6 +307,38 @@
      (sp/send! event-queue env {:event  event
                                 :data   data
                                 :target session-id}))))
+
+(defn process-events!
+  "Process all pending statechart events synchronously. This is useful when you have installed
+   statecharts with `:event-loop? false` and want to process events manually.
+
+   Call this after `send!` or any action that queues events to process them immediately.
+
+   Example usage in tests:
+   ```clojure
+   (let [app (app/fulcro-app)]
+     (app/set-root! app Root {:initialize-state? true})
+     (scf/install-fulcro-statecharts! app {:event-loop? false})
+     (scf/register-statechart! app ::my-chart my-chart)
+     (scf/start! app {:machine ::my-chart :session-id ::session})
+
+     ;; Send an event and process it synchronously
+     (scf/send! app ::session :some-event)
+     (scf/process-events! app)
+
+     ;; Check the resulting state
+     (scf/current-configuration app ::session))
+   ```"
+  [app-ish]
+  (let [env (statechart-env app-ish)]
+    (sp/receive-events! (::sc/event-queue env) env
+      (fn [{::sc/keys [working-memory-store processor] :as env} {:keys [target] :as event}]
+        (when target
+          (let [wmem     (sp/get-working-memory working-memory-store env target)
+                next-mem (when wmem (sp/process-event! processor env wmem event))]
+            (when next-mem
+              (sp/save-working-memory! working-memory-store env target next-mem)))))
+      {})))
 
 (defn mutation-result
   "Extracts the mutation result from an event that was triggered by the completion of a mutation.
