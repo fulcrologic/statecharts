@@ -189,8 +189,10 @@
    properly denormalize the new target's data.
 
    Since finding mounted router instances at runtime is complex, we take a simpler approach:
-   We traverse all router idents in the state-map and update the one containing this target."
-  [{:fulcro/keys [app]} target-class target-ident]
+   We traverse all router idents in the state-map and update the one containing this target.
+
+   `route-status` should be :routed for immediate routes or :pending for deferred routes."
+  [{:fulcro/keys [app]} target-class target-ident route-status]
   (let [state-atom (::app/state-atom app)
         state-map @state-atom
         target-key (rc/class->registry-key target-class)
@@ -208,10 +210,15 @@
     (log/debug "update-current-route!" {:target-key target-key
                                         :target-ident target-ident
                                         :router-entries (keys router-entries)
-                                        :router-key router-key})
+                                        :router-key router-key
+                                        :route-status route-status})
     (when router-key
-      ;; Update the ident pointer
-      (swap! state-atom assoc-in [::id router-key :ui/current-route] target-ident)
+      ;; Update the ident pointer and the router state (for current-state in defrouter)
+      (swap! state-atom (fn [sm]
+                          (-> sm
+                              (assoc-in [::id router-key :ui/current-route] target-ident)
+                              ;; Set the current-route-target state so routers can show loading UI
+                              (assoc-in [::current-route-target router-key] route-status))))
       ;; Update the router's query to use the target's query
       (let [new-query [::id
                        [::current-route-target router-key]
@@ -246,7 +253,7 @@
                             ;; Initialize the route target's state in the Fulcro database
                             (uir/initialize-route! env (assoc data ::uir/target target-key))
                             ;; Update router state - find all routers and update the one containing this target
-                            (update-current-route! env target-class ident)
+                            (update-current-route! env target-class ident :routed)
                             [(ops/assign [:route/idents target-key] ident)
                              (ops/assign [:route/status target-key] :ready)
                              (ops/assign [:route/actual-params target-key] params)])
@@ -255,8 +262,9 @@
                           fn
                           (do
                             (uir/initialize-route! env (assoc data ::uir/target target-key))
-                            ;; Note: Do NOT call update-current-route! here for deferred routes
-                            ;; Wait for target-ready! to update the router's current route
+                            ;; For deferred routes, set state to :pending so router can show loading UI
+                            ;; Don't set :ui/current-route yet - wait for target-ready!
+                            (update-current-route! env target-class ident :pending)
                             (fn) ; invoke the loading thunk
                             [(ops/assign [:route/idents target-key] ident)
                              (ops/assign [:route/status target-key] :pending)
@@ -311,8 +319,8 @@
                          (= event-target our-ident))))}
          (script {:expr (fn [env data _ _]
                           (let [ident (get-in data [:route/idents target-key])]
-                            ;; Now that target is ready, update the router's current route
-                            (update-current-route! env target-class ident)
+                            ;; Now that target is ready, update the router's current route to :routed
+                            (update-current-route! env target-class ident :routed)
                             [(ops/assign [:route/status target-key] :ready)]))}))
 
         ;; Nested router states
@@ -774,7 +782,8 @@
            :ident         ~ident-method
            :initial-state ~initial-state-lambda
            :router-targets ~(vec router-targets)}
-          (let [~'current-state (get ~'props ::current-route-target)
+          ;; current-state will be nil before routing starts, treat as :initial
+          (let [~'current-state (or (get ~'props ::current-route-target) :initial)
                 ~'route-props (get ~'props :ui/current-route)]
             ~(if (seq body)
                `(do ~@body)
