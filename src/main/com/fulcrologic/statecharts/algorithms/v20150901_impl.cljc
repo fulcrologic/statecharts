@@ -55,11 +55,12 @@
 (defn !?
   "Returns `value` if not nil, or runs `expr` and returns that as the value. Returns nil if both are nil."
   [{::sc/keys [execution-model] :as env} value expr]
-  (cond
-    (fn? value) (sp/run-expression! execution-model env value)
-    (not (nil? value)) value
-    (not (nil? expr)) (sp/run-expression! execution-model env expr)
-    :else nil))
+  (let [raw-env (assoc env ::sc/raw-result? true)]
+    (cond
+      (fn? value) (sp/run-expression! execution-model raw-env value)
+      (not (nil? value)) value
+      (not (nil? expr)) (sp/run-expression! execution-model raw-env expr)
+      :else nil)))
 
 (>defn- named-data
   "Convert a element namelist arg into a map of data from the data model."
@@ -101,7 +102,7 @@
       (do
         (log/debug "evaluating condition" cond)
         (log/spy :debug
-          (boolean (run-expression! env cond)))))))
+          (boolean (run-expression! (assoc env ::sc/raw-result? true) cond)))))))
 
 (>defn session-id
   "Returns the unique session id from an initialized `env`."
@@ -273,18 +274,19 @@
   (execute! env element))
 
 (defmethod execute-element-content! :log [env {:keys [label expr level]}]
-  (case level
-    :error (log/error (or label "LOG") (run-expression! env expr))
-    :warn (log/warn (or label "LOG") (run-expression! env expr))
-    :info (log/info (or label "LOG") (run-expression! env expr))
-    (log/debug (or label "LOG") (run-expression! env expr))))
+  (let [raw-env (assoc env ::sc/raw-result? true)]
+    (case level
+      :error (log/error (or label "LOG") (run-expression! raw-env expr))
+      :warn (log/warn (or label "LOG") (run-expression! raw-env expr))
+      :info (log/info (or label "LOG") (run-expression! raw-env expr))
+      (log/debug (or label "LOG") (run-expression! raw-env expr)))))
 
 (defmethod execute-element-content! :raise [env {:keys [event]}]
   (log/debug "Raise " event)
   (raise env event))
 
 (defmethod execute-element-content! :assign [env {:keys [location expr]}]
-  (let [v (run-expression! env expr)]
+  (let [v (run-expression! (assoc env ::sc/raw-result? true) expr)]
     (log/debug "Assign" location " = " v)
     (env/assign! env location v)))
 

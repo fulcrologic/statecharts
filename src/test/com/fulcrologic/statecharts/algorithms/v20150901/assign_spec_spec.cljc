@@ -1,5 +1,6 @@
 (ns com.fulcrologic.statecharts.algorithms.v20150901.assign-spec-spec
   (:require
+    [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements
      :refer [assign
@@ -73,3 +74,33 @@
 
     (assertions
       @final-target => :pass)))
+
+(specification "assign with vector value (GitHub issue #23)"
+  (let [chart (chart/statechart {}
+                (state {:id :start}
+                  (on-entry {}
+                    (assign {:location :items :expr (fn [_ _] [:a :b :c])}))
+                  (transition {:event :check :target :done}))
+                (final {:id :done}))
+        env   (testing/new-testing-env
+                {:statechart chart :mocking-options {:run-unmocked? true}} {})]
+    (testing/start! env)
+
+    (assertions
+      "The vector is stored as data, not run as ops"
+      (:items (testing/data env)) => [:a :b :c])))
+
+(specification "assign with empty vector value (GitHub issue #23)"
+  (let [chart (chart/statechart {}
+                (state {:id :start}
+                  (on-entry {}
+                    (assign {:location :result :expr (fn [_ _] [])}))
+                  (transition {:event :check :target :done}))
+                (final {:id :done}))
+        env   (testing/new-testing-env
+                {:statechart chart :mocking-options {:run-unmocked? true}} {})]
+    (testing/start! env)
+
+    (assertions
+      "An empty vector is stored as data, not treated as empty ops"
+      (:result (testing/data env)) => [])))

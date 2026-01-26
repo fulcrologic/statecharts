@@ -4,6 +4,7 @@
    of scripts/expressions can return updates for the data model. It also requires the event queue
    so it can send error events back to the machine if the expression has an error."
   (:require
+    [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.protocols :as sp]
     [taoensso.timbre :as log]))
 
@@ -17,16 +18,16 @@
                                                         event-data :data} (:_event data)]
                                                    (expr env data event-name event-data))
                                                  (expr env data)))
-            update? (vector? result)]
-        ;; FIXME: The update logic should NOT be in the execution model! Possibly hard to move without breakage...
-        ;; It makes nodes like `assign` and `log` possibly try to run ops, which it should not.
+            ;; Script nodes rely on vector-as-ops behavior; specific handlers opt-out via ::sc/raw-result?
+            update? (and (not (::sc/raw-result? env))
+                         (vector? result))]
         (when update?
           (log/trace "trying vector result as a data model update" result)
           (sp/update! data-model env {:ops result}))
         result)
-      (let [update? (vector? expr)]
-        ;; FIXME: The update logic should NOT be in the execution model! Possibly hard to move without breakage...
-        ;; It makes nodes like `assign` and `log` possibly try to run ops, which it should not.
+      (let [;; Script nodes rely on vector-as-ops behavior; specific handlers opt-out via ::sc/raw-result?
+            update? (and (not (::sc/raw-result? env))
+                         (vector? expr))]
         (when update?
           (log/trace "trying vector result as a data model update" expr)
           (sp/update! data-model env {:ops expr}))

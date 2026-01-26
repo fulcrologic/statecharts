@@ -52,7 +52,8 @@
           :else false))))
   sp/ExecutionModel
   (run-expression! [_model env expr]
-    (let [{:keys [run-unmocked?]} options]
+    (let [{:keys [run-unmocked?]} options
+          raw-result? (::sc/raw-result? env)]
       (swap! expressions-seen conj expr)
       (swap! call-counts update expr (fnil inc 0))
       (cond
@@ -60,7 +61,7 @@
                                       expr    (get @mocks expr)
                                       data    (sp/current-data data-model env)
                                       result  (log/spy :trace "expr => " (expr env data))
-                                      update? (vector? result)]
+                                      update? (and (not raw-result?) (vector? result))]
                                   (when update?
                                     (log/trace "trying vector result as a data model update" result)
                                     (sp/update! data-model env {:ops result}))
@@ -69,7 +70,7 @@
         (and run-unmocked? (fn? expr)) (let [env     (assoc env :ncalls (get @call-counts expr))
                                              data    (sp/current-data data-model env)
                                              result  (log/spy :trace "expr => " (expr env data))
-                                             update? (vector? result)]
+                                             update? (and (not raw-result?) (vector? result))]
                                          (when update?
                                            (log/trace "trying vector result as a data model update" result)
                                            (sp/update! data-model env {:ops result}))
