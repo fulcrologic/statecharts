@@ -59,6 +59,24 @@
          (seq children) (assoc :children (vec (remove nil? children))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; System Variables and Predicates (W3C SCXML Section 5.7, 5.9)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn In
+  "Returns a predicate function that checks if the statechart is currently in the given state.
+   This is the W3C SCXML standard In() predicate (Section 5.9) for use in condition expressions.
+
+   Usage:
+     (transition {:event :check :target :next :cond (In :some-state)})
+
+   The returned function takes [env data] and returns true if the current configuration
+   includes the specified state-id, false otherwise."
+  [state-id]
+  (fn [{::sc/keys [vwmem] :as _env} & _]
+    (boolean
+      (some-> vwmem deref ::sc/configuration (contains? state-id)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Core Constructs
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -53,7 +53,7 @@
 
     (assertions
       "Places start data in the local data of the statechart"
-      (get-in @state-atom (scf/local-data-path ::session))
+      (dissoc (get-in @state-atom (scf/local-data-path ::session)) :_sessionid :_name)
       => #:fulcro{:aliases {:a     [:fulcro/state :a]
                             :field [:actor/thing :thing/field]}
                   :actors  #:actor{:thing

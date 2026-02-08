@@ -114,9 +114,9 @@
 
     (assertions
       "Transitions that had no event get just the data model (no :_event)"
-      (first @events-seen) => {:y 1}
+      (dissoc (first @events-seen) :_sessionid :_name) => {:y 1}
       "Transitions that had an event, get the event with data"
-      (rest @events-seen) => [
+      (mapv #(dissoc % :_sessionid :_name) (rest @events-seen)) => [
                               {:y 1
                                :_event
                                {:type                                   :external,

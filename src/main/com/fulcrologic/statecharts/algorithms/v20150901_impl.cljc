@@ -823,6 +823,12 @@
           (doseq [n all-data-model-nodes]
             (in-state-context env n
               (initialize-data-model! env (chart/get-parent statechart n))))))
+      ;; Bind SCXML system variables (Section 5.7) into data model
+      (let [session-id (env/session-id env)
+            chart-name (:name statechart)
+            system-vars (cond-> {:_sessionid session-id}
+                          chart-name (assoc :_name chart-name))]
+        (sp/update! data-model env {:ops (ops/set-map-ops system-vars)}))
       (when (map? invocation-data)
         (sp/update! data-model env {:ops (ops/set-map-ops invocation-data)}))
       (enter-states! env)

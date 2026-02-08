@@ -160,18 +160,18 @@
     (try
       (assertions
         "Saves the data model in working memory"
-        (::wmdm/data-model @wmem) => {:ROOT {:allow? false}}
+        (:allow? (:ROOT (::wmdm/data-model @wmem))) => false
         "Sets the initial data model (early binding)"
         (config) => #{:A}
-        (data :ROOT) => {:allow? false})
+        (:allow? (data :ROOT)) => false)
 
       (assertions
         "Transition conditions prevent transitions"
         (next! :trigger) => #{:A}
-        (dissoc (data :ROOT) :_event) => {:allow? false})
+        (:allow? (data :ROOT)) => false)
 
       (assertions
         "Transition content evolves the data model"
         (next! :toggle) => #{:A}
-        (dissoc (data :ROOT) :_event) => {:allow? true}))))
+        (:allow? (data :ROOT)) => true))))
 

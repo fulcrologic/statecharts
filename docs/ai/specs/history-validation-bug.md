@@ -1,9 +1,10 @@
 # Spec: Fix History Element Validation Bug
 
-**Status**: backlog
+**Status**: done
 **Priority**: P0
 **Created**: 2026-02-08
-**Owner**: conductor
+**Completed**: 2026-02-08
+**Owner**: AI
 
 ## Context
 

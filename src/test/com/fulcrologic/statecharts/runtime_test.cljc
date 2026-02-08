@@ -39,7 +39,7 @@
     (testing/start! test-env)
     (assertions
       "can return the full data model value"
-      (rt/session-data env :session) => {:x {:y 1}}
+      (dissoc (rt/session-data env :session) :_sessionid :_name) => {:x {:y 1}}
       "can return the data at a path"
       (rt/session-data env :session [:x :y]) => 1)))
 
