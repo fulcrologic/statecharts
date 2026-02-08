@@ -64,70 +64,19 @@ Shadow-cljs nREPL runs on port 9000 (configured in shadow-cljs.edn).
 
 ## Architecture Overview
 
-### Core Processing Model
+The library uses **protocol-based extensibility** around 7 core components. Each major subsystem has its own CLAUDE.md with deep-dive details:
 
-The library implements the SCXML algorithm using an **imperative style with volatiles** internally (matching the W3C spec for easier comparison), but exposes a **functional interface** externally.
+1. **Processor** — SCXML algorithm (see `algorithms/CLAUDE.md`)
+2. **DataModel** — Data storage/retrieval (see `data_model/CLAUDE.md`)
+3. **ExecutionModel** — Expression interpretation (`execution_model/lambda.cljc`)
+4. **EventQueue** — Event delivery (see `event_queue/CLAUDE.md`)
+5. **WorkingMemoryStore** — Session persistence (`working_memory_store/`)
+6. **StatechartRegistry** — Chart definitions (`registry/`)
+7. **InvocationProcessors** — External service invocation (see `invocation/CLAUDE.md`)
 
-**Key architectural components (all protocol-based):**
+For **Fulcro integration**, see `integration/CLAUDE.md`
 
-1. **Processor** (`protocols.cljc`, impl in `algorithms/v20150901.cljc`)
-   - Implements the SCXML state transition algorithm
-   - Handles `start!`, `process-event!`, and `exit!` operations
-   - Version-namespaced (v20150901) to support future SCXML standards
-
-2. **DataModel** (`data_model/`)
-   - Stores and retrieves state chart data
-   - Default implementations: `FlatWorkingMemoryDataModel` (single scope), `WorkingMemoryDataModel` (scoped)
-   - Fulcro integration: uses Fulcro app state as the data model
-
-3. **ExecutionModel** (`execution_model/lambda.cljc`)
-   - Interprets executable content (expressions, conditions)
-   - Default: CLJC lambda execution (functions)
-   - Extensible: could use strings + SCI, JavaScript, etc.
-
-4. **EventQueue** (`event_queue/`)
-   - Manages external event delivery
-   - Implementations: `manually_polled_queue`, `core_async_event_loop`
-   - Supports delayed events, inter-session communication
-
-5. **WorkingMemoryStore** (`working_memory_store/local_memory_store.cljc`)
-   - Persists session state between events
-   - Default: in-memory, but designed for Redis/SQL/Datomic
-
-6. **StatechartRegistry** (`registry/`)
-   - Stores and retrieves chart definitions by name
-
-7. **InvocationProcessors** (`invocation/`)
-   - Handles `invoke` elements (nested charts, futures, custom services)
-
-### File Organization
-
-```
-src/main/com/fulcrologic/statecharts/
-├── chart.cljc                 # Chart definition & navigation API
-├── elements.cljc              # Element constructors (state, transition, etc)
-├── protocols.cljc             # Core protocol definitions
-├── simple.cljc                # Simplified API for common use cases
-├── runtime.cljc               # Runtime utilities (send!, current-configuration)
-├── testing.cljc               # Test helpers with mock execution model
-├── algorithms/
-│   └── v20150901*.cljc        # SCXML algorithm implementation
-├── data_model/
-│   ├── operations.cljc        # assign, delete operations
-│   └── working_memory_data_model.cljc
-├── event_queue/
-│   ├── manually_polled_queue.cljc
-│   ├── core_async_event_loop.cljc
-│   └── event_processing.cljc
-├── execution_model/
-│   └── lambda.cljc            # Default Clojure fn execution
-├── integration/
-│   └── fulcro*.cljc           # Fulcro framework integration
-├── invocation/
-│   ├── statechart.cljc        # Invoke nested charts
-│   └── future.clj             # CLJ-only: invoke futures
-└── convenience*.cljc          # Helper fns/macros for cleaner charts
-```
+Internally uses **imperative style with volatiles** (matching W3C pseudocode); externally exposes a **functional interface**.
 
 ### State Chart Structure
 
@@ -221,6 +170,24 @@ Any deviation from SCXML standard behavior (transitions, entry/exit order, etc.)
 3. **Session IDs are global**: Restarting with existing ID overwrites the session
 4. **History nodes have strict rules**: Shallow history requires exactly one target, see `chart.cljc:invalid-history-elements`
 5. **Executable content is data**: Functions, not code - allows for serialization strategies
+
+## Project Tracking
+
+Specs and project tracking live in `docs/ai/specs/`:
+- `TRACKER.md` — Single source of truth for project status
+- `WORKFLOW.md` — Agent-centric conductor pattern guide
+- Individual spec files — One per feature/bug/improvement
+
+## CLAUDE.md Hierarchy
+
+Subdirectory CLAUDE.md files provide targeted context:
+- `algorithms/CLAUDE.md` — W3C SCXML algorithm details
+- `data_model/CLAUDE.md` — Data flow and operations
+- `event_queue/CLAUDE.md` — Event delivery mechanisms
+- `integration/CLAUDE.md` — Fulcro integration patterns
+- `invocation/CLAUDE.md` — External service invocation
+
+Update subdirectory CLAUDEs when discovering gotchas. Keep them under 50 lines. Detail goes in the closest module CLAUDE.md; root stays cross-cutting.
 
 ## Dependencies of Note
 
