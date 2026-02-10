@@ -1,9 +1,10 @@
 # Spec: Add Convenience API Tests
 
-**Status**: backlog
+**Status**: done
 **Priority**: P2
 **Created**: 2026-02-08
-**Owner**: conductor
+**Completed**: 2026-02-09
+**Owner**: convenience-api-tester
 
 ## Context
 
@@ -28,10 +29,17 @@ The namespace is marked ALPHA but appears widely used.
 
 ## Verification
 
-1. [ ] `on` produces correct transition element
-2. [ ] `choice` dispatches to correct target based on predicates
-3. [ ] `choice` `:else` clause works as default
-4. [ ] `send-after` on-entry sends delayed event
-5. [ ] `send-after` on-exit cancels the delayed event
-6. [ ] `handle` creates transition with script handler
-7. [ ] `assign-on` creates transition with assignment
+1. [x] `on` produces correct transition element
+2. [x] `choice` dispatches to correct target based on predicates
+3. [x] `choice` `:else` clause works as default
+4. [x] `send-after` on-entry sends delayed event
+5. [x] `send-after` on-exit cancels the delayed event
+6. [x] `handle` creates transition with script handler
+7. [x] `assign-on` creates transition with assignment
+
+## Implementation Notes
+
+Test file created at `src/test/com/fulcrologic/statecharts/convenience_spec.cljc` with:
+- **15 specifications** with **83 assertions**
+- Both structural tests (verify element structure) and behavioral tests (verify runtime execution)
+- 100% pass rate

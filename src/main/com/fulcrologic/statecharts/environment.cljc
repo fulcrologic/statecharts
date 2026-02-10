@@ -76,6 +76,7 @@
    [::sc/processing-env ::sc/event-name map? => nil?]
    (raise env {:name event-name :data data}))
   ([{::sc/keys [vwmem] :as env} event]
-   [::sc/processing-env ::sc/event-or-name => nil?]
+   ;; Accept either a keyword event name OR a partial event map (evts/new-event fills in :type)
+   [::sc/processing-env [:or ::sc/event-name [:map [:name ::sc/event-name]]] => nil?]
    (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event))
    nil))

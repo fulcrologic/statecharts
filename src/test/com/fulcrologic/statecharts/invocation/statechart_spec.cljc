@@ -112,21 +112,21 @@
         ;; Check the queue for error event
         (let [sends @(:session-queues queue)
               parent-events (get sends :parent-456)
-              error-event (first (filter #(= :error.platform (:event %)) parent-events))]
+              error-event (first (filter #(= :error.platform (:name %)) parent-events))]
           (assertions
             "error event exists"
             (some? error-event) => true
             "error includes diagnostic data"
             (contains? (:data error-event) :message) => true)))
 
-      (behavior "returns true even on error (known issue)"
+      (behavior "returns false on error"
         (let [result (sp/start-invocation! processor parent-env
                        {:invokeid :test
                         :src      ::nonexistent
                         :params   {}})]
           (assertions
-            "returns true despite failure"
-            result => true)))))
+            "returns false on failure"
+            result => false)))))
 
   (component "stop-invocation! removes child session"
     (let [processor (sut/new-invocation-processor)
@@ -170,16 +170,16 @@
       (behavior "event delivered to child"
         (let [sends @(:session-queues queue)
               child-events (get sends :child-999)
-              forwarded (first (filter #(= :test-event (:event %)) child-events))]
+              forwarded (first (filter #(= :test-event (:name %)) child-events))]
           (assertions
             "event exists"
             (some? forwarded) => true
             "event has correct name"
-            (:event forwarded) => :test-event
+            (:name forwarded) => :test-event
             "event includes data"
             (:data forwarded) => {:x 1}
             "event knows source"
-            (:source-session-id forwarded) => :parent-999)))
+            (::sc/source-session-id forwarded) => :parent-999)))
 
       (behavior "forward-event! returns true"
         (assertions
@@ -196,10 +196,9 @@
     (let [env (simple/simple-env)
           parent-chart (chart/statechart {}
                          (state {:id :parent/active}
-                           (invoke {:id      :inv1
-                                    :type    :statechart
-                                    :src     ::simple-child
-                                    :invokeid :my-child})
+                           (invoke {:id   :my-child
+                                    :type :statechart
+                                    :src  ::simple-child})
                            (transition {:event  :done.invoke.my-child
                                         :target :parent/complete}))
                          (final {:id :parent/complete}))]

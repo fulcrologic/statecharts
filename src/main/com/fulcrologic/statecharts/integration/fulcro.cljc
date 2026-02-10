@@ -114,8 +114,8 @@
       actor-names)))
 
 (>defn resolve-actor
-  "Returns the UI props of a single actor. Use env. `data` is allowed to prevent a non-breaking change, but doesn't work
-   when a non-even predicate is evaluated."
+  "Returns the UI props of a single actor. Use `env` as the first argument. `data` is allowed to prevent a non-breaking change, but doesn't work
+   when a non-event predicate is evaluated."
   [data-or-env actor-name]
   [[:or
     ::env
@@ -222,14 +222,19 @@ Returns the new session-id of the statechart."
 
   Options can include:
 
-  `:extra-env` - A map of things to include in the `env` parameter that all executable content receives.
-  `:on-save` - A `(fn [session-id EDN])` that is called every time the statechart reaches a stable state and
+  * `:extra-env` - A map of additional keys to include in the `env` parameter that all executable content receives.
+  * `:on-save` - A `(fn [session-id EDN])` that is called every time the statechart reaches a stable state and
            has working memory saved to the Fulcro app database. Allows you to do things like make statechart
            data durable across sessions.
-  `:on-delete` - A `(fn [session-id])` that is called when a statechart reaches a final state and is removed.
-  `:event-loop?` - If true (the default), start the async core.async event loop to process statechart events
+  * `:on-delete` - A `(fn [session-id])` that is called when a statechart reaches a final state and is removed.
+  * `:event-loop?` - If true (the default), start the async core.async event loop to process statechart events
         automatically. If false, you must process events manually by calling `process-events!`. Set to false
         for deterministic testing or when you want external control over event processing.
+  * `:async?` - If true, use the async-capable processor and execution model (promesa-based). This enables
+        expressions to return promises that the algorithm awaits, allowing `afop/await-load` and
+        `afop/await-mutation` to work. Requires promesa on the classpath. Defaults to false. When enabled,
+        the chart will atomically transition through states awaiting promise resolution, rather than
+        resting in intermediate states.
 
    IMPORTANT: The execution model for Fulcro calls expressions with 4 args: env, data, event-name, and event-data. The
    last two are available in `:_event` of `data`, but are passed as addl args for convenience. If you use this
@@ -245,12 +250,13 @@ Returns the new session-id of the statechart."
   ([app]
    [::fulcro-app => ::sc/env]
    (install-fulcro-statecharts! app {}))
-  ([app {:keys [extra-env on-save on-delete event-loop?] :or {event-loop? true}}]
+  ([app {:keys [extra-env on-save on-delete event-loop? async?] :or {event-loop? true async? false}}]
    [::fulcro-app [:map
                   [:extra-env {:optional true} map?]
                   [:on-save {:optional true} fn?]
                   [:on-delete {:optional true} fn?]
-                  [:event-loop? {:optional true} :boolean]] => ::sc/env]
+                  [:event-loop? {:optional true} :boolean]
+                  [:async? {:optional true} :boolean]] => ::sc/env]
    (let [runtime-atom (:com.fulcrologic.fulcro.application/runtime-atom app)]
      (when-not (contains? @runtime-atom ::sc/env)
        (let [dm                 (impl/new-fulcro-data-model app)
@@ -269,7 +275,14 @@ Returns the new session-id of the statechart."
                                                                 (impl/statechart-event! app session-id (:name event) (:data event) configuration)
                                                                 (impl/statechart-event! app session-id event {} configuration))))]
                                       (sp/receive-events! real-queue env wrapped-handler options))))
-             ex                 (lambda/new-execution-model dm instrumented-queue {:explode-event? true})
+             new-async-ex       #?(:clj (when async?
+                                          (require 'com.fulcrologic.statecharts.execution-model.lambda-async)
+                                          (requiring-resolve 'com.fulcrologic.statecharts.execution-model.lambda-async/new-execution-model))
+                                    :cljs (when async?
+                                            com.fulcrologic.statecharts.execution-model.lambda-async/new-execution-model))
+             ex                 (if async?
+                                  (new-async-ex dm instrumented-queue {:explode-event? true})
+                                  (lambda/new-execution-model dm instrumented-queue {:explode-event? true}))
              registry           (lmr/new-registry)
              wmstore            (impl/->FulcroWorkingMemoryStore app on-save on-delete)
              env                (merge {:fulcro/app                app
@@ -277,7 +290,13 @@ Returns the new session-id of the statechart."
                                         ::sc/data-model            dm
                                         ::sc/event-queue           instrumented-queue
                                         ::sc/working-memory-store  wmstore
-                                        ::sc/processor             (alg/new-processor)
+                                        ::sc/processor             (if async?
+                                                                     (let [new-proc #?(:clj (do
+                                                                                              (require 'com.fulcrologic.statecharts.algorithms.v20150901-async)
+                                                                                              (requiring-resolve 'com.fulcrologic.statecharts.algorithms.v20150901-async/new-processor))
+                                                                                        :cljs com.fulcrologic.statecharts.algorithms.v20150901-async/new-processor)]
+                                                                       (new-proc))
+                                                                     (alg/new-processor))
                                         ::sc/invocation-processors [(i.statechart/new-invocation-processor)]
                                         ::sc/execution-model       ex}
                                   extra-env)

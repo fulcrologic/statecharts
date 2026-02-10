@@ -397,18 +397,29 @@
 
 (defn invalid-history-elements
   "Returns a sequence of history elements from `chart` that have errors. Each node will contain a `:msgs` key
-   with the problem descriptions. This is a static check."
+   with the problem descriptions. This is a static check.
+
+   Validates per W3C SCXML Section 3.10:
+   - History must have exactly one transition child
+   - History transition must not have event or cond attributes
+   - History must be child of a compound state
+   - Shallow history requires exactly one target
+   - Deep history target should be a proper descendant of the parent state"
   [chart]
   (let [history-nodes (filter #(history-element? chart %) (vals (::sc/elements-by-id chart)))
         e             (fn [n msg] (update n :msgs conj msg))]
-    (for [{:keys [parent deep?] :as hn} history-nodes       ; Section 3.10.2 of spec
+    (for [{:keys [parent deep? type] :as hn} history-nodes  ; Section 3.10 of spec
           :let [transitions        (transitions chart hn)
                 transition-element (element chart (first transitions))
                 {:keys [target event cond]} transition-element
-                immediate-children (set (child-states chart parent))
+                parent-descendants (all-descendants chart parent)
+                is-compound?       (compound-state? chart parent)
+                targets-are-proper-descendants? (every? #(contains? parent-descendants %) target)
                 possible-problem   (cond-> (assoc hn :msgs [])
                                      (not= 1 (count transitions)) (e "A history node MUST have exactly one transition")
                                      (or (some? event) (some? cond)) (e "A history transition MUST NOT have cond/event.")
-                                     (and (not deep?) (not= 1 (count target))) (e "Exactly ONE transition target is required for shallow history."))]
+                                     (not is-compound?) (e "A history node MUST be a child of a compound state.")
+                                     (and (not deep?) (not= 1 (count target))) (e "Exactly ONE transition target is required for shallow history.")
+                                     (and deep? (seq target) (not targets-are-proper-descendants?)) (e "Deep history transition target should be a proper descendant of the parent state."))]
           :when (pos-int? (count (:msgs possible-problem)))]
       possible-problem)))

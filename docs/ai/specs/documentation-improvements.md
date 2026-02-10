@@ -1,9 +1,10 @@
 # Spec: Documentation Improvements
 
-**Status**: backlog
+**Status**: done
 **Priority**: P2
 **Created**: 2026-02-08
-**Owner**: conductor
+**Completed**: 2026-02-09
+**Owner**: doc-fixer
 
 ## Context
 
@@ -24,5 +25,5 @@ Documentation audit identified several areas for improvement. The main documenta
 
 ## Verification
 
-. [ ] AI docs bug fixed
-. [ ] Guide.adoc typo fixed
+. [x] AI docs bug fixed - `doc` -> `source` in clojure-library-source-and-documentation.md:44
+. [x] Guide.adoc typo fixed - "you simple want" -> "you simply want" at line 94

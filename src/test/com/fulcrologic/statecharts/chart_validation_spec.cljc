@@ -7,7 +7,7 @@
     [com.fulcrologic.guardrails.config :as grc]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [history state transition]]
-    [fulcro-spec.core :refer [=> assertions behavior component specification]]))
+    [fulcro-spec.core :refer [=> =throws=> assertions behavior component specification]]))
 
 (grc/clear-exclusions!)
 
@@ -47,6 +47,23 @@
           "no error messages"
           (seq invalid) => nil))))
 
+  (component "valid deep history with nested descendants"
+    (behavior "deep history target can be any proper descendant of parent"
+      (let [test-chart (chart/statechart
+                         {:initial :a}
+                         (state {:id :a} (transition {:target :h :event :go}))
+                         (state {:id :b :initial :b1}
+                           (history {:id :h :type :deep}
+                             (transition {:target :b1b}))
+                           (state {:id :b1 :initial :b1a}
+                             (state {:id :b1a})
+                             (state {:id :b1b}))
+                           (state {:id :b2})))
+            invalid    (chart/invalid-history-elements test-chart)]
+        (assertions
+          "returns empty collection"
+          (count invalid) => 0))))
+
   (component "multiple shallow history in same parent"
     (behavior "each valid shallow history produces no errors"
       (let [test-chart (chart/statechart
@@ -68,3 +85,30 @@
         (assertions
           "returns empty collection for all histories"
           (count invalid) => 0)))))
+
+(specification "statechart validation on construction"
+  (component "history validation failures throw on construction"
+    (behavior "shallow history with multiple targets throws"
+      (assertions
+        "throws ex-info with descriptive message"
+        (chart/statechart
+          {:initial :a}
+          (state {:id :a})
+          (state {:id :b :initial :b1}
+            (history {:id :h :type :shallow}
+              (transition {:target [:b1 :b2]}))
+            (state {:id :b1})
+            (state {:id :b2})))
+        =throws=> #"Exactly ONE transition target"))
+
+    (behavior "deep history with target outside parent descendants throws"
+      (assertions
+        "throws ex-info when target is not a descendant"
+        (chart/statechart
+          {:initial :a}
+          (state {:id :a})
+          (state {:id :b :initial :b1}
+            (history {:id :h :type :deep}
+              (transition {:target :a}))
+            (state {:id :b1})))
+        =throws=> #"proper descendant"))))

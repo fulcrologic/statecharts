@@ -33,7 +33,11 @@
    :history    #{:transition}
    :script     #{}
    :parallel   #{:on-entry :on-exit :transition :state :parallel :history :data-model :invoke}
-   :transition executable-content-types})
+   :transition executable-content-types
+   :if         executable-content-types
+   :else-if    executable-content-types
+   :else       executable-content-types
+   :for-each   executable-content-types})
 
 (defn new-element
   "Create a new element with the given `type` and `attrs`. Will auto-assign an ID if it is not supplied. Use
@@ -232,6 +236,47 @@
   https://www.w3.org/TR/scxml/#log"
   [{:keys [id label expr] :as attrs}]
   (new-element :log attrs nil))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Flow Control (SCXML Section 3.12)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn sc-if
+  "Conditional execution. Evaluates `:cond` predicate and executes children if truthy.
+   May contain sc-else-if and sc-else elements as children for multi-way branching.
+
+   Per SCXML spec: children before the first sc-else-if/sc-else are the 'then' branch.
+
+   https://www.w3.org/TR/scxml/#if"
+  [{:keys [id cond] :as attrs} & children]
+  (new-element :if attrs children))
+
+(defn sc-else-if
+  "Conditional branch within sc-if. Must be a child of sc-if.
+   Evaluates `:cond` and executes children if truthy.
+
+   https://www.w3.org/TR/scxml/#if"
+  [{:keys [id cond] :as attrs} & children]
+  (new-element :else-if attrs children))
+
+(defn sc-else
+  "Default branch within sc-if. Must be a child of sc-if.
+   Executes children if no prior conditions matched.
+
+   https://www.w3.org/TR/scxml/#if"
+  [{:keys [id] :as attrs} & children]
+  (new-element :else attrs children))
+
+(defn sc-foreach
+  "Iterate over a collection, executing children for each item.
+
+   `:array` - Expression returning the collection to iterate over
+   `:item` - Location (keyword or vector) to bind current item
+   `:index` - Location (keyword or vector) to bind current index (optional)
+
+   https://www.w3.org/TR/scxml/#foreach"
+  [{:keys [id array item index] :as attrs} & children]
+  (new-element :for-each attrs children))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Data Model

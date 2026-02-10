@@ -34,19 +34,22 @@
                                      :source-session-id child-session-id
                                      :event             :error.platform
                                      :data              {:message "Could not invoke child chart. Not registered."
-                                                         :target  src}}))
-        (let [wmem (sp/start! processor env src {::sc/invocation-data         params
-                                                 ::sc/session-id              child-session-id
-                                                 ::sc/parent-session-id       source-session-id
-                                                 :org.w3.scxml.event/invokeid invokeid})]
-          (sp/save-working-memory! working-memory-store env child-session-id wmem)))
-      true))
+                                                         :target  src}})
+          false)
+        (do
+          (let [wmem (sp/start! processor env src {::sc/invocation-data         params
+                                                   ::sc/session-id              child-session-id
+                                                   ::sc/parent-session-id       source-session-id
+                                                   :org.w3.scxml.event/invokeid invokeid})]
+            (sp/save-working-memory! working-memory-store env child-session-id wmem))
+          true))))
   (stop-invocation! [this {::sc/keys [event-queue processor working-memory-store] :as env} {:keys [invokeid] :as data}]
     (log/debug "Stop invocation" invokeid)
     (let [child-session-id invokeid
           wmem             (sp/get-working-memory working-memory-store env child-session-id)]
-      (sp/exit! processor env wmem true)
-      (sp/delete-working-memory! working-memory-store env child-session-id)
+      (when wmem
+        (sp/exit! processor env wmem true)
+        (sp/delete-working-memory! working-memory-store env child-session-id))
       true))
   (forward-event! [this {::sc/keys [event-queue] :as env} {:keys [type invokeid event]}]
     (log/debug "Forward event " invokeid event)

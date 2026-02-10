@@ -91,7 +91,7 @@ a data/execution model, a working memory storage facility, a state chart registr
 That's a lot of different things to set up!
 
 The `com.fulcrologic.statecharts.simple` namespace can set up all of these things for you, as long
-as you simple want to run state charts all in the same JVM in RAM. That namespace also includes helper
+as you simply want to run state charts all in the same JVM in RAM. That namespace also includes helper
 functions for starting a new session on a chart, and sending events to arbitrary sessions.
 
 NOTE: The design of this library is meant to accomplish much more complex distributed and long-lived systems, but you
@@ -115,6 +115,64 @@ include::src/examples/traffic_light_async.cljc[]
 ------
 
 NOTE: The `send` element has a `Send` (capital S) alias so you can avoid shadowing the predefined Clojure function.
+
+= Async Execution Engine
+
+The library includes an async-capable execution engine built on https://github.com/funcool/promesa[promesa] that allows
+expressions to return promises the algorithm awaits. When all expressions are synchronous, the overhead is minimal.
+When an expression returns a promise, the algorithm parks until it resolves before continuing.
+
+Both `start!` and `process-event!` may return promises instead of plain values. Callers must handle both cases.
+The easiest approach is to use `promesa.core/let` or `promesa.core/then` which handle both synchronous values and
+promises transparently.
+
+== Setting Up the Async Engine
+
+Use the `com.fulcrologic.statecharts.simple-async` namespace for automatic configuration:
+
+[source]
+-----
+(require '[com.fulcrologic.statecharts.simple-async :as simple-async])
+
+(let [env (simple-async/simple-env)]
+  (simple-async/register! env :my-chart my-chart)
+  (simple-async/start! env :my-chart session-id))
+-----
+
+Or compose manually:
+
+[source]
+-----
+(require '[com.fulcrologic.statecharts.algorithms.v20150901-async :as alg]
+         '[com.fulcrologic.statecharts.execution-model.lambda-async :as lambda-async])
+
+{::sc/processor (alg/new-processor)
+ ::sc/execution-model (lambda-async/new-execution-model dm event-queue)}
+-----
+
+The async engine requires promesa on the classpath. Add it to your `deps.edn`:
+
+[source]
+-----
+{:deps {funcool/promesa {:mvn/version "11.0.678"}}}
+-----
+
+Or use the `:async` alias if available in the project.
+
+== Using Async Expressions
+
+Any expression (predicates, script nodes, etc.) can return a promise:
+
+[source]
+-----
+(state {:id :loading}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     (p/let [result (http/get "/api/data")]
+                       [(ops/assign :result result)]))})))
+-----
+
+The algorithm will automatically detect promises and await them. Synchronous expressions continue to work without change.
 
 = Going Deeper
 
@@ -568,6 +626,7 @@ Namespace aliases used in this document:
 [com.fulcrologic.statecharts.data-model.operations :as ops]
 [com.fulcrologic.statecharts.integration.fulcro :as scf]
 [com.fulcrologic.statecharts.integration.fulcro.operations :as fop]
+[com.fulcrologic.statecharts.integration.fulcro.async-operations :as afop]
 [com.fulcrologic.statecharts.protocols :as sp]
 -----
 
@@ -701,6 +760,126 @@ need to syntax-quote the transaction; however, remember that the Fulcro mutation
 ...
    (script {:expr [(fop/invoke-remote [(login {...})] {:ok-event :event/success :error-event :event/failed)]}))
 -----
+
+=== Async Operations
+
+The operations `fop/load` and `fop/invoke-remote` described above use `send!` to place completion events on the
+external event queue. This means the statechart rests in an intermediate state between starting the operation and
+receiving the completion event. With async operations, the chart transitions atomically within a single
+`process-event!` call.
+
+The `com.fulcrologic.statecharts.integration.fulcro.async-operations` namespace (aliased as `afop`) provides
+async-aware versions of these operations that return promesa promises and use `raise` (internal queue) instead of
+`send!` (external queue).
+
+To enable async operations, pass `:async? true` when installing statecharts:
+
+[source]
+-----
+(scf/install-fulcro-statecharts! app {:async? true})
+-----
+
+This swaps in the async processor and execution model from the <<Async Execution Engine>> section.
+
+==== await-load
+
+`(afop/await-load env query-root component-or-actor options)` issues a remote load and returns a promise that
+resolves when the load completes.
+
+Parameters:
+
+* `env` - The statechart environment (first arg to expressions)
+* `query-root` - A keyword or ident for the root of the remote query
+* `component-or-actor` - A Fulcro component, or a keyword naming a known actor
+* `options` - Same as `fop/load` options:
+** `::sc/ok-event` - Event to raise when the load succeeds
+** `::sc/error-event` - Event to raise when the load fails
+** `::sc/ok-data` - Extra data to include in the ok event
+** `::sc/error-data` - Extra data to include in the error event
+** `::sc/target-alias` - Target the load at a statechart alias
+
+Example:
+
+[source]
+-----
+(state {:id :loading-user}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     (afop/await-load env :user User
+                       {::sc/ok-event    :event/user-loaded
+                        ::sc/error-event :event/load-failed}))}))
+  (transition {:event :event/user-loaded :target :viewing-user})
+  (transition {:event :event/load-failed :target :error}))
+-----
+
+==== await-mutation
+
+`(afop/await-mutation env txn options)` invokes a remote mutation and returns a promise that resolves when the
+mutation completes.
+
+Parameters:
+
+* `env` - The statechart environment (first arg to expressions)
+* `txn` - A Fulcro transaction vector containing a single mutation
+* `options` - Same as `fop/invoke-remote` options:
+** `:ok-event` - Event to raise on success
+** `:error-event` - Event to raise on failure
+** `:ok-data` - Extra data for the ok event
+** `:error-data` - Extra data for the error event
+** `:target` - Data-targeting path (vector, alias keyword, or actor-prefixed)
+** `:returning` - Component class or actor keyword for normalization
+** `:mutation-remote` - Remote name (defaults to `:remote`)
+** `:tx-options` - Options passed to `rc/transact!`
+
+Example:
+
+[source]
+-----
+(state {:id :saving}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     (let [form-data (resolve-actor data :actor/form)]
+                       (afop/await-mutation env [(save-user form-data)]
+                         {:ok-event    :event/saved
+                          :error-event :event/save-failed
+                          :returning   User})))}))
+  (transition {:event :event/saved :target :success})
+  (transition {:event :event/save-failed :target :error}))
+-----
+
+==== Comparison: Send-based vs Raise-based
+
+With standard operations, intermediate states are visible:
+
+[source]
+-----
+;; Using fop/load - chart rests in :loading
+(state {:id :loading}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     [(fop/load :user User {::sc/ok-event :event/loaded})])}))
+  ;; Chart is in :loading state until external event arrives
+  (transition {:event :event/loaded :target :viewing}))
+-----
+
+With async operations, the transition is atomic:
+
+[source]
+-----
+;; Using afop/await-load - atomic transition
+(state {:id :loading}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     (afop/await-load env :user User {::sc/ok-event :event/loaded}))}))
+  ;; Event is raised internally, processed in same microstep
+  (transition {:event :event/loaded :target :viewing}))
+-----
+
+The async version never observably rests in `:loading` — it transitions directly to `:viewing` when the promise
+resolves.
+
+NOTE: The existing `fop/load` and `fop/invoke-remote` operations remain unchanged and continue to work with both
+sync and async execution engines. Use `afop/await-load` and `afop/await-mutation` only when you need atomic transitions.
 
 == Useful Helpers
 

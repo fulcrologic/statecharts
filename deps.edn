@@ -5,7 +5,9 @@
            org.clojure/core.async     {:mvn/version "1.8.741"}
            com.taoensso/timbre        {:mvn/version "6.8.0"}}
 
- :aliases {:test             {:extra-paths ["src/test"]
+ :aliases {:async            {:extra-deps {funcool/promesa {:mvn/version "11.0.678"}}}
+
+           :test             {:extra-paths ["src/test"]
                               :extra-deps  {lambdaisland/kaocha     {:mvn/version "1.91.1392"}
                                             org.clojure/test.check  {:mvn/version "1.1.2"}
                                             fulcrologic/fulcro-spec {:mvn/version "3.2.1"}}}
@@ -22,7 +24,7 @@
                               :main-opts   ["-m" "kaocha.runner"]
                               :extra-deps  {lambdaisland/kaocha {:mvn/version "1.91.1392"}}}
 
-           :dev              {:extra-paths ["src/dev" "src/examples"]
+           :dev              {:extra-paths ["src/dev" "src/examples" "src/routing-demo"]
                               :extra-deps  {thheller/shadow-cljs                   {:mvn/version "3.3.4"}
                                             com.fulcrologic/fulcro-devtools-remote {:mvn/version "0.2.8"}
                                             com.fulcrologic/fulcro-inspect         {:mvn/version "1.0.5"}

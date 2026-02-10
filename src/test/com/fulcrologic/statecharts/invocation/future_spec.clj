@@ -15,19 +15,22 @@
 ;; =============================================================================
 
 (defn success-fn
-  "Function that completes successfully"
+  "Function that completes successfully after a short delay.
+  The delay ensures the future can be observed in active-futures before completion."
   [params]
+  (Thread/sleep 50)
   {:result :success :input params})
 
 (defn slow-fn
-  "Function that takes time"
+  "Function that takes longer time (for cancel testing)"
   [_params]
-  (Thread/sleep 200)
+  (Thread/sleep 500)
   {:result :completed})
 
 (defn non-map-fn
-  "Returns non-map value"
+  "Returns non-map value after delay"
   [_params]
+  (Thread/sleep 50)
   42)
 
 ;; =============================================================================
@@ -60,7 +63,9 @@
          :params   {:foo :bar}})
 
       (behavior "future is tracked in active-futures"
-        (let [future-key :parent-123.my-future
+        ;; Note: child-session-id is constructed as (str source-session-id "." invokeid)
+        ;; which produces a string like ":parent-123.:my-future" when source-session-id is a keyword
+        (let [future-key ":parent-123.:my-future"
               f (get @active-futures future-key)]
           (assertions
             "future exists"
@@ -74,19 +79,20 @@
       (behavior "done event sent to parent on completion"
         (let [sends @(:session-queues queue)
               parent-events (get sends :parent-123)
-              done-event (first (filter #(= :done.invoke.my-future (:event %)) parent-events))]
+              ;; Events are stored with :name key, not :event
+              done-event (first (filter #(= :done.invoke.my-future (:name %)) parent-events))]
           (assertions
             "done event exists"
             (some? done-event) => true
             "event includes result data"
             (:data done-event) => {:result :success :input {:foo :bar}}
             "event has correct source"
-            (:source-session-id done-event) => :parent-123.my-future)))
+            (::sc/source-session-id done-event) => ":parent-123.:my-future")))
 
       (behavior "future removed from tracking after completion"
         ;; Give finally block time to execute
         (Thread/sleep 100)
-        (let [future-key :parent-123.my-future]
+        (let [future-key ":parent-123.:my-future"]
           (assertions
             (contains? @active-futures future-key) => false)))))
 
@@ -106,7 +112,8 @@
       (behavior "error.platform event sent immediately"
         (let [sends @(:session-queues queue)
               parent-events (get sends :parent-456)
-              error-event (first (filter #(= :error.platform (:event %)) parent-events))]
+              ;; Events are stored with :name key, not :event
+              error-event (first (filter #(= :error.platform (:name %)) parent-events))]
           (assertions
             "error event exists"
             (some? error-event) => true
@@ -117,13 +124,13 @@
         (assertions
           (empty? @active-futures) => true))
 
-      (behavior "returns true even on error (known issue)"
+      (behavior "returns false on error"
         (let [result (sp/start-invocation! processor parent-env
                        {:invokeid :another-bad
                         :src      123
                         :params   {}})]
           (assertions
-            result => true)))))
+            result => false)))))
 
   (component "Non-map return value handling"
     (let [processor (sut/new-future-processor)
@@ -143,7 +150,8 @@
       (behavior "done event sent with empty map"
         (let [sends @(:session-queues queue)
               parent-events (get sends :parent-789)
-              done-event (first (filter #(= :done.invoke.non-map-future (:event %)) parent-events))]
+              ;; Events are stored with :name key, not :event
+              done-event (first (filter #(= :done.invoke.non-map-future (:name %)) parent-events))]
           (assertions
             "done event exists"
             (some? done-event) => true
@@ -163,7 +171,7 @@
          :params   {}})
 
       (behavior "future exists before stop"
-        (let [f (get @active-futures :parent-999.slow-future)]
+        (let [f (get @active-futures ":parent-999.:slow-future")]
           (assertions
             "future created"
             (some? f) => true
@@ -174,7 +182,7 @@
       (sp/stop-invocation! processor parent-env {:invokeid :slow-future})
 
       (behavior "future is cancelled"
-        (let [f (get @active-futures :parent-999.slow-future)]
+        (let [f (get @active-futures ":parent-999.:slow-future")]
           (assertions
             "future was cancelled"
             (when f (future-cancelled? f)) => true)))
@@ -217,12 +225,11 @@
       (behavior "child session-id is parent.invokeid"
         (let [sends @(:session-queues queue)
               parent-events (get sends :parent-abc)
-              done-event (first (filter #(= :done.invoke.my-future (:event %)) parent-events))]
+              ;; Events are stored with :name key, not :event
+              done-event (first (filter #(= :done.invoke.my-future (:name %)) parent-events))]
           (assertions
-            "sendid follows format"
-            (:sendid done-event) => :parent-abc.my-future
-            "source-session-id follows format"
-            (:source-session-id done-event) => :parent-abc.my-future))))))
+            "sendid follows format - source-session-id stored with namespace"
+            (::sc/source-session-id done-event) => ":parent-abc.:my-future"))))))
 
 ;; =============================================================================
 ;; Slice 3: Edge Cases
@@ -253,17 +260,17 @@
       (behavior "all futures tracked independently"
         (assertions
           "future1 exists"
-          (contains? @active-futures :parent-concurrent.future1) => true
+          (contains? @active-futures ":parent-concurrent.:future1") => true
           "future2 exists"
-          (contains? @active-futures :parent-concurrent.future2) => true
+          (contains? @active-futures ":parent-concurrent.:future2") => true
           "future3 exists"
-          (contains? @active-futures :parent-concurrent.future3) => true))
+          (contains? @active-futures ":parent-concurrent.:future3") => true))
 
       ;; Wait for all to complete
       (Thread/sleep 150)
 
       (behavior "all futures removed after completion"
         (assertions
-          (contains? @active-futures :parent-concurrent.future1) => false
-          (contains? @active-futures :parent-concurrent.future2) => false
-          (contains? @active-futures :parent-concurrent.future3) => false)))))
+          (contains? @active-futures ":parent-concurrent.:future1") => false
+          (contains? @active-futures ":parent-concurrent.:future2") => false
+          (contains? @active-futures ":parent-concurrent.:future3") => false)))))

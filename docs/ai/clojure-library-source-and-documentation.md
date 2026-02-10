@@ -41,7 +41,7 @@ First name sure the tool and namespace are loaded in nREPL:
 Then:
 
 * To see the docstring, use `(clojure.repl/doc fully-qualified-name)`
-* To see the source, use `(clojure.repl/doc fully-qualified-name)`
+* To see the source, use `(clojure.repl/source fully-qualified-name)`
 
 IMPORTANT: Both `doc` and `source` are macros that take a symbol that MUST NOT be quoted in any way. You should always
 use the fully-qualified name (e.g. dataico.lib.strings/normalize instead of just normalize or an aliased
