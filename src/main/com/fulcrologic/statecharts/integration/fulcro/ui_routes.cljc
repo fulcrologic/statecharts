@@ -287,7 +287,7 @@
                            [(ops/assign [:route/idents target-key] ident)]))})
         (script {:expr (fn [env data & _] (update-parent-query! env data id))}))
       (ele/invoke (cond-> {:params      (merge
-                                          {:fulcro/actors (fn [env data]
+                                          {:fulcro/actors (fn [env data & _]
                                                             (let [Target (rc/registry-key->class target-key)
                                                                   ident  (get-in data [:route/idents target-key] (when (rc/has-ident? Target) (rc/get-ident Target {})))
                                                                   actors (merge {:actor/component (scf/actor Target ident)} (?! (rc/component-options Target ro/actors) env data))]
@@ -296,7 +296,7 @@
                            :autoforward (boolean autoforward)
                            :idlocation  [:invocation/id target-key]
                            :type        :statechart
-                           :srcexpr     (fn [{:fulcro/keys [app] :as env} data]
+                           :srcexpr     (fn [{:fulcro/keys [app] :as env} data & _]
                                           (enc/if-let [Target (rc/registry-key->class target-key)]
                                             (let [id    (or statechart-id (rc/component-options Target ro/statechart-id))
                                                   chart (rc/component-options Target ro/statechart)]
@@ -406,7 +406,7 @@
                              all-targets)]
     (apply state props
       (on-entry {}
-        (script-fn [env data]
+        (script-fn [& _]
           (let [root-key   (coerce-to-keyword root)
                 Root       (rc/registry-key->class root-key)
                 root-ident (when (rc/has-ident? Root) (rc/get-ident Root {}))]
@@ -480,6 +480,8 @@
 (defn ui-current-subroute
   "Render the current subroute. factory-fn is the function wrapper that generates a proper element (e.g. comp/factory),
    and parent-component-instance is usually `this`.
+
+   WARNING: You MUST put `:preserve-dynamic-query? true` on the containing component, or hot code reload will wipe the current route.
 
    NOTE: This will NOT properly render a parallel route. You must use `ui-parallel-route`"
   [parent-component-instance factory-fn]

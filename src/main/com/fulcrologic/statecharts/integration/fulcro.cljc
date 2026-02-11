@@ -37,11 +37,13 @@
     [com.fulcrologic.guardrails.malli.core :refer [=> >def >defn ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
+    [com.fulcrologic.statecharts.algorithms.v20150901-async :as aalg]
     [com.fulcrologic.statecharts.environment]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as cael]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
     [com.fulcrologic.statecharts.execution-model.lambda :as lambda]
+    [com.fulcrologic.statecharts.execution-model.lambda-async :as alambda]
     [com.fulcrologic.statecharts.integration.fulcro-impl :as impl]
     [com.fulcrologic.statecharts.invocation.statechart :as i.statechart]
     [com.fulcrologic.statecharts.protocols :as sp]
@@ -275,13 +277,8 @@ Returns the new session-id of the statechart."
                                                                 (impl/statechart-event! app session-id (:name event) (:data event) configuration)
                                                                 (impl/statechart-event! app session-id event {} configuration))))]
                                       (sp/receive-events! real-queue env wrapped-handler options))))
-             new-async-ex       #?(:clj (when async?
-                                          (require 'com.fulcrologic.statecharts.execution-model.lambda-async)
-                                          (requiring-resolve 'com.fulcrologic.statecharts.execution-model.lambda-async/new-execution-model))
-                                    :cljs (when async?
-                                            com.fulcrologic.statecharts.execution-model.lambda-async/new-execution-model))
              ex                 (if async?
-                                  (new-async-ex dm instrumented-queue {:explode-event? true})
+                                  (alambda/new-execution-model dm instrumented-queue {:explode-event? true})
                                   (lambda/new-execution-model dm instrumented-queue {:explode-event? true}))
              registry           (lmr/new-registry)
              wmstore            (impl/->FulcroWorkingMemoryStore app on-save on-delete)
@@ -291,11 +288,7 @@ Returns the new session-id of the statechart."
                                         ::sc/event-queue           instrumented-queue
                                         ::sc/working-memory-store  wmstore
                                         ::sc/processor             (if async?
-                                                                     (let [new-proc #?(:clj (do
-                                                                                              (require 'com.fulcrologic.statecharts.algorithms.v20150901-async)
-                                                                                              (requiring-resolve 'com.fulcrologic.statecharts.algorithms.v20150901-async/new-processor))
-                                                                                        :cljs com.fulcrologic.statecharts.algorithms.v20150901-async/new-processor)]
-                                                                       (new-proc))
+                                                                     (aalg/new-processor)
                                                                      (alg/new-processor))
                                         ::sc/invocation-processors [(i.statechart/new-invocation-processor)]
                                         ::sc/execution-model       ex}
