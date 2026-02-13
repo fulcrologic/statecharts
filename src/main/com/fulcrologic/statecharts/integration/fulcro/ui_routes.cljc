@@ -36,6 +36,7 @@
   ::session)
 
 (defonce history (volatile! nil))
+(defonce route-table-atom (atom nil))
 
 (defn ?!
   "Run if the argument is a fn. This function can accept a value or function. If it is a
@@ -172,34 +173,43 @@
    are in the event data, then it uses those, and sets them on the URL. If they are
    not in the event data, it attempts to get them from the URL.
 
+   When a route table is available, uses `resolve-full-path` to compose the hierarchical
+   URL path and `resolve-path-params` to substitute parameter values.
+
    In both cases the obtained parameters (or the lack thereof) are set into
    [:routing/parameters <state-id>] in the data model."
   [{:keys       [id]
     :route/keys [path params]}]
   (script
     {:expr
-     (fn [{:fulcro/keys [app]} _dm _e event-data]
+     (fn [{:fulcro/keys [app] :as env} _dm _e event-data]
        (when path
          (let [{::keys [external?]} event-data
                ks                      (log/spy :info (set (keys event-data)))
-               event-has-route-params? (boolean (seq (set/intersection ks params)))
-               path-params             (some-> (ru/current-url)
+               event-has-route-params? (boolean (seq (set/intersection ks (or params #{}))))
+               url-state-params        (some-> (ru/current-url)
                                          (ru/current-url-state-params)
                                          (get id))
-               has-path-params?        (boolean
+               has-url-state-params?   (boolean
                                          (seq (set/intersection
-                                                (set (keys path-params))
-                                                params)))
+                                                (set (keys url-state-params))
+                                                (or params #{}))))
                actual-params           (select-keys
                                          (cond
                                            event-has-route-params? event-data
-                                           has-path-params? path-params
+                                           has-url-state-params? url-state-params
                                            :else {})
-                                         params)]
+                                         (or params #{}))
+               ;; Use the full hierarchical path when a route table is available
+               nchart                  (senv/normalized-chart env)
+               full-pattern            (when nchart (ru/resolve-full-path nchart id))
+               effective-path          (if (seq full-pattern)
+                                         (ru/resolve-path-params full-pattern (merge actual-params event-data))
+                                         path)]
            (when @history
              (if (log/spy :info external?)
-               (rhist/replace-route! @history {:id id :route/path path :route/params actual-params})
-               (rhist/push-route! @history {:id id :route/path path :route/params actual-params}))
+               (rhist/replace-route! @history {:id id :route/path effective-path :route/params actual-params})
+               (rhist/push-route! @history {:id id :route/path effective-path :route/params actual-params}))
              [(ops/assign [:routing/parameters id] actual-params)]))))}))
 
 (defn rstate
@@ -358,25 +368,42 @@
       (rhist/replace-route! @history (get id->node uid)))
     nil))
 
+(defn state-for-path
+  "Find the statechart element whose route path matches `current-path`. Tries exact
+   match on `:route/path` first (backward compatible). With a `route-table`, also
+   attempts parameterized matching and augments the result with `:route/path-params`."
+  ([statechart current-path]
+   (state-for-path statechart current-path nil))
+  ([{::sc/keys [elements-by-id] :as statechart} current-path route-table]
+   (let [elements (vals elements-by-id)
+         exact    (first
+                    (filter
+                      (fn [{:route/keys [path]}]
+                        (= path current-path))
+                      elements))]
+     (or exact
+       (when route-table
+         (when-let [{:keys [state-id route/path-params]} (ru/find-route-for-url route-table current-path)]
+           (assoc (get elements-by-id state-id) :route/path-params path-params)))))))
+
 (defn apply-external-route
   "Look at the URL and figure out which of the statechart states we need to be in,
-   compute the parameters, and then trigger an event to go there."
+   compute the parameters, and then trigger an event to go there. Uses the
+   precomputed route table for parameterized path matching when available."
   [{::sc/keys    [statechart-registry]
     :fulcro/keys [app]} & _]
-  (let [{::sc/keys [elements-by-id]} (scp/get-statechart statechart-registry ::chart)
-        elements         (vals elements-by-id)
+  (let [statechart       (scp/get-statechart statechart-registry ::chart)
         current-path     (ru/current-url-path)
+        route-table      @route-table-atom
+        matched          (state-for-path statechart current-path route-table)
         {target-state-id :id
-         :route/keys     [target]} (first
-                                     (filter
-                                       (fn [{:route/keys [path]}]
-                                         (= path current-path))
-                                       elements))
+         :route/keys     [target path-params]} matched
         route-event-name (when target (route-to-event-name target))
         ;; FIXME: Don't tie to HTML
-        route-params     (when route-event-name
+        url-state-params (when route-event-name
                            (get (ru/current-url-state-params (ru/current-url))
-                             target-state-id))]
+                             target-state-id))
+        route-params     (merge path-params url-state-params)]
     (when route-event-name
       (scf/send! app ::session route-event-name (assoc route-params
                                                   ::external? true)))
@@ -528,35 +555,30 @@
   [app statechart]
   (scf/register-statechart! app ::chart statechart))
 
-(defn state-for-path [{::sc/keys [elements-by-id] :as statechart} current-path]
-  (let [elements (vals elements-by-id)]
-    (first
-      (filter
-        (fn [{:route/keys [path]}]
-          (= path current-path))
-        elements))))
-
 (defn start-routing!
-  "Installs the statechart and starts it."
+  "Installs the statechart and starts it. Builds a precomputed route table for
+   efficient URL-to-state matching, including parameterized path segments."
   [app statechart]
-  (vreset! history (rhist/new-html5-history app
-                     {:route->url (fn [{:keys       [id]
-                                        :route/keys [path params]}]
-                                    (-> (ru/current-url)
-                                      (ru/update-url-state-param id (constantly params))
-                                      (ru/new-url-path (str "/" (str/join "/" path)))))
-                      :url->route (fn []
-                                    (let [url        (ru/current-url)
-                                          id->params (ru/current-url-state-params url)
-                                          path       (ru/current-url-path url)
-                                          {:keys [id] :as state} (state-for-path statechart path)]
-                                      {:id           id
-                                       :route/path   path
-                                       :route/params (get id->params id)}))}))
-  (update-chart! app statechart)
-  (scf/start! app {:machine    ::chart
-                   :session-id session-id
-                   :data       {}}))
+  (let [route-table (ru/build-route-table statechart)]
+    (reset! route-table-atom route-table)
+    (vreset! history (rhist/new-html5-history app
+                       {:route->url (fn [{:keys       [id]
+                                          :route/keys [path params]}]
+                                      (-> (ru/current-url)
+                                        (ru/update-url-state-param id (constantly params))
+                                        (ru/new-url-path (str "/" (str/join "/" path)))))
+                        :url->route (fn []
+                                      (let [url        (ru/current-url)
+                                            id->params (ru/current-url-state-params url)
+                                            path       (ru/current-url-path url)
+                                            {:keys [id] :as state} (state-for-path statechart path route-table)]
+                                        {:id           id
+                                         :route/path   path
+                                         :route/params (get id->params id)}))}))
+    (update-chart! app statechart)
+    (scf/start! app {:machine    ::chart
+                     :session-id session-id
+                     :data       {}})))
 
 (>defn has-routes?
   "Returns true if the state with the given ID contains routes."

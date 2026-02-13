@@ -1,9 +1,11 @@
 # Project Tracker
-<!-- Last updated: 2026-02-11 | Active: 0 | Blocked: 0 | Backlog: 5 | Done: 12 -->
+<!-- Last updated: 2026-02-12 | Active: 1 | Blocked: 0 | Backlog: 3 | Done: 13 -->
 
 ## Active
 
-(none)
+| Spec | Priority | Created | Summary |
+|------|----------|---------|---------|
+| url-path-design | P1 | 2026-02-11 | Phase 1 complete: hierarchical paths, parameterized segments. Phase 2 (URL unification) pending |
 
 ## Blocked
 
@@ -14,15 +16,14 @@
 | Spec | Priority | Created | Summary |
 |------|----------|---------|---------|
 | async-url-restoration | P1 | 2026-02-11 | Async deep state restoration from URL on page load |
-| url-path-design | P1 | 2026-02-11 | Hierarchical paths, parameterized segments, URL format unification |
 | url-state-sync | P2 | 2026-02-11 | Coordinated bidirectional URL-state synchronization |
-| async-plet-refactor | P2 | 2026-02-11 | Replace nested maybe-then chains with p/let in async impl |
 | browser-navigation-async | P2 | 2026-02-11 | Browser back/forward with async state entry and busy guards |
 
 ## Done (recent)
 
 | Spec | Priority | Completed | Summary |
 |------|----------|-----------|---------|
+| async-plet-refactor | P2 | 2026-02-12 | Replace nested maybe-then chains with p/let in async impl |
 | routing-demo-update | P1 | 2026-02-10 | Fixed raise! API, CLJS promise handling, added build config |
 | convenience-api-tests | P2 | 2026-02-09 | 15 specs / 83 assertions for convenience helpers |
 | scxml-flow-control-elements | P2 | 2026-02-09 | if/elseif/else/foreach already implemented, tests added |

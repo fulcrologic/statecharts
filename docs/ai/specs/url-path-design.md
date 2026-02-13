@@ -1,6 +1,6 @@
 # Spec: URL Path Design
 
-**Status**: backlog
+**Status**: active (Phase 1 complete, Phase 2 pending)
 **Priority**: P1
 **Created**: 2026-02-11
 **Owner**: conductor
@@ -112,12 +112,15 @@ Phase 3: Remove old encoding support in a future version.
 
 ## Verification
 
-1. [ ] Child routes compose paths with parent: parent `["users"]` + child `["edit"]` = `/users/edit`
-2. [ ] Parameterized segments resolve: `["users" :id]` with `{:id 42}` produces `/users/42`
-3. [ ] URL restoration extracts params: `/users/42` matched against `["users" :id]` yields `{:id "42"}`
-4. [ ] States with no `:route/path` inherit parent path
-5. [ ] Flat `:route/path` (existing behavior) still works unchanged
+### Phase 1 (hierarchical paths + parameterized matching)
+1. [x] Child routes compose paths with parent: parent `["users"]` + child `["edit"]` = `/users/edit`
+2. [x] Parameterized segments resolve: `["users" :id]` with `{:id 42}` produces `/users/42`
+3. [x] URL restoration extracts params: `/users/42` matched against `["users" :id]` yields `{:id "42"}`
+4. [x] States with no `:route/path` inherit parent path
+5. [x] Flat `:route/path` (existing behavior) still works unchanged
+9. [x] `route->url` / `url->route` callbacks still work for custom schemes
+
+### Phase 2 (URL encoding unification — not yet started)
 6. [ ] `_sc_` and `_rp_` unified into single `_s` parameter
 7. [ ] Named query parameters appear as human-readable URL params
 8. [ ] Parallel regions: only one region contributes to path, others contribute query params
-9. [ ] `route->url` / `url->route` callbacks still work for custom schemes
