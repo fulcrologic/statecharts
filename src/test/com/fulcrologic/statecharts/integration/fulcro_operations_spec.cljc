@@ -333,10 +333,12 @@
           (get-in @state-atom (scf/local-data-path session-id :local/value)) => 42)))))
 
 (specification "Operation integration with actors and aliases"
-  (let [app        (test-app)
-        state-atom (::app/state-atom app)]
+   (let [app        (test-app)
+         state-atom (::app/state-atom app)]
+     ;; Initialize the Item with default label for alias tests
+     (swap! state-atom assoc-in [:item/id 1 :item/label] "Default")
 
-    (behavior "operations can use actor paths"
+     (behavior "operations can use actor paths"
       (let [chart      (chart/statechart {:initial :active}
                          (state {:id :active}
                            (on-entry {}
@@ -356,9 +358,8 @@
       (let [chart      (chart/statechart {:initial :active}
                          (state {:id :active}
                            (on-entry {}
-                             (script {:expr (fn [env data _ _]
-                                              (let [aliases (scf/resolve-aliases data)]
-                                                [(fop/assoc-alias :label (str "Updated: " (:label aliases)))]))}))))
+                              (script {:expr (fn [env data _ _]
+                                                [(fop/assoc-alias :label (str "Updated: " (:label data)))])}))))
             session-id (do
                          (scf/register-statechart! app ::alias-ops-chart chart)
                          (scf/start! app {:machine    ::alias-ops-chart

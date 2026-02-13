@@ -361,7 +361,10 @@
         (log/error "Apply action failed:" {:f f :args args})))))
 
 (defmethod run-fulcro-data-op! :fulcro/apply-action [app _processing-env {:keys [f args]}]
-  (rc/transact! app [(do-apply-action {:f f :args args})]))
+  (try
+    (swap! (state-atom app) (fn [s] (apply f s args)))
+    (catch #?(:cljs :default :clj Throwable) t
+      (log/error "Apply action failed:" {:f f :args args}))))
 
 (def master-chart-id :com.fulcrologic.fulcro/master-statechart)
 

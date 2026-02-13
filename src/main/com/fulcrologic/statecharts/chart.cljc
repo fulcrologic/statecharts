@@ -4,13 +4,16 @@
 
    ::sc/k in the docstrings of this namespace assumes the alias `[com.fulcrologic.statecharts :as sc]`, which
    can be generated as only an alias, though an empty namespace of that name does exist."
-  (:require
-    [clojure.set :as set]
-    [com.fulcrologic.guardrails.malli.core :refer [=> >defn >defn- ?]]
-    [com.fulcrologic.statecharts :as sc]
-    [com.fulcrologic.statecharts.elements :as elements]
-    [com.fulcrologic.statecharts.malli-specs]
-    [taoensso.timbre :as log]))
+   (:require
+     [clojure.set :as set]
+     [clojure.string :as str]
+     [com.fulcrologic.guardrails.malli.core :refer [=> >defn >defn- ?]]
+     [com.fulcrologic.statecharts :as sc]
+     [com.fulcrologic.statecharts.elements :as elements]
+     [com.fulcrologic.statecharts.malli-specs]
+     [taoensso.timbre :as log]))
+
+(declare invalid-history-elements)
 
 ;; I did try to translate all that imperative code to something more functional...got really tiring, and generated
 ;; subtle bugs divergent from spec.
@@ -118,9 +121,13 @@
                            children)
         legal-node-types #{:state :parallel :final :data-model :script}
         bad-nodes        (set/difference node-types legal-node-types)]
-    (when (seq bad-nodes)
-      (throw (ex-info (str "Illegal top-level node. Root node cannot have: " bad-nodes " elements.") {})))
-    node))
+     (when (seq bad-nodes)
+       (throw (ex-info (str "Illegal top-level node. Root node cannot have: " bad-nodes " elements.") {})))
+     (let [invalid-histories (invalid-history-elements node)]
+       (when (seq invalid-histories)
+         (let [msgs (into [] (mapcat :msgs) invalid-histories)]
+           (throw (ex-info (str "Invalid history element(s): " (str/join "; " msgs)) {:invalid invalid-histories})))))
+     node))
 
 (def scxml "Alias for `statechart`." statechart)
 
@@ -402,7 +409,7 @@
    Validates per W3C SCXML Section 3.10:
    - History must have exactly one transition child
    - History transition must not have event or cond attributes
-   - History must be child of a compound state
+   - History must be child of a compound or parallel state
    - Shallow history requires exactly one target
    - Deep history target should be a proper descendant of the parent state"
   [chart]
@@ -413,12 +420,13 @@
                 transition-element (element chart (first transitions))
                 {:keys [target event cond]} transition-element
                 parent-descendants (all-descendants chart parent)
-                is-compound?       (compound-state? chart parent)
+                parent-can-have-history? (or (compound-state? chart parent) 
+                                              (parallel-state? chart parent))
                 targets-are-proper-descendants? (every? #(contains? parent-descendants %) target)
                 possible-problem   (cond-> (assoc hn :msgs [])
                                      (not= 1 (count transitions)) (e "A history node MUST have exactly one transition")
                                      (or (some? event) (some? cond)) (e "A history transition MUST NOT have cond/event.")
-                                     (not is-compound?) (e "A history node MUST be a child of a compound state.")
+                                     (not parent-can-have-history?) (e "A history node MUST be a child of a compound or parallel state.")
                                      (and (not deep?) (not= 1 (count target))) (e "Exactly ONE transition target is required for shallow history.")
                                      (and deep? (seq target) (not targets-are-proper-descendants?)) (e "Deep history transition target should be a proper descendant of the parent state."))]
           :when (pos-int? (count (:msgs possible-problem)))]

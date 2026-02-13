@@ -404,7 +404,7 @@
       (fn [id]
         (sp/cancel! event-queue env (env/session-id env) id)))))
 
-(defmethod execute-element-content! :if [env {:keys [cond children] :as element}]
+(defmethod execute-element-content! :if [env {:keys [children] :as element}]
   (log/debug "Evaluating if" element)
   (let [{::sc/keys [statechart]} env
         ;; Split children into then-branch and else-branches
