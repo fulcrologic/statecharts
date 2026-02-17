@@ -6,7 +6,11 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state transition on-entry on-exit script]]
     [com.fulcrologic.statecharts.testing-async :as testing]
+    [com.fulcrologic.statecharts.testing :as sync-testing]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
+    [com.fulcrologic.statecharts.execution-model.lambda-async :as la]
+    [com.fulcrologic.statecharts.protocols :as sp]
+    [com.fulcrologic.statecharts.simple-async :as simple-async]
     [promesa.core :as p]
     [fulcro-spec.core :refer [=> assertions specification]]))
 
@@ -333,3 +337,61 @@
       (testing/in? env :chain) => true
       "Final step value is correct"
       (get (testing/data env) :step) => 3)))
+
+;; =============================================================================
+;; Test 10: Expression returning vector with async ops blocks state entry
+;; =============================================================================
+
+;; Register a test async operation that resolves a promise after performing an assign.
+;; This exercises the run-async-op! multimethod dispatch in process-ops.
+(defmethod la/run-async-op! :test/delayed-assign [env op]
+  (p/resolved (sp/update! (::sc/data-model env) env {:ops [(:assign-op op)]})))
+
+(def mixed-ops-script
+  "Expression that returns a vector containing both sync ops and an async op (with ::sc/async? true).
+   This exercises the handle-result -> process-ops path that was fixed."
+  (fn [env data]
+    [(ops/assign :sync-before true)
+     {:op         :test/delayed-assign
+      ::sc/async? true
+      :assign-op  (ops/assign :async-completed true)}
+     (ops/assign :sync-after true)]))
+
+(specification "Expression returning vector with async ops blocks child state entry"
+  ;; This test uses the REAL execution model (not the mock) because the bug was in
+  ;; lambda_async/handle-result -> process-ops. The mock execution model has its own
+  ;; handle-result that does not call process-ops, so it would not exercise this path.
+  (let [chart     (chart/statechart {:initial :parent}
+                    (state {:id :parent :initial :child-a}
+                      (on-entry {}
+                        (script {:expr mixed-ops-script}))
+                      (state {:id :child-a}
+                        (on-entry {}
+                          (script {:expr (fn [env data]
+                                          ;; Record whether async-completed was visible when child was entered
+                                          [(ops/assign :child-saw-async (boolean (get data :async-completed)))])}))
+                        (transition {:event :next :target :child-b}))
+                      (state {:id :child-b})))
+        ;; Build env with the REAL AsyncCLJCExecutionModel (default from simple-async)
+        ;; instead of the mock, so process-ops is exercised.
+        sys-env   (simple-async/simple-env {::sc/event-queue           (sync-testing/new-mock-queue)
+                                            ::sc/invocation-processors [(sync-testing/new-mock-invocations)]})
+        _         (simple-async/register! sys-env :com.fulcrologic.statecharts.testing-async/chart chart)
+        env       (sync-testing/map->TestingEnv {:statechart chart
+                                                 :session-id :test
+                                                 :env        sys-env})]
+
+    (testing/start! env)
+
+    (assertions
+      "Parent and initial child state are both active"
+      (testing/in? env :parent) => true
+      (testing/in? env :child-a) => true
+      "Sync ops before async op are applied"
+      (get (testing/data env) :sync-before) => true
+      "Async op completed before child state entry"
+      (get (testing/data env) :async-completed) => true
+      "Sync ops after async op are applied"
+      (get (testing/data env) :sync-after) => true
+      "Child on-entry saw async-completed as true (proving async completed before child entry)"
+      (get (testing/data env) :child-saw-async) => true)))

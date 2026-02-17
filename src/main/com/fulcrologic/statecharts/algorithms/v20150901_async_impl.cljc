@@ -9,7 +9,7 @@
    order, conflict resolution, and history handling. Only the control flow is adapted for
    async support using promesa."
   #?(:cljs (:require-macros [com.fulcrologic.statecharts.algorithms.v20150901-async-impl
-                             :refer [in-state-context]]))
+                             :refer [in-state-context maybe-let]]))
   (:require
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
@@ -44,6 +44,19 @@
   :ret any?
   :args (s/cat :s symbol? :sid any? :body (s/* any?)))
 
+#?(:clj
+   (defmacro maybe-let
+     "Like `p/let` but stays synchronous when all binding values are non-promises.
+      Uses `maybe-then` internally so no promise wrapping occurs for plain values.
+      This is critical for CLJS where JS Promises always deliver .then callbacks
+      asynchronously (microtask), even for already-resolved promises."
+     [bindings & body]
+     (assert (even? (count bindings)) "maybe-let requires an even number of binding forms")
+     (if (seq bindings)
+       (let [[sym val & rest] bindings]
+         `(maybe-then ~val (fn [~sym] (maybe-let ~rest ~@body))))
+       `(do ~@body))))
+
 ;; =============================================================================
 ;; Async utility: maybe-then
 ;; =============================================================================
@@ -69,7 +82,7 @@
         (let [result (f (first remaining))]
           (if (p/promise? result)
             ;; Switch to async mode for the rest
-            (p/let [_ result]
+            (maybe-let [_ result]
               (let [rest-items (rest remaining)]
                 (if (empty? rest-items)
                   nil
@@ -301,8 +314,7 @@
                          (when (vector? ops)
                            (sp/update! data-model env {:ops (log/spy :debug ops)})))))
         (map? expr) (sp/update! data-model env {:ops (log/spy :debug (ops/set-map-ops expr))})
-        :else (sp/update! data-model env {:ops (ops/set-map-ops {})})))
-    nil))
+        :else (sp/update! data-model env {:ops (ops/set-map-ops {})})))))
 
 ;; =============================================================================
 ;; Executable content — multimethods, async-aware
@@ -365,8 +377,8 @@
                         type
                         typeexpr] :as _send-element}]
           (let [id-v (if idlocation (genid "send") id)]
-            ;; Any of these may be promises. Resolve all with p/let.
-            (p/let [event-name (!? env event eventexpr)
+            ;; Any of these may be promises. Resolve all with maybe-let.
+            (maybe-let [event-name (!? env event eventexpr)
                     target     (!? env target targetexpr)
                     type       (!? env type typeexpr)
                     delay      (!? env delay delayexpr)
@@ -465,7 +477,7 @@
         (execute-element-content! env (chart/element statechart child-id))))))
 
 (defmethod execute-element-content! :for-each [{::sc/keys [data-model statechart] :as env}
-                                                {:keys [array item index children] :as element}]
+                                               {:keys [array item index children] :as element}]
   (log/debug "Executing for-each" element)
   (let [coll-result (run-expression! (assoc env ::sc/raw-result? true) array)]
     (maybe-then coll-result
@@ -515,48 +527,50 @@
   (let [[states-to-enter
          states-for-default-entry
          default-history-content] (log/spy :debug "entry set"
-                                    (compute-entry-set! env))]
-    (do-sequence (chart/in-entry-order statechart states-to-enter)
-      (fn [s]
-        (let [state-id (chart/element-id statechart s)]
-          (log/debug "Enter" state-id)
-          (in-state-context env s
-            (vswap! vwmem update ::sc/configuration conj s)
-            (vswap! vwmem update ::sc/states-to-invoke conj s)
-            (let [late-init (when (and (= :late (:binding statechart))
-                                    (not (contains? (::sc/initialized-states @vwmem) state-id)))
-                              (let [r (initialize-data-model! env s)]
-                                (vswap! vwmem update ::sc/initialized-states (fnil conj #{}) state-id)
-                                r))]
-              (p/let [_ late-init
-                      _ (do-sequence (chart/entry-handlers statechart s)
-                          (fn [entry] (execute! env entry)))
-                      _ (when-let [t (and (contains? states-for-default-entry s)
-                                       (some->> s (chart/initial-element statechart) (chart/transition-element statechart)))]
-                          (execute! env t))
-                      _ (when-let [content (get default-history-content (chart/element-id statechart s))]
-                          (execute-element-content! env (chart/element statechart content)))]
-                ;; Final state handling
-                (when (log/spy :debug (chart/final-state? statechart s))
-                  (if (= :ROOT (chart/get-parent statechart s))
-                    (vswap! vwmem assoc ::sc/running? false)
-                    (let [parent      (chart/get-parent statechart s)
-                          grandparent (chart/get-parent statechart parent)]
-                      (p/let [done-data (compute-done-data! env s)]
-                        (vswap! vwmem update ::sc/internal-queue conj
-                          (new-event {:sendid (chart/element-id statechart s)
-                                      :type   :internal
-                                      :data   done-data
-                                      :name   (keyword (str "done.state." (name (chart/element-id statechart parent))))}))
-                        (when (and (chart/parallel-state? statechart grandparent)
-                                (every? (fn [s] (in-final-state? env s)) (chart/child-states statechart grandparent)))
-                          (vswap! vwmem update ::sc/internal-queue conj
-                            (new-event {:sendid (chart/element-id statechart s)
-                                        :type   :internal
-                                        :data   done-data
-                                        :name   (keyword (str "done.state." (name (chart/element-id statechart grandparent))))}))))))))))))))
-  (log/spy :debug "after enter states: " (::sc/configuration @vwmem))
-  nil)
+                                    (compute-entry-set! env))
+        result (do-sequence (chart/in-entry-order statechart states-to-enter)
+                 (fn [s]
+                   (let [state-id (chart/element-id statechart s)]
+                     (log/debug "Enter" state-id)
+                     (in-state-context env s
+                       (vswap! vwmem update ::sc/configuration conj s)
+                       (vswap! vwmem update ::sc/states-to-invoke conj s)
+                       (let [late-init (when (and (= :late (:binding statechart))
+                                               (not (contains? (::sc/initialized-states @vwmem) state-id)))
+                                         (let [r (initialize-data-model! env s)]
+                                           (vswap! vwmem update ::sc/initialized-states (fnil conj #{}) state-id)
+                                           r))]
+                         (maybe-let [_ late-init
+                                 _ (do-sequence (chart/entry-handlers statechart s)
+                                     (fn [entry] (execute! env entry)))
+                                 _ (when-let [t (and (contains? states-for-default-entry s)
+                                                  (some->> s (chart/initial-element statechart) (chart/transition-element statechart)))]
+                                     (execute! env t))
+                                 _ (when-let [content (get default-history-content (chart/element-id statechart s))]
+                                     (execute-element-content! env (chart/element statechart content)))]
+                           ;; Final state handling
+                           (when (log/spy :debug (chart/final-state? statechart s))
+                             (if (= :ROOT (chart/get-parent statechart s))
+                               (vswap! vwmem assoc ::sc/running? false)
+                               (let [parent      (chart/get-parent statechart s)
+                                     grandparent (chart/get-parent statechart parent)]
+                                 (maybe-let [done-data (compute-done-data! env s)]
+                                   (vswap! vwmem update ::sc/internal-queue conj
+                                     (new-event {:sendid (chart/element-id statechart s)
+                                                 :type   :internal
+                                                 :data   done-data
+                                                 :name   (keyword (str "done.state." (name (chart/element-id statechart parent))))}))
+                                   (when (and (chart/parallel-state? statechart grandparent)
+                                           (every? (fn [s] (in-final-state? env s)) (chart/child-states statechart grandparent)))
+                                     (vswap! vwmem update ::sc/internal-queue conj
+                                       (new-event {:sendid (chart/element-id statechart s)
+                                                   :type   :internal
+                                                   :data   done-data
+                                                   :name   (keyword (str "done.state." (name (chart/element-id statechart grandparent))))})))))))))))))]
+    (maybe-then result
+      (fn [_]
+        (log/spy :debug "after enter states: " (::sc/configuration @vwmem))
+        nil))))
 
 ;; =============================================================================
 ;; Transition content execution — async-aware
@@ -713,7 +727,7 @@
         type-v (!? env type typeexpr)
         src-v  (or src (!? env nil srcexpr))]
     ;; type and src may be promises
-    (p/let [type (or type-v :statechart)
+    (maybe-let [type (or type-v :statechart)
             src  src-v]
       (assoc invocation
         :type type
@@ -725,17 +739,17 @@
                data-model
                execution-model
                event-queue] :as env} invocation]
-  (p/let [{:keys [type src
+  (maybe-let [{:keys [type src
                   id idlocation
                   explicit-id?
                   namelist params
                   processor] :as invocation} (invocation-details env invocation)]
     (let [parent-state-id (chart/nearest-ancestor-state statechart invocation)]
       (if processor
-        (p/let [param-map (if (map? params)
+        (maybe-let [param-map (if (map? params)
                             (let [entries (vec params)
                                   results (volatile! {})]
-                              (p/let [_ (do-sequence entries
+                              (maybe-let [_ (do-sequence entries
                                           (fn [[k expr]]
                                             (let [v (sp/run-expression! execution-model env expr)]
                                               (maybe-then v (fn [resolved] (vswap! results assoc k resolved))))))]
@@ -842,7 +856,7 @@
       (fn [s]
         (log/debug "Leaving state " s)
         (in-state-context env s
-          (p/let [_ (run-many! env (chart/exit-handlers statechart s))
+          (maybe-let [_ (run-many! env (chart/exit-handlers statechart s))
                   _ (cancel-active-invocations! env s)]
             (vswap! vwmem update ::sc/configuration disj s)))))))
 
@@ -853,7 +867,7 @@
 (defn microstep!
   "Perform a single microstep. May return a promise."
   [env]
-  (p/let [_ (exit-states! env)
+  (maybe-let [_ (exit-states! env)
           _ (execute-transition-content! env)]
     (enter-states! env)))
 
@@ -979,7 +993,7 @@
    (let [states-to-exit (log/spy :debug (chart/in-exit-order statechart (::sc/configuration @vwmem)))]
      (do-sequence (vec states-to-exit)
        (fn [state]
-         (p/let [_ (run-exit-handlers! env state)
+         (maybe-let [_ (run-exit-handlers! env state)
                  _ (cancel-active-invocations! env state)]
            (vswap! vwmem update ::sc/configuration disj state)
            (when (and (not skip-done-event?) (chart/final-state? statechart state) (= :ROOT (chart/get-parent statechart state)))
@@ -998,9 +1012,9 @@
     (if running?
       ((fn step []
          (vswap! vwmem assoc ::sc/enabled-transitions (chart/document-ordered-set statechart) ::sc/macrostep-done? false)
-         (p/let [_ (handle-eventless-transitions! env)]
+         (maybe-let [_ (handle-eventless-transitions! env)]
            (if (-> vwmem deref ::sc/running?)
-             (p/let [_ (run-invocations! env)]
+             (maybe-let [_ (run-invocations! env)]
                (when (seq (::sc/internal-queue @vwmem))
                  (step)))
              (exit-interpreter! env)))))
@@ -1059,7 +1073,7 @@
                         (exit-interpreter! env)
                         (do
                           (env/assign! env [:ROOT :_event] event)
-                          (p/let [_ (select-transitions! env event)
+                          (maybe-let [_ (select-transitions! env event)
                                   _ (handle-external-invocations! env event)
                                   _ (microstep! env)]
                             (before-event! env))))]
@@ -1103,7 +1117,7 @@
                                  (fn [n]
                                    (in-state-context env n
                                      (initialize-data-model! env (chart/get-parent statechart n)))))))]
-            (p/let [_ early-init
+            (maybe-let [_ early-init
                     _ (when (map? invocation-data)
                         (sp/update! data-model env {:ops (ops/set-map-ops invocation-data)}))
                     _ (enter-states! env)

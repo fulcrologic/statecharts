@@ -80,7 +80,8 @@
       (and ident? class?) (ops/assign [:fulcro/actors actor-name] (scf/actor class ident))
       (and ident? (not class?)) (let [old-class (scf/resolve-actor-class data actor-name)]
                                   (ops/assign [:fulcro/actors actor-name] (scf/actor old-class ident)))
-      (and (not ident?) class?) (ops/assign [:fulcro/actors actor-name] (scf/actor class))
+      (and (not ident?) class?) (let [old-ident (get-in data [:fulcro/actors actor-name :ident])]
+                                  (ops/assign [:fulcro/actors actor-name] (scf/actor class (or old-ident (rc/get-ident class {})))))
       :else (do
               (log/error "Cannot set actor. Arguments were invalid: " options)
               nil))))

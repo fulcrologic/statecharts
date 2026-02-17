@@ -1,10 +1,8 @@
 (ns user
   (:require
-    [clojure.pprint :refer [pprint]]
-    [clojure.spec.alpha :as s]
-    [clojure.string :as str]
     [clj-reload.core :as reload]
-    [expound.alpha :as expound]
+    [clojure.pprint :refer [pprint]]
+    [clojure.string :as str]
     [taoensso.timbre :as log])
   (:import (clojure.lang PersistentQueue)
            (java.io Writer)))

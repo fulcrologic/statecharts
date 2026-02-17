@@ -512,18 +512,19 @@
 
    NOTE: This will NOT properly render a parallel route. You must use `ui-parallel-route`"
   [parent-component-instance factory-fn]
-  (let [this         parent-component-instance
-        q            (rc/get-query this (rapp/current-state this))
-        {:ui/keys [current-route]} (rc/props this)
-        {:keys [component]} (first
-                              (filter
-                                (fn [{:keys [dispatch-key]}] (= dispatch-key :ui/current-route))
-                                (:children (eql/query->ast q))))
-        render-child (when component (factory-fn component))]
-    (if render-child
-      (render-child current-route)
-      (let [nm (rc/component-name parent-component-instance)]
-        (log/warn (str "No subroute to render for " nm ". Did you remember to use ui-current-subroute in its parent?"))))))
+  (when (contains? (scf/current-configuration parent-component-instance session-id) :region/routing-info)
+    (let [this         parent-component-instance
+          q            (rc/get-query this (rapp/current-state this))
+          {:ui/keys [current-route]} (rc/props this)
+          {:keys [component]} (first
+                                (filter
+                                  (fn [{:keys [dispatch-key]}] (= dispatch-key :ui/current-route))
+                                  (:children (eql/query->ast q))))
+          render-child (when component (factory-fn component))]
+      (if render-child
+        (render-child current-route)
+        (let [nm (rc/component-name parent-component-instance)]
+          (log/warn (str "No subroute to render for " nm ". Did you remember to use ui-current-subroute in its parent?")))))))
 
 (defn ui-parallel-route
   "Render ONE of the possible routes underneath a parallel routing node.

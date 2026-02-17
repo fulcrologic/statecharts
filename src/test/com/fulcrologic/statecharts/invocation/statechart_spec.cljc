@@ -56,11 +56,12 @@
           (sp/supports-invocation-type? processor :http) => false))))
 
   (component "start-invocation! creates child session"
-    (let [processor (sut/new-invocation-processor)
-          env (simple/simple-env)
-          wmstore (::sc/working-memory-store env)
-          queue (::sc/event-queue env)
-          proc (::sc/processor env)]
+    (let [processor  (sut/new-invocation-processor)
+          env        (simple/simple-env)
+          wmstore    (::sc/working-memory-store env)
+          queue      (::sc/event-queue env)
+          proc       (::sc/processor env)
+          parent-env (assoc env ::sc/vwmem (volatile! {::sc/session-id :parent-123}))]
 
       ;; Register child chart
       (simple/register! env ::simple-child simple-child)
@@ -70,11 +71,10 @@
         (sp/save-working-memory! wmstore env :parent-123 parent-wmem))
 
       ;; Start invocation
-      (let [parent-env (assoc env ::sc/vwmem (volatile! {::sc/session-id :parent-123}))]
-        (sp/start-invocation! processor parent-env
-          {:invokeid :my-child
-           :src      ::simple-child
-           :params   {:foo :bar}}))
+      (sp/start-invocation! processor parent-env
+        {:invokeid :my-child
+         :src      ::simple-child
+         :params   {:foo :bar}})
 
       (behavior "child working memory exists"
         (let [child-wmem (sp/get-working-memory wmstore env :my-child)]
@@ -89,7 +89,7 @@
             (::sc/invocation-data child-wmem) => {:foo :bar})))
 
       (behavior "start-invocation! returns true"
-        (let [result (sp/start-invocation! processor env
+        (let [result (sp/start-invocation! processor parent-env
                        {:invokeid :another-child
                         :src      ::simple-child
                         :params   {}})]

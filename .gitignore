@@ -63,3 +63,4 @@ resources/public/workspaces
 resources
 lsp
 /*.lock
+.sisyphus

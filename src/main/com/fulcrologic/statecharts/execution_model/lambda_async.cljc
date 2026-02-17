@@ -57,13 +57,15 @@
   [data-model env result]
   (let [update? (and (not (::sc/raw-result? env))
                   (vector? result))]
-    (when update?
+    (if update?
       (if (some ::sc/async? result)
-        (process-ops data-model env result)
+        (p/let [_ (process-ops data-model env result)]
+          result)
         (do
           (log/trace "trying vector result as a data model update" result)
-          (sp/update! data-model env {:ops result}))))
-    result))
+          (sp/update! data-model env {:ops result})
+          result))
+      result)))
 
 (deftype AsyncCLJCExecutionModel [data-model event-queue explode-events?]
   sp/ExecutionModel

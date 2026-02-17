@@ -535,70 +535,77 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <ul class="sectlevel1">
 <li><a href="#_getting_started">1. Getting Started</a></li>
 <li><a href="#_autonomous_state_charts">2. Autonomous State Charts</a></li>
-<li><a href="#_going_deeper">3. Going Deeper</a>
+<li><a href="#_async_execution_engine">3. Async Execution Engine</a>
 <ul class="sectlevel2">
-<li><a href="#_terminology">3.1. Terminology</a></li>
-<li><a href="#_states">3.2. States</a></li>
-<li><a href="#_transitions">3.3. Transitions</a></li>
-<li><a href="#_condition_states">3.4. "Condition" States</a></li>
-<li><a href="#_event_processing">3.5. Event Processing</a>
-<ul class="sectlevel3">
-<li><a href="#_event_name_matching">3.5.1. Event Name Matching</a></li>
-<li><a href="#_send_targets">3.5.2. Send Targets</a></li>
-<li><a href="#_send_types">3.5.3. Send Types</a></li>
-<li><a href="#_manual_polling_queue">3.5.4. Manual Polling Queue</a></li>
+<li><a href="#_setting_up_the_async_engine">3.1. Setting Up the Async Engine</a></li>
+<li><a href="#_using_async_expressions">3.2. Using Async Expressions</a></li>
 </ul>
 </li>
-<li><a href="#_data_models">3.6. Data Models</a></li>
-<li><a href="#_execution_models">3.7. Execution Models</a></li>
-<li><a href="#_working_memory_and_identity">3.8. Working Memory and Identity</a></li>
-<li><a href="#_accessing_running_charts_from_outside_the_chart">3.9. Accessing Running Charts from Outside the Chart</a></li>
-<li><a href="#_invocations">3.10. Invocations</a>
-<ul class="sectlevel3">
-<li><a href="#_passing_invocation_data">3.10.1. Passing Invocation Data</a></li>
-<li><a href="#_invoking_other_state_charts_or_futures">3.10.2. Invoking other State Charts or Futures</a></li>
-<li><a href="#_custom_invocation_processors">3.10.3. Custom Invocation Processors</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#Convenience">4. Shorthand Convenience</a></li>
-<li><a href="#_custom_executable_content">5. Custom Executable Content</a></li>
-<li><a href="#_integration_with_fulcro">6. Integration with Fulcro</a>
+<li><a href="#_going_deeper">4. Going Deeper</a>
 <ul class="sectlevel2">
-<li><a href="#_basic_usage">6.1. Basic Usage</a></li>
-<li><a href="#_the_data_model">6.2. The Data Model</a>
+<li><a href="#_terminology">4.1. Terminology</a></li>
+<li><a href="#_states">4.2. States</a></li>
+<li><a href="#_transitions">4.3. Transitions</a></li>
+<li><a href="#_condition_states">4.4. "Condition" States</a></li>
+<li><a href="#_event_processing">4.5. Event Processing</a>
 <ul class="sectlevel3">
-<li><a href="#_initializing_the_data_model">6.2.1. Initializing the Data Model</a></li>
-<li><a href="#_data_locations">6.2.2. Data Locations</a></li>
+<li><a href="#_event_name_matching">4.5.1. Event Name Matching</a></li>
+<li><a href="#_send_targets">4.5.2. Send Targets</a></li>
+<li><a href="#_send_types">4.5.3. Send Types</a></li>
+<li><a href="#_manual_polling_queue">4.5.4. Manual Polling Queue</a></li>
 </ul>
 </li>
-<li><a href="#_executable_content">6.3. Executable Content</a>
+<li><a href="#_data_models">4.6. Data Models</a></li>
+<li><a href="#_execution_models">4.7. Execution Models</a></li>
+<li><a href="#_working_memory_and_identity">4.8. Working Memory and Identity</a></li>
+<li><a href="#_accessing_running_charts_from_outside_the_chart">4.9. Accessing Running Charts from Outside the Chart</a></li>
+<li><a href="#_invocations">4.10. Invocations</a>
 <ul class="sectlevel3">
-<li><a href="#_operations">6.3.1. Operations</a></li>
+<li><a href="#_passing_invocation_data">4.10.1. Passing Invocation Data</a></li>
+<li><a href="#_invoking_other_state_charts_or_futures">4.10.2. Invoking other State Charts or Futures</a></li>
+<li><a href="#_custom_invocation_processors">4.10.3. Custom Invocation Processors</a></li>
 </ul>
 </li>
-<li><a href="#_useful_helpers">6.4. Useful Helpers</a>
-<ul class="sectlevel3">
-<li><a href="#_functions">6.4.1. Functions</a></li>
-<li><a href="#_content_of_data_in_executable_content">6.4.2. Content of <code>data</code> in Executable Content</a></li>
-<li><a href="#_runtime_env_of_executable_content">6.4.3. Runtime <code>env</code> of Executable Content</a></li>
 </ul>
 </li>
-<li><a href="#_react_hooks">6.5. React Hooks</a></li>
-</ul>
-</li>
-<li><a href="#_testing">7. Testing</a>
+<li><a href="#Convenience">5. Shorthand Convenience</a></li>
+<li><a href="#_custom_executable_content">6. Custom Executable Content</a></li>
+<li><a href="#_integration_with_fulcro">7. Integration with Fulcro</a>
 <ul class="sectlevel2">
-<li><a href="#_mocking">7.1. Mocking</a></li>
-<li><a href="#_event_sendscancels">7.2. Event Sends/Cancels</a></li>
-<li><a href="#_starting_in_a_specific_configuration">7.3. Starting in a Specific Configuration</a></li>
+<li><a href="#_basic_usage">7.1. Basic Usage</a></li>
+<li><a href="#_the_data_model">7.2. The Data Model</a>
+<ul class="sectlevel3">
+<li><a href="#_initializing_the_data_model">7.2.1. Initializing the Data Model</a></li>
+<li><a href="#_data_locations">7.2.2. Data Locations</a></li>
 </ul>
 </li>
-<li><a href="#_relationship_to_scxml">8. Relationship to SCXML</a>
+<li><a href="#_executable_content">7.3. Executable Content</a>
+<ul class="sectlevel3">
+<li><a href="#_operations">7.3.1. Operations</a></li>
+<li><a href="#_async_operations">7.3.2. Async Operations</a></li>
+</ul>
+</li>
+<li><a href="#_useful_helpers">7.4. Useful Helpers</a>
+<ul class="sectlevel3">
+<li><a href="#_functions">7.4.1. Functions</a></li>
+<li><a href="#_content_of_data_in_executable_content">7.4.2. Content of <code>data</code> in Executable Content</a></li>
+<li><a href="#_runtime_env_of_executable_content">7.4.3. Runtime <code>env</code> of Executable Content</a></li>
+</ul>
+</li>
+<li><a href="#_react_hooks">7.5. React Hooks</a></li>
+</ul>
+</li>
+<li><a href="#_testing">8. Testing</a>
 <ul class="sectlevel2">
-<li><a href="#_related_work">8.1. Related Work</a></li>
-<li><a href="#_conformance">8.2. Conformance</a></li>
+<li><a href="#_mocking">8.1. Mocking</a></li>
+<li><a href="#_event_sendscancels">8.2. Event Sends/Cancels</a></li>
+<li><a href="#_starting_in_a_specific_configuration">8.3. Starting in a Specific Configuration</a></li>
+</ul>
+</li>
+<li><a href="#_relationship_to_scxml">9. Relationship to SCXML</a>
+<ul class="sectlevel2">
+<li><a href="#_related_work">9.1. Related Work</a></li>
+<li><a href="#_conformance">9.2. Conformance</a></li>
 </ul>
 </li>
 </ul>
@@ -651,7 +658,7 @@ leverages parallel and compound states to simulate traffic lights with pedestria
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
     [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [parallel state transition]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
     [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
     [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
@@ -758,11 +765,11 @@ leverages parallel and compound states to simulate traffic lights with pedestria
 <pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">history-sample</span>
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state transition history]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [history state transition]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
     [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
-    [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
-    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]))
+    [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]))
 
 (<span class="keyword">def</span> <span class="function">sample</span>
   (statechart {}
@@ -842,7 +849,7 @@ a data/execution model, a working memory storage facility, a state chart registr
 </div>
 <div class="paragraph">
 <p>The <code>com.fulcrologic.statecharts.simple</code> namespace can set up all of these things for you, as long
-as you simple want to run state charts all in the same JVM in RAM. That namespace also includes helper
+as you simply want to run state charts all in the same JVM in RAM. That namespace also includes helper
 functions for starting a new session on a chart, and sending events to arbitrary sessions.</p>
 </div>
 <div class="admonitionblock note">
@@ -892,12 +899,12 @@ uses <code>core.async</code> to run such a loop for you.</p>
    sent events and mutates in place (and handles timers in CLJC) via core.async.</span><span class="delimiter">&quot;</span></span>
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition on-entry Send]]
+    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [Send on-entry parallel state transition]]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop <span class="symbol">:as</span> <span class="keyword">loop</span>]
     [com.fulcrologic.statecharts.events <span class="symbol">:as</span> evts]
     [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
     [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
-    [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
     [com.fulcrologic.statecharts.util <span class="symbol">:refer</span> [extend-key]]))
 
 (<span class="keyword">def</span> <span class="function">nk</span>
@@ -1031,7 +1038,78 @@ The <code>send</code> element has a <code>Send</code> (capital S) alias so you c
 </div>
 </div>
 <div class="sect1">
-<h2 id="_going_deeper"><a class="anchor" href="#_going_deeper"></a><a class="link" href="#_going_deeper">3. Going Deeper</a></h2>
+<h2 id="_async_execution_engine"><a class="anchor" href="#_async_execution_engine"></a><a class="link" href="#_async_execution_engine">3. Async Execution Engine</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The library includes an async-capable execution engine built on <a href="https://github.com/funcool/promesa">promesa</a> that allows
+expressions to return promises the algorithm awaits. When all expressions are synchronous, the overhead is minimal.
+When an expression returns a promise, the algorithm parks until it resolves before continuing.</p>
+</div>
+<div class="paragraph">
+<p>Both <code>start!</code> and <code>process-event!</code> may return promises instead of plain values. Callers must handle both cases.
+The easiest approach is to use <code>promesa.core/let</code> or <code>promesa.core/then</code> which handle both synchronous values and
+promises transparently.</p>
+</div>
+<div class="sect2">
+<h3 id="_setting_up_the_async_engine"><a class="anchor" href="#_setting_up_the_async_engine"></a><a class="link" href="#_setting_up_the_async_engine">3.1. Setting Up the Async Engine</a></h3>
+<div class="paragraph">
+<p>Use the <code>com.fulcrologic.statecharts.simple-async</code> namespace for automatic configuration:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">require</span> '[com.fulcrologic.statecharts.simple-async <span class="symbol">:as</span> simple-async])
+
+(<span class="keyword">let</span> [env (simple-async/simple-env)]
+  (simple-async/register! env <span class="symbol">:my-chart</span> my-chart)
+  (simple-async/start! env <span class="symbol">:my-chart</span> session-id))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Or compose manually:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">require</span> '[com.fulcrologic.statecharts.algorithms.v20150901-async <span class="symbol">:as</span> alg]
+         '[com.fulcrologic.statecharts.execution-model.lambda-async <span class="symbol">:as</span> lambda-async])
+
+{<span class="symbol">::sc/processor</span> (alg/new-processor)
+ <span class="symbol">::sc/execution-model</span> (lambda-async/new-execution-model dm event-queue)}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The async engine requires promesa on the classpath. Add it to your <code>deps.edn</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">{<span class="symbol">:deps</span> {funcool/promesa {<span class="symbol">:mvn/version</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">11.0.678</span><span class="delimiter">&quot;</span></span>}}}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Or use the <code>:async</code> alias if available in the project.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_using_async_expressions"><a class="anchor" href="#_using_async_expressions"></a><a class="link" href="#_using_async_expressions">3.2. Using Async Expressions</a></h3>
+<div class="paragraph">
+<p>Any expression (predicates, script nodes, etc.) can return a promise:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> <span class="symbol">:loading</span>}
+  (on-entry {}
+    (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [env data]
+                     (p/let [result (http/get <span class="string"><span class="delimiter">&quot;</span><span class="content">/api/data</span><span class="delimiter">&quot;</span></span>)]
+                       [(ops/assign <span class="symbol">:result</span> result)]))})))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The algorithm will automatically detect promises and await them. Synchronous expressions continue to work without change.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_going_deeper"><a class="anchor" href="#_going_deeper"></a><a class="link" href="#_going_deeper">4. Going Deeper</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>You can use the <a href="http://www.w3.org/TR/2015/REC-scxml-20150901/">SCXML guide</a> which has examples as a pretty
@@ -1057,7 +1135,7 @@ of this library:</p>
 <p>See the docstrings on the <code>statechart</code> and various elements for details of differences.</p>
 </div>
 <div class="sect2">
-<h3 id="_terminology"><a class="anchor" href="#_terminology"></a><a class="link" href="#_terminology">3.1. Terminology</a></h3>
+<h3 id="_terminology"><a class="anchor" href="#_terminology"></a><a class="link" href="#_terminology">4.1. Terminology</a></h3>
 <div class="dlist">
 <dl>
 <dt class="hdlist1">Atomic State</dt>
@@ -1161,14 +1239,14 @@ and <code>:event</code> qualifier (meaning they are exited as soon as they are e
 </div>
 </div>
 <div class="sect2">
-<h3 id="_states"><a class="anchor" href="#_states"></a><a class="link" href="#_states">3.2. States</a></h3>
+<h3 id="_states"><a class="anchor" href="#_states"></a><a class="link" href="#_states">4.2. States</a></h3>
 <div class="paragraph">
 <p>States may be atomic, compound (hierarchical), or parallel. The first two are generated with the <code>state</code> element, and
 the latter with <code>parallel</code>.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_transitions"><a class="anchor" href="#_transitions"></a><a class="link" href="#_transitions">3.3. Transitions</a></h3>
+<h3 id="_transitions"><a class="anchor" href="#_transitions"></a><a class="link" href="#_transitions">4.3. Transitions</a></h3>
 <div class="paragraph">
 <p>Transitions are the consumers of events. Their "source" is their parent. Transitions can be <strong>eventless</strong>, and
 they can also have no <strong>target</strong> (indicating they do not change the active states, and are only for executing
@@ -1203,7 +1281,7 @@ transition (that has no target at all) will not.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_condition_states"><a class="anchor" href="#_condition_states"></a><a class="link" href="#_condition_states">3.4. "Condition" States</a></h3>
+<h3 id="_condition_states"><a class="anchor" href="#_condition_states"></a><a class="link" href="#_condition_states">4.4. "Condition" States</a></h3>
 <div class="paragraph">
 <p>Condition states from classic state charts
 (shown as a diamond in UML state chart notation) can be modelled using eventless transitions.</p>
@@ -1236,7 +1314,7 @@ See <a href="#Convenience">Shorthand Convenience</a> for a nicer-looking version
 </div>
 </div>
 <div class="sect2">
-<h3 id="_event_processing"><a class="anchor" href="#_event_processing"></a><a class="link" href="#_event_processing">3.5. Event Processing</a></h3>
+<h3 id="_event_processing"><a class="anchor" href="#_event_processing"></a><a class="link" href="#_event_processing">4.5. Event Processing</a></h3>
 <div class="paragraph">
 <p>In a fully-fleshed system your event queue would have a corresponding runtime story, where <code>process-event</code> was
 automatically called on the correct chart/session/invocation/service when an event is available. As such,
@@ -1247,7 +1325,7 @@ that runs in-core (a core.async <code>go-loop</code>).</p>
 <p>The library includes a fully-functional system for simple applications in the <code>simple</code> namespace.</p>
 </div>
 <div class="sect3">
-<h4 id="_event_name_matching"><a class="anchor" href="#_event_name_matching"></a><a class="link" href="#_event_name_matching">3.5.1. Event Name Matching</a></h4>
+<h4 id="_event_name_matching"><a class="anchor" href="#_event_name_matching"></a><a class="link" href="#_event_name_matching">4.5.1. Event Name Matching</a></h4>
 <div class="paragraph">
 <p>The SCXML standard describes a name matching algorithm for event names that allows for wildcard pattern matching.
 Event names are dot-separated, and are prefix-matched. In this library keywords are used for event names, but
@@ -1276,7 +1354,7 @@ match at the same time.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_send_targets"><a class="anchor" href="#_send_targets"></a><a class="link" href="#_send_targets">3.5.2. Send Targets</a></h4>
+<h4 id="_send_targets"><a class="anchor" href="#_send_targets"></a><a class="link" href="#_send_targets">4.5.2. Send Targets</a></h4>
 <div class="paragraph">
 <p>The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that
 these are often URLs. The default implementation of the event queue in this library only supports
@@ -1288,7 +1366,7 @@ expected to simply be a <code>session-id</code>, where <code>session-id</code>  
 </div>
 </div>
 <div class="sect3">
-<h4 id="_send_types"><a class="anchor" href="#_send_types"></a><a class="link" href="#_send_types">3.5.3. Send Types</a></h4>
+<h4 id="_send_types"><a class="anchor" href="#_send_types"></a><a class="link" href="#_send_types">4.5.3. Send Types</a></h4>
 <div class="paragraph">
 <p>The SCXML standard (section 6.2.5) defines types as a URI as well. The internal implementations in this library
 do not enforce this, but this library <strong>does</strong> recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
@@ -1296,7 +1374,7 @@ as a desire to talk to another state chart session (and is the only/default pred
 </div>
 </div>
 <div class="sect3">
-<h4 id="_manual_polling_queue"><a class="anchor" href="#_manual_polling_queue"></a><a class="link" href="#_manual_polling_queue">3.5.4. Manual Polling Queue</a></h4>
+<h4 id="_manual_polling_queue"><a class="anchor" href="#_manual_polling_queue"></a><a class="link" href="#_manual_polling_queue">4.5.4. Manual Polling Queue</a></h4>
 <div class="paragraph">
 <p>There is a manually polled queue implementation in this library, with <strong>no</strong> automatic processing
 at all. If you want to support events that come from outside of the chart via the queue, then you have
@@ -1309,7 +1387,7 @@ delayed event delivery will work, as long as your code watches for the delayed e
   (<span class="symbol">:require</span>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
     [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state parallel transition]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [parallel state transition]]
     [com.fulcrologic.statecharts.events <span class="symbol">:refer</span> [new-event]]
     [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]
     [com.fulcrologic.statecharts.simple <span class="symbol">:as</span> simple]
@@ -1397,7 +1475,7 @@ delayed event delivery will work, as long as your code watches for the delayed e
 </div>
 </div>
 <div class="sect2">
-<h3 id="_data_models"><a class="anchor" href="#_data_models"></a><a class="link" href="#_data_models">3.6. Data Models</a></h3>
+<h3 id="_data_models"><a class="anchor" href="#_data_models"></a><a class="link" href="#_data_models">4.6. Data Models</a></h3>
 <div class="paragraph">
 <p>A data model is a component of the system that holds data for a given state chart&#8217;s session.
 The SCXML specification allows the implementation quite a bit of latitude in the interpretation of the chart&#8217;s
@@ -1420,7 +1498,7 @@ a running session when pausing it for later revival.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_execution_models"><a class="anchor" href="#_execution_models"></a><a class="link" href="#_execution_models">3.7. Execution Models</a></h3>
+<h3 id="_execution_models"><a class="anchor" href="#_execution_models"></a><a class="link" href="#_execution_models">4.7. Execution Models</a></h3>
 <div class="paragraph">
 <p>Most people will probably just use the CLJCExecutionModel, which lets you write executable content
 in CLJC as lambdas:</p>
@@ -1447,7 +1525,7 @@ script elements:</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_working_memory_and_identity"><a class="anchor" href="#_working_memory_and_identity"></a><a class="link" href="#_working_memory_and_identity">3.8. Working Memory and Identity</a></h3>
+<h3 id="_working_memory_and_identity"><a class="anchor" href="#_working_memory_and_identity"></a><a class="link" href="#_working_memory_and_identity">4.8. Working Memory and Identity</a></h3>
 <div class="paragraph">
 <p>The working memory of the state chart is plain EDN and contains no code.
 It is serializable by nippy, transit, etc. Therefore, you can easily save
@@ -1462,7 +1540,7 @@ instances of chart that are archived in durable storage while idle.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_accessing_running_charts_from_outside_the_chart"><a class="anchor" href="#_accessing_running_charts_from_outside_the_chart"></a><a class="link" href="#_accessing_running_charts_from_outside_the_chart">3.9. Accessing Running Charts from Outside the Chart</a></h3>
+<h3 id="_accessing_running_charts_from_outside_the_chart"><a class="anchor" href="#_accessing_running_charts_from_outside_the_chart"></a><a class="link" href="#_accessing_running_charts_from_outside_the_chart">4.9. Accessing Running Charts from Outside the Chart</a></h3>
 <div class="paragraph">
 <p>While you <strong>can</strong> work with the core algorithms as pure function, you will normally set up a
 standard system environment (where you provide an event queue and working memory store). When working with such a
@@ -1511,7 +1589,7 @@ in your chart.  The latter <strong>can</strong> be used anywhere the former is n
 </div>
 </div>
 <div class="sect2">
-<h3 id="_invocations"><a class="anchor" href="#_invocations"></a><a class="link" href="#_invocations">3.10. Invocations</a></h3>
+<h3 id="_invocations"><a class="anchor" href="#_invocations"></a><a class="link" href="#_invocations">4.10. Invocations</a></h3>
 <div class="paragraph">
 <p>An invocation is an "external" service/chart/process that can be started when your state chart enters a state,
 exchanges events <strong>while</strong> that state is active (you can forward events and receive them). The invocation can self-terminate
@@ -1523,7 +1601,7 @@ pre-processed by <code>finalize</code> elements and can update the data model be
 the chart. See the SCXML standard for a full description of how invocations work.</p>
 </div>
 <div class="sect3">
-<h4 id="_passing_invocation_data"><a class="anchor" href="#_passing_invocation_data"></a><a class="link" href="#_passing_invocation_data">3.10.1. Passing Invocation Data</a></h4>
+<h4 id="_passing_invocation_data"><a class="anchor" href="#_passing_invocation_data"></a><a class="link" href="#_passing_invocation_data">4.10.1. Passing Invocation Data</a></h4>
 <div class="paragraph">
 <p>The <code>invoke</code> element has both a <code>:namelist</code> and <code>:params</code> argument. The former allows you to list data locations
 of the parent that should be copied to the child. <code>:params</code> is dynamic, and allows you to specify expressions that
@@ -1538,7 +1616,7 @@ calculate values to inject into the child data model. These options can be used 
 </div>
 </div>
 <div class="sect3">
-<h4 id="_invoking_other_state_charts_or_futures"><a class="anchor" href="#_invoking_other_state_charts_or_futures"></a><a class="link" href="#_invoking_other_state_charts_or_futures">3.10.2. Invoking other State Charts or Futures</a></h4>
+<h4 id="_invoking_other_state_charts_or_futures"><a class="anchor" href="#_invoking_other_state_charts_or_futures"></a><a class="link" href="#_invoking_other_state_charts_or_futures">4.10.2. Invoking other State Charts or Futures</a></h4>
 <div class="paragraph">
 <p>The library has a built-in <code>InvocationProcessor</code> that knows how to start other state charts via an <code>invoke</code>, and in CLJ
 there is also support for futures (which are cancelled if the state containing the invoke is exited).</p>
@@ -1665,7 +1743,7 @@ there is also support for futures (which are cancelled if the state containing t
 </div>
 </div>
 <div class="sect3">
-<h4 id="_custom_invocation_processors"><a class="anchor" href="#_custom_invocation_processors"></a><a class="link" href="#_custom_invocation_processors">3.10.3. Custom Invocation Processors</a></h4>
+<h4 id="_custom_invocation_processors"><a class="anchor" href="#_custom_invocation_processors"></a><a class="link" href="#_custom_invocation_processors">4.10.3. Custom Invocation Processors</a></h4>
 <div class="paragraph">
 <p>For example, suppose you want to install an invocation processor that can provide timer events on some interval.
 You could do something like:</p>
@@ -1678,7 +1756,7 @@ You could do something like:</p>
     [com.fulcrologic.statecharts <span class="symbol">:as</span> sc]
     [com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
     [com.fulcrologic.statecharts.data-model.operations <span class="symbol">:as</span> ops]
-    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state transition script-fn invoke]]
+    [com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [invoke script-fn state transition]]
     [com.fulcrologic.statecharts.environment <span class="symbol">:as</span> env]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop <span class="symbol">:as</span> <span class="keyword">loop</span>]
     [com.fulcrologic.statecharts.events <span class="symbol">:as</span> evts]
@@ -1777,7 +1855,7 @@ an <code>invoke</code> can send such events. So, the timer service here is sendi
 </div>
 </div>
 <div class="sect1">
-<h2 id="Convenience"><a class="anchor" href="#Convenience"></a><a class="link" href="#Convenience">4. Shorthand Convenience</a></h2>
+<h2 id="Convenience"><a class="anchor" href="#Convenience"></a><a class="link" href="#Convenience">5. Shorthand Convenience</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>Making your state chart definition cleaner is a simple matter, since it
@@ -1882,7 +1960,7 @@ to the reader.</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_custom_executable_content"><a class="anchor" href="#_custom_executable_content"></a><a class="link" href="#_custom_executable_content">5. Custom Executable Content</a></h2>
+<h2 id="_custom_executable_content"><a class="anchor" href="#_custom_executable_content"></a><a class="link" href="#_custom_executable_content">6. Custom Executable Content</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>The SCXML standard defines a number of elements it terms "Executable Content", meaning child nodes that
@@ -1905,7 +1983,7 @@ com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like 
 </div>
 </div>
 <div class="sect1">
-<h2 id="_integration_with_fulcro"><a class="anchor" href="#_integration_with_fulcro"></a><a class="link" href="#_integration_with_fulcro">6. Integration with Fulcro</a></h2>
+<h2 id="_integration_with_fulcro"><a class="anchor" href="#_integration_with_fulcro"></a><a class="link" href="#_integration_with_fulcro">7. Integration with Fulcro</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>The Fulcro integration for state charts has the following general enhancements over the standard
@@ -1958,11 +2036,12 @@ with other database concerns.</p>
 [com.fulcrologic.statecharts.data-model.operations <span class="symbol">:as</span> ops]
 [com.fulcrologic.statecharts.integration.fulcro <span class="symbol">:as</span> scf]
 [com.fulcrologic.statecharts.integration.fulcro.operations <span class="symbol">:as</span> fop]
+[com.fulcrologic.statecharts.integration.fulcro.async-operations <span class="symbol">:as</span> afop]
 [com.fulcrologic.statecharts.protocols <span class="symbol">:as</span> sp]</code></pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_basic_usage"><a class="anchor" href="#_basic_usage"></a><a class="link" href="#_basic_usage">6.1. Basic Usage</a></h3>
+<h3 id="_basic_usage"><a class="anchor" href="#_basic_usage"></a><a class="link" href="#_basic_usage">7.1. Basic Usage</a></h3>
 <div class="paragraph">
 <p>There are three basic steps: install the support, register machines, and start them:</p>
 </div>
@@ -1988,7 +2067,7 @@ with other database concerns.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_the_data_model"><a class="anchor" href="#_the_data_model"></a><a class="link" href="#_the_data_model">6.2. The Data Model</a></h3>
+<h3 id="_the_data_model"><a class="anchor" href="#_the_data_model"></a><a class="link" href="#_the_data_model">7.2. The Data Model</a></h3>
 <div class="paragraph">
 <p>The Fulcro state charts data model has a number of features to help you work with Fulcro applications.</p>
 </div>
@@ -2026,7 +2105,7 @@ take a vector to describe a data path will usually accept an alias keyword inste
 </ul>
 </div>
 <div class="sect3">
-<h4 id="_initializing_the_data_model"><a class="anchor" href="#_initializing_the_data_model"></a><a class="link" href="#_initializing_the_data_model">6.2.1. Initializing the Data Model</a></h4>
+<h4 id="_initializing_the_data_model"><a class="anchor" href="#_initializing_the_data_model"></a><a class="link" href="#_initializing_the_data_model">7.2.1. Initializing the Data Model</a></h4>
 <div class="paragraph">
 <p>You can use the initial data in <code>sp/start!</code> or a top-level <code>data-model</code> element to put data into the
 local storage of your state chart. This is particularly useful for specifying things like aliases
@@ -2058,7 +2137,7 @@ the data model.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_data_locations"><a class="anchor" href="#_data_locations"></a><a class="link" href="#_data_locations">6.2.2. Data Locations</a></h4>
+<h4 id="_data_locations"><a class="anchor" href="#_data_locations"></a><a class="link" href="#_data_locations">7.2.2. Data Locations</a></h4>
 <div class="paragraph">
 <p>There are four primary ways to address data in the data model, and
 the standard state chart operations such as <code>op/assign</code> already support these abstract paths:</p>
@@ -2093,7 +2172,7 @@ in place of that keyword and the resulting path is treated as above.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_executable_content"><a class="anchor" href="#_executable_content"></a><a class="link" href="#_executable_content">6.3. Executable Content</a></h3>
+<h3 id="_executable_content"><a class="anchor" href="#_executable_content"></a><a class="link" href="#_executable_content">7.3. Executable Content</a></h3>
 <div class="paragraph">
 <p>The executable content nodes (predicates and other expressions) in the state chart can be functions of
 two arguments: <code>env</code> (the processing environment) and <code>data</code>.</p>
@@ -2107,7 +2186,7 @@ will also include the standard <code>:_event</code> (which is a map that has thi
 an extended key for <code>:fulcro/state-map</code> which has the current value of the Fulcro state database.</p>
 </div>
 <div class="sect3">
-<h4 id="_operations"><a class="anchor" href="#_operations"></a><a class="link" href="#_operations">6.3.1. Operations</a></h4>
+<h4 id="_operations"><a class="anchor" href="#_operations"></a><a class="link" href="#_operations">7.3.1. Operations</a></h4>
 <div class="paragraph">
 <p>Non-predicate executable content (e.g. <code>script</code>) functions can return a vector of operations to
 run. The standard set (assign and delete) are supported, and use the extended path support
@@ -2150,11 +2229,212 @@ need to syntax-quote the transaction; however, remember that the Fulcro mutation
 </div>
 </div>
 </div>
+<div class="sect3">
+<h4 id="_async_operations"><a class="anchor" href="#_async_operations"></a><a class="link" href="#_async_operations">7.3.2. Async Operations</a></h4>
+<div class="paragraph">
+<p>The operations <code>fop/load</code> and <code>fop/invoke-remote</code> described above use <code>send!</code> to place completion events on the
+external event queue. This means the statechart rests in an intermediate state between starting the operation and
+receiving the completion event. With async operations, the chart transitions atomically within a single
+<code>process-event!</code> call.</p>
+</div>
+<div class="paragraph">
+<p>The <code>com.fulcrologic.statecharts.integration.fulcro.async-operations</code> namespace (aliased as <code>afop</code>) provides
+async-aware versions of these operations that return promesa promises and use <code>raise</code> (internal queue) instead of
+<code>send!</code> (external queue).</p>
+</div>
+<div class="paragraph">
+<p>To enable async operations, pass <code>:async? true</code> when installing statecharts:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(scf/install-fulcro-statecharts! app {<span class="symbol">:async?</span> <span class="predefined-constant">true</span>})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This swaps in the async processor and execution model from the <a href="#_async_execution_engine">Async Execution Engine</a> section.</p>
+</div>
+<div class="sect4">
+<h5 id="_await_load"><a class="anchor" href="#_await_load"></a><a class="link" href="#_await_load">await-load</a></h5>
+<div class="paragraph">
+<p><code>(afop/await-load env query-root component-or-actor options)</code> issues a remote load and returns a promise that
+resolves when the load completes.</p>
+</div>
+<div class="paragraph">
+<p>Parameters:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>env</code> - The statechart environment (first arg to expressions)</p>
+</li>
+<li>
+<p><code>query-root</code> - A keyword or ident for the root of the remote query</p>
+</li>
+<li>
+<p><code>component-or-actor</code> - A Fulcro component, or a keyword naming a known actor</p>
+</li>
+<li>
+<p><code>options</code> - Same as <code>fop/load</code> options:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>::sc/ok-event</code> - Event to raise when the load succeeds</p>
+</li>
+<li>
+<p><code>::sc/error-event</code> - Event to raise when the load fails</p>
+</li>
+<li>
+<p><code>::sc/ok-data</code> - Extra data to include in the ok event</p>
+</li>
+<li>
+<p><code>::sc/error-data</code> - Extra data to include in the error event</p>
+</li>
+<li>
+<p><code>::sc/target-alias</code> - Target the load at a statechart alias</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> <span class="symbol">:loading-user</span>}
+  (on-entry {}
+    (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [env data]
+                     (afop/await-load env <span class="symbol">:user</span> User
+                       {<span class="symbol">::sc/ok-event</span>    <span class="symbol">:event/user-loaded</span>
+                        <span class="symbol">::sc/error-event</span> <span class="symbol">:event/load-failed</span>}))}))
+  (transition {<span class="symbol">:event</span> <span class="symbol">:event/user-loaded</span> <span class="symbol">:target</span> <span class="symbol">:viewing-user</span>})
+  (transition {<span class="symbol">:event</span> <span class="symbol">:event/load-failed</span> <span class="symbol">:target</span> <span class="symbol">:error</span>}))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_await_mutation"><a class="anchor" href="#_await_mutation"></a><a class="link" href="#_await_mutation">await-mutation</a></h5>
+<div class="paragraph">
+<p><code>(afop/await-mutation env txn options)</code> invokes a remote mutation and returns a promise that resolves when the
+mutation completes.</p>
+</div>
+<div class="paragraph">
+<p>Parameters:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>env</code> - The statechart environment (first arg to expressions)</p>
+</li>
+<li>
+<p><code>txn</code> - A Fulcro transaction vector containing a single mutation</p>
+</li>
+<li>
+<p><code>options</code> - Same as <code>fop/invoke-remote</code> options:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>:ok-event</code> - Event to raise on success</p>
+</li>
+<li>
+<p><code>:error-event</code> - Event to raise on failure</p>
+</li>
+<li>
+<p><code>:ok-data</code> - Extra data for the ok event</p>
+</li>
+<li>
+<p><code>:error-data</code> - Extra data for the error event</p>
+</li>
+<li>
+<p><code>:target</code> - Data-targeting path (vector, alias keyword, or actor-prefixed)</p>
+</li>
+<li>
+<p><code>:returning</code> - Component class or actor keyword for normalization</p>
+</li>
+<li>
+<p><code>:mutation-remote</code> - Remote name (defaults to <code>:remote</code>)</p>
+</li>
+<li>
+<p><code>:tx-options</code> - Options passed to <code>rc/transact!</code></p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(state {<span class="symbol">:id</span> <span class="symbol">:saving</span>}
+  (on-entry {}
+    (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [env data]
+                     (<span class="keyword">let</span> [form-data (resolve-actor data <span class="symbol">:actor/form</span>)]
+                       (afop/await-mutation env [(save-user form-data)]
+                         {<span class="symbol">:ok-event</span>    <span class="symbol">:event/saved</span>
+                          <span class="symbol">:error-event</span> <span class="symbol">:event/save-failed</span>
+                          <span class="symbol">:returning</span>   User})))}))
+  (transition {<span class="symbol">:event</span> <span class="symbol">:event/saved</span> <span class="symbol">:target</span> <span class="symbol">:success</span>})
+  (transition {<span class="symbol">:event</span> <span class="symbol">:event/save-failed</span> <span class="symbol">:target</span> <span class="symbol">:error</span>}))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_comparison_send_based_vs_raise_based"><a class="anchor" href="#_comparison_send_based_vs_raise_based"></a><a class="link" href="#_comparison_send_based_vs_raise_based">Comparison: Send-based vs Raise-based</a></h5>
+<div class="paragraph">
+<p>With standard operations, intermediate states are visible:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; Using fop/load - chart rests in :loading</span>
+(state {<span class="symbol">:id</span> <span class="symbol">:loading</span>}
+  (on-entry {}
+    (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [env data]
+                     [(fop/load <span class="symbol">:user</span> User {<span class="symbol">::sc/ok-event</span> <span class="symbol">:event/loaded</span>})])}))
+  <span class="comment">;; Chart is in :loading state until external event arrives</span>
+  (transition {<span class="symbol">:event</span> <span class="symbol">:event/loaded</span> <span class="symbol">:target</span> <span class="symbol">:viewing</span>}))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With async operations, the transition is atomic:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; Using afop/await-load - atomic transition</span>
+(state {<span class="symbol">:id</span> <span class="symbol">:loading</span>}
+  (on-entry {}
+    (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [env data]
+                     (afop/await-load env <span class="symbol">:user</span> User {<span class="symbol">::sc/ok-event</span> <span class="symbol">:event/loaded</span>}))}))
+  <span class="comment">;; Event is raised internally, processed in same microstep</span>
+  (transition {<span class="symbol">:event</span> <span class="symbol">:event/loaded</span> <span class="symbol">:target</span> <span class="symbol">:viewing</span>}))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The async version never observably rests in <code>:loading</code> — it transitions directly to <code>:viewing</code> when the promise
+resolves.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The existing <code>fop/load</code> and <code>fop/invoke-remote</code> operations remain unchanged and continue to work with both
+sync and async execution engines. Use <code>afop/await-load</code> and <code>afop/await-mutation</code> only when you need atomic transitions.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
 </div>
 <div class="sect2">
-<h3 id="_useful_helpers"><a class="anchor" href="#_useful_helpers"></a><a class="link" href="#_useful_helpers">6.4. Useful Helpers</a></h3>
+<h3 id="_useful_helpers"><a class="anchor" href="#_useful_helpers"></a><a class="link" href="#_useful_helpers">7.4. Useful Helpers</a></h3>
 <div class="sect3">
-<h4 id="_functions"><a class="anchor" href="#_functions"></a><a class="link" href="#_functions">6.4.1. Functions</a></h4>
+<h4 id="_functions"><a class="anchor" href="#_functions"></a><a class="link" href="#_functions">7.4.1. Functions</a></h4>
 <div class="dlist">
 <dl>
 <dt class="hdlist1"><code>(scf/local-data-path session-id)</code></dt>
@@ -2211,7 +2491,7 @@ in transactions for <code>invoke-remote</code>.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_content_of_data_in_executable_content"><a class="anchor" href="#_content_of_data_in_executable_content"></a><a class="link" href="#_content_of_data_in_executable_content">6.4.2. Content of <code>data</code> in Executable Content</a></h4>
+<h4 id="_content_of_data_in_executable_content"><a class="anchor" href="#_content_of_data_in_executable_content"></a><a class="link" href="#_content_of_data_in_executable_content">7.4.2. Content of <code>data</code> in Executable Content</a></h4>
 <div class="paragraph">
 <p>The <code>data</code> parameter of runtime content (e.g. script nodes) contains:</p>
 </div>
@@ -2240,7 +2520,7 @@ in transactions for <code>invoke-remote</code>.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_runtime_env_of_executable_content"><a class="anchor" href="#_runtime_env_of_executable_content"></a><a class="link" href="#_runtime_env_of_executable_content">6.4.3. Runtime <code>env</code> of Executable Content</a></h4>
+<h4 id="_runtime_env_of_executable_content"><a class="anchor" href="#_runtime_env_of_executable_content"></a><a class="link" href="#_runtime_env_of_executable_content">7.4.3. Runtime <code>env</code> of Executable Content</a></h4>
 <div class="paragraph">
 <p>The runtime <code>env</code> in executable elements includes:</p>
 </div>
@@ -2278,7 +2558,7 @@ in transactions for <code>invoke-remote</code>.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_react_hooks"><a class="anchor" href="#_react_hooks"></a><a class="link" href="#_react_hooks">6.5. React Hooks</a></h3>
+<h3 id="_react_hooks"><a class="anchor" href="#_react_hooks"></a><a class="link" href="#_react_hooks">7.5. React Hooks</a></h3>
 <div class="paragraph">
 <p>There is support for using a state chart as a co-located element of a hooks-based
 component.</p>
@@ -2358,7 +2638,7 @@ blink red:</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_testing"><a class="anchor" href="#_testing"></a><a class="link" href="#_testing">7. Testing</a></h2>
+<h2 id="_testing"><a class="anchor" href="#_testing"></a><a class="link" href="#_testing">8. Testing</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>The main interface to this library is pure and functional, which makes the general job of testing easier in some cases,
@@ -2427,7 +2707,7 @@ would normally be run.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_mocking"><a class="anchor" href="#_mocking"></a><a class="link" href="#_mocking">7.1. Mocking</a></h3>
+<h3 id="_mocking"><a class="anchor" href="#_mocking"></a><a class="link" href="#_mocking">8.1. Mocking</a></h3>
 <div class="paragraph">
 <p>The mocking (set when creating the testing env) is a simple map (e.g. <code>{is-tuesday? true}</code>). The keys of the map
 must exactly match the expression in question (e.g. use <code>defn</code> to make them (as shown above), and then use those as the
@@ -2437,13 +2717,13 @@ the number of times that expression has run since the test env was created.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_event_sendscancels"><a class="anchor" href="#_event_sendscancels"></a><a class="link" href="#_event_sendscancels">7.2. Event Sends/Cancels</a></h3>
+<h3 id="_event_sendscancels"><a class="anchor" href="#_event_sendscancels"></a><a class="link" href="#_event_sendscancels">8.2. Event Sends/Cancels</a></h3>
 <div class="paragraph">
 <p>The sends and cancels will also be auto-recorded. See the docstrings in the testing namespace for more information.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_starting_in_a_specific_configuration"><a class="anchor" href="#_starting_in_a_specific_configuration"></a><a class="link" href="#_starting_in_a_specific_configuration">7.3. Starting in a Specific Configuration</a></h3>
+<h3 id="_starting_in_a_specific_configuration"><a class="anchor" href="#_starting_in_a_specific_configuration"></a><a class="link" href="#_starting_in_a_specific_configuration">8.3. Starting in a Specific Configuration</a></h3>
 <div class="paragraph">
 <p>Most of your tests will need the chart to be in some particular state as part of your setup. You <strong>could</strong> get there
 by triggering a sequence of events while having the mocks in perfect condition, but this creates a fragile
@@ -2484,7 +2764,7 @@ list a valid leaf from each region.</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">8. Relationship to SCXML</a></h2>
+<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">9. Relationship to SCXML</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>This library&#8217;s internal implementation follows (as closely as possible) the official
@@ -2553,7 +2833,7 @@ values in the data and excution model):</p>
 <code>script</code> tags to begin with.</p>
 </div>
 <div class="sect2">
-<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">8.1. Related Work</a></h3>
+<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">9.1. Related Work</a></h3>
 <div class="paragraph">
 <p>The primary alternative to this library is <a href="https://github.com/lucywang000/clj-statecharts">clj-statecharts</a>,
 which is a fine library modelled after xstate.</p>
@@ -2605,7 +2885,7 @@ Fulcro UI and I/O).</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">8.2. Conformance</a></h3>
+<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">9.2. Conformance</a></h3>
 <div class="paragraph">
 <p>This library was written using the reference implementation described in
 the <a href="https://www.w3.org/TR/scxml">SCXML standard</a>, but without the requirement
@@ -2629,7 +2909,7 @@ this library will add a new namespace for that new standard (not break versionin
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-07-31 07:42:34 -0700
+Last updated 2026-02-10 12:22:32 -0500
 </div>
 </div>
 </body>

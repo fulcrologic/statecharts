@@ -122,7 +122,7 @@
                          (transition {:event :go :target :done}))
                        (state {:id :done}))]
       (scf/register-statechart! app ::basic-chart chart)
-      (let [session-id (scf/start! app {:machine ::basic-chart})]
+      (let [session-id @(scf/start! app {:machine ::basic-chart})]
         (scf/send! app session-id :go)
         (scf/process-events! app)
         (assertions

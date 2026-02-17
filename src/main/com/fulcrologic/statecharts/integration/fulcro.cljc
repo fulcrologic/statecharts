@@ -48,7 +48,8 @@
     [com.fulcrologic.statecharts.invocation.statechart :as i.statechart]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.registry.local-memory-registry :as lmr]
-    [com.fulcrologic.statecharts.util :refer [new-uuid]]))
+    [com.fulcrologic.statecharts.util :refer [new-uuid]]
+    [promesa.core :as p]))
 
 (def local-data-path
   "[session-id & ks]
@@ -205,7 +206,7 @@ Returns the new session-id of the statechart."
   [::fulcro-appish [:map
                     [:machine :keyword]
                     [:session-id {:optional true} ::sc/id]
-                    [:data {:optional true} map?]] => (? ::sc/session-id)]
+                    [:data {:optional true} map?]] => [:maybe [:or ::sc/session-id [:fn p/promise?]]]]
   (when machine
     (let [env (or
                 (statechart-env app-ish)
@@ -215,8 +216,13 @@ Returns the new session-id of the statechart."
                                                         :org.w3.scxml.event/invokeid                   (new-uuid)
                                                         :com.fulcrologic.statecharts/parent-session-id impl/master-chart-id}
                                                  (map? data) (assoc :com.fulcrologic.statecharts/invocation-data data)))]
-      (sp/save-working-memory! working-memory-store env session-id s0)
-      session-id)))
+      (if (p/promise? s0)
+        (p/then s0 (fn [wmem]
+                     (sp/save-working-memory! working-memory-store env session-id wmem)
+                     session-id))
+        (do
+          (sp/save-working-memory! working-memory-store env session-id s0)
+          session-id)))))
 
 ;; Might need to defonce this so things don't restart. One coreasync queue. Timers???
 (>defn install-fulcro-statecharts!
@@ -346,10 +352,14 @@ Returns the new session-id of the statechart."
     (sp/receive-events! (::sc/event-queue env) env
       (fn [{::sc/keys [working-memory-store processor] :as env} {:keys [target] :as event}]
         (when target
-          (let [wmem     (sp/get-working-memory working-memory-store env target)
-                next-mem (when wmem (sp/process-event! processor env wmem event))]
-            (when next-mem
-              (sp/save-working-memory! working-memory-store env target next-mem)))))
+          (let [wmem    (sp/get-working-memory working-memory-store env target)
+                result  (when wmem (sp/process-event! processor env wmem event))
+                save-fn (fn [next-mem]
+                          (when next-mem
+                            (sp/save-working-memory! working-memory-store env target next-mem)))]
+            (if (p/promise? result)
+              (p/then result save-fn)
+              (save-fn result)))))
       {})))
 
 (defn mutation-result
