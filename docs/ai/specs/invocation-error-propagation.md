@@ -1,9 +1,10 @@
 # Spec: Fix Invocation Error Propagation
 
-**Status**: backlog
+**Status**: done
 **Priority**: P2
 **Created**: 2026-02-08
-**Owner**: conductor
+**Completed**: 2026-02-09
+**Owner**: invocation-bug-fixer
 
 ## Context
 
@@ -27,7 +28,29 @@ Additionally, `invocation/future.clj:44` has a potential race condition between 
 
 ## Verification
 
-1. [ ] Return value contract documented in InvocationProcessor protocol
-2. [ ] Invocation failure returns correct value
-3. [ ] Tests cover missing-chart scenario
-4. [ ] Tests cover future cancellation race condition
+1. [x] Return value contract documented in InvocationProcessor protocol
+2. [x] Invocation failure returns correct value
+3. [x] Tests cover missing-chart scenario
+4. [x] Tests cover future cancellation race condition
+
+## Implementation Notes
+
+### Bug Fixes Applied
+
+1. **future.clj - Error Return Value Bug (Fixed)**
+   - Original code always returned `true` regardless of success/failure
+   - Fixed to return `false` when `src` is not a function
+
+2. **future.clj - Race Condition (Fixed)**
+   - Original code could have the future complete before it was added to `active-futures`
+   - Fixed by using a promise to block the future body until registration completes
+
+3. **future.clj - Exception Handling (Added)**
+   - Added `catch Throwable` to log exceptions in the future body
+
+4. **statechart.cljc** - Already correctly returned `false` on error
+
+### Test Results
+- StatechartInvocationProcessor: 30 assertions passing
+- FutureInvocationProcessor: 29 assertions passing
+- **Total: 59 assertions, 0 failures**

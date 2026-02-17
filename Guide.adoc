@@ -29,27 +29,23 @@ endif::[]
 
 = Getting Started
 
-A state chart is defined as a (nested) map. Some of this content's behavior is <<Goals, configurable>>.
-The simplest setup is to use Clojure for the executable code and a simple flat data model that scopes all state charts
-to the session (running instance of state chart).
+A state chart is defined as a (nested) map.
+Some of this content's behavior is <<Goals, configurable>>.
+The simplest setup is to use Clojure for the executable code and a simple flat data model that scopes all state charts to the session (running instance of state chart).
 
-NOTE: The SCXML standard is used for the semantics and processing, and MUCH of the overall structure. We keep
-the idea that each node in the chart has a unique ID, but take some license with executable content.
-Most of the "executable content" elements described in the SCXML standard have differences since we are not
-using XML. Sometimes we assume you can get by with an expression on the parent element, or just a single child
-script node.
+NOTE: The SCXML standard is used for the semantics and processing, and MUCH of the overall structure.
+We keep the idea that each node in the chart has a unique ID, but take some license with executable content.
+Most of the "executable content" elements described in the SCXML standard have differences since we are not using XML.
+Sometimes we assume you can get by with an expression on the parent element, or just a single child script node.
 
 To make it easier to write the maps there are functions for each element type in the
-`com.fulcrologic.statecharts.elements` namespace, and it is recommended that you use these because some of
-them validate their parameters and children.
+`com.fulcrologic.statecharts.elements` namespace, and it is recommended that you use these because some of them validate their parameters and children.
 
-Once you have a state chart definition you need to create a session, which is just a running instance of the
-chart.
+Once you have a state chart definition you need to create a session, which is just a running instance of the chart.
 
 Once you have a session, you can send events to it, and look at the content of the session (or store it, etc).
 
-Here's a traffic light example from the `src/examples` directory in this repository that
-leverages parallel and compound states to simulate traffic lights with pedestrian signals:
+Here's a traffic light example from the `src/examples` directory in this repository that leverages parallel and compound states to simulate traffic lights with pedestrian signals:
 
 [source]
 -----
@@ -69,45 +65,41 @@ If you run the items in the comment block, you'll see:
 (:cross-ew/red :cross-ns/white :east-west/green :north-south/red)
 -----
 
-History support includes both shallow and deep. Here's a shallow example:
+History support includes both shallow and deep.
+Here's a shallow example:
 
 [source]
 -----
 include::src/examples/history_sample.cljc[]
 -----
 
-See the https://www.w3.org/TR/2015/REC-scxml-20150901/[SCXML spec] for how to structure elements. The structure and naming are kept close to that spec for easy
-cross-referencing with its documentation.
+See the https://www.w3.org/TR/2015/REC-scxml-20150901/[SCXML spec] for how to structure elements.
+The structure and naming are kept close to that spec for easy cross-referencing with its documentation.
 
 = Autonomous State Charts
 
-The pure functional form for the charts is interesting and useful as a building-block, but if you want
-a fully-function SCXML-compatible system, you needs something that can run, deliver delayed events, send
-events from one state chart session to another, start/stop nested state charts, etc.
+The pure functional form for the charts is interesting and useful as a building-block, but if you want a fully-function SCXML-compatible system, you needs something that can run, deliver delayed events, send events from one state chart session to another, start/stop nested state charts, etc.
 
-In order for this to work you must have a number of things: an event queue, invocation processor(s),
-a data/execution model, a working memory storage facility, a state chart registry, and an event loop.
+In order for this to work you must have a number of things: an event queue, invocation processor(s), a data/execution model, a working memory storage facility, a state chart registry, and an event loop.
 
 That's a lot of different things to set up!
 
-The `com.fulcrologic.statecharts.simple` namespace can set up all of these things for you, as long
-as you simple want to run state charts all in the same JVM in RAM. That namespace also includes helper
-functions for starting a new session on a chart, and sending events to arbitrary sessions.
+The `com.fulcrologic.statecharts.simple` namespace can set up all of these things for you, as long as you simply want to run state charts all in the same JVM in RAM.
+That namespace also includes helper functions for starting a new session on a chart, and sending events to arbitrary sessions.
 
-NOTE: The design of this library is meant to accomplish much more complex distributed and long-lived systems, but you
-have to implement the various protocols for each of the above elements to build such a thing.
+NOTE: The design of this library is meant to accomplish much more complex distributed and long-lived systems, but you have to implement the various protocols for each of the above elements to build such a thing.
 
 The basic steps for using `simple` are:
 
 . Create a `(simple/simple-env)`
 . Register your charts with the state chart registry in that env with `(simple/register! env k chart)`
-. Run an event loop. The `com.fulcrologic.statecharts.event-queue.core-async-event-loop/run-event-loop!`
+. Run an event loop.
+The `com.fulcrologic.statecharts.event-queue.core-async-event-loop/run-event-loop!`
 uses `core.async` to run such a loop for you.
 . Start one or more state charts, via the `k` you registered them under.
 . (optionally) Send events `(simple/send! env {:event :evt :target sessionid})`
 
-Below is an example that uses these steps, but also overrides one of the components in the env
-(the working memory store) so it can output messages as the state chart changes state:
+Below is an example that uses these steps, but also overrides one of the components in the env (the working memory store) so it can output messages as the state chart changes state:
 
 [source]
 ------
@@ -116,11 +108,91 @@ include::src/examples/traffic_light_async.cljc[]
 
 NOTE: The `send` element has a `Send` (capital S) alias so you can avoid shadowing the predefined Clojure function.
 
+= Async Execution Engine
+
+The library includes an async-capable execution engine built on https://github.com/funcool/promesa[promesa] that allows expressions to return promises the algorithm awaits.
+When all expressions are synchronous, the overhead is minimal.
+When an expression returns a promise, the algorithm parks until it resolves before continuing.
+
+Both `start!` and `process-event!` may return promises instead of plain values.
+Callers must handle both cases.
+The easiest approach is to use `promesa.core/let` or `promesa.core/then` which handle both synchronous values and promises transparently.
+
+The motivation for this features is CLJS statecharts, because the js ecosystem has a ton of promise-based asynchrony.
+In CLJ, you can write script tags that *block*:
+
+[source]
+-----
+(state {:id :state/foo}
+  (on-entry {}
+    (script-fn [env data] (db/run-query! "A")) ; blocks
+    (script-fn [env data]  ; runs AFTER the first script
+      (if (condition-needing-loaded-data-from-a)
+        (db/run-query! "B"))))
+  (state {:id :nested-state} ; IS NOT entered until all scripts finish
+    ...)
+-----
+
+but in JS-land, I/O is async, meaning you end up writing a bunch of states to "track progress".
+IF you use the async engine, then returning a promise from a script will cause the statechart to PARK until the promise completes, allowing you to write much simpler charts.
+
+NOTE: This is an *opt-in* feature.
+The Fulcro integration can use it simply by passing a single parameter when you install the statecharts support.
+
+== Setting Up the Async Engine
+
+Use the `com.fulcrologic.statecharts.simple-async` namespace for automatic configuration:
+
+[source]
+-----
+(require '[com.fulcrologic.statecharts.simple-async :as simple-async])
+
+(let [env (simple-async/simple-env)]
+  (simple-async/register! env :my-chart my-chart)
+  (simple-async/start! env :my-chart session-id))
+-----
+
+Or compose manually:
+
+[source]
+-----
+(require '[com.fulcrologic.statecharts.algorithms.v20150901-async :as alg]
+         '[com.fulcrologic.statecharts.execution-model.lambda-async :as lambda-async])
+
+{::sc/processor (alg/new-processor)
+ ::sc/execution-model (lambda-async/new-execution-model dm event-queue)}
+-----
+
+The async engine requires promesa on the classpath.
+Add it to your `deps.edn`:
+
+[source]
+-----
+{:deps {funcool/promesa {:mvn/version "11.0.678"}}}
+-----
+
+Or use the `:async` alias if available in the project.
+
+== Using Async Expressions
+
+Any expression (predicates, script nodes, etc.) can return a promise:
+
+[source]
+-----
+(state {:id :loading}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     (p/let [result (http/get "/api/data")]
+                       [(ops/assign :result result)]))})))
+-----
+
+The algorithm will automatically detect promises and await them.
+Synchronous expressions continue to work without change.
+
 = Going Deeper
 
-You can use the http://www.w3.org/TR/2015/REC-scxml-20150901/[SCXML guide] which has examples as a pretty
-good reference for documentation. The document structure in XML is nearly identical to the data structure
-of this library:
+You can use the http://www.w3.org/TR/2015/REC-scxml-20150901/[SCXML guide] which has examples as a pretty good reference for documentation.
+The document structure in XML is nearly identical to the data structure of this library:
 
 [source,xml]
 -----
@@ -145,88 +217,73 @@ Atomic State:: A state that does not have child states.
 
 Compound State:: A state that has child *states*, where at most *one* child is active at any given time.
 
-Parallel State:: A state that has more than one compound child state, all of which are active at the same time, and
-thus have a child state that is active.
+Parallel State:: A state that has more than one compound child state, all of which are active at the same time, and thus have a child state that is active.
 
-Configuration:: When used in the context of a state chart, the configuration is the list of all active states. A
-state is active if it or ANY of its children are active. Thus, a parallel state chart with hierarchical states may
-have a rather large set of IDs in its current configuration.
+Configuration:: When used in the context of a state chart, the configuration is the list of all active states.
+A state is active if it or ANY of its children are active.
+Thus, a parallel state chart with hierarchical states may have a rather large set of IDs in its current configuration.
 
-Working Memory:: A map of data that contains the current configuration of the state chart, and other information
-necessary to know its current full state (which states have had their data model initialized, possible data model
-tracking, etc.).
+Working Memory:: A map of data that contains the current configuration of the state chart, and other information necessary to know its current full state (which states have had their data model initialized, possible data model tracking, etc.).
 
-DataModel:: An implementation of the data model protocol defines how the data model of your chart works. The simple
-implementation places the data in Working Memory, and treats lookups as paths into a single top-level map scoped
-to the session (running chart instance).
+DataModel:: An implementation of the data model protocol defines how the data model of your chart works.
+The simple implementation places the data in Working Memory, and treats lookups as paths into a single top-level map scoped to the session (running chart instance).
 
-ExecutionModel:: An implementation of this protocol is handed the expressions that are included on the state chart, and
-chooses how to run them. A default implementation requires that they be Clojure `(fn [env data])`, and simply calls them
-with the contextual data for their location.
+ExecutionModel:: An implementation of this protocol is handed the expressions that are included on the state chart, and chooses how to run them.
+A default implementation requires that they be Clojure `(fn [env data])`, and simply calls them with the contextual data for their location.
 
-External Event:: An event that came from the external API, either by you calling `process-event` or some other
-actor code doing so (invocations, sends from external charts, etc.)
+External Event:: An event that came from the external API, either by you calling `process-event` or some other actor code doing so (invocations, sends from external charts, etc.)
 
-Internal Event:: An event that came from the session that will process it. These come from the
-chart implementation itself (e.g. done evens) and from you using the `raise` element in an
-executable content position.
+Internal Event:: An event that came from the session that will process it.
+These come from the chart implementation itself (e.g. done evens) and from you using the `raise` element in an executable content position.
 
-EventQueue:: A FIFO queue for external event delivery. The event queue is responsible for holding onto pending
-External Events to "self", possibly other state chart sessions (instances of other charts),
-remote services (e.g. send an email), and for delayed delivery. The default implementation is a "manually polled" queue
-that does *not* support most of
-these features, and the delayed event delivery is manual (e.g. you have to poll it, or ask it when the next one should
-happen and start a timer/thread). Creating a system that runs the loop and does the timed delivery is typically
-how you would use these in a more serious/production environment.
+EventQueue:: A FIFO queue for external event delivery.
+The event queue is responsible for holding onto pending External Events to "self", possibly other state chart sessions (instances of other charts), remote services (e.g. send an email), and for delayed delivery.
+The default implementation is a "manually polled" queue that does *not* support most of these features, and the delayed event delivery is manual (e.g. you have to poll it, or ask it when the next one should happen and start a timer/thread).
+Creating a system that runs the loop and does the timed delivery is typically how you would use these in a more serious/production environment.
 
-Processor:: An implementation of the state chart algorithm. This library comes with an implementation that follows
-(as closely as possible) the SCXML recommended standard from 2015. You may provide your own.
+Processor:: An implementation of the state chart algorithm.
+This library comes with an implementation that follows (as closely as possible) the SCXML recommended standard from 2015. You may provide your own.
 
-InvocationProcessor:: A protocol representing things that can be invoked while
-in a state. Implementations are provided for state chart invocations, and
-(in CLJ) futures. It is a simple matter to expand the list of supported types.
+InvocationProcessor:: A protocol representing things that can be invoked while in a state.
+Implementations are provided for state chart invocations, and (in CLJ) futures.
+It is a simple matter to expand the list of supported types.
 
-WorkingMemoryStore:: A protocol that represents a place to put the working
-memory of a state chart. This is used when you want an autonomous system that
-can "freeze" and "thaw" running sessions as events are received. Such a store
-could be in RAM (implementation provided) or in something more durable
-(Redis, SQL, Datomic, Filesystem).
+WorkingMemoryStore:: A protocol that represents a place to put the working memory of a state chart.
+This is used when you want an autonomous system that can "freeze" and "thaw" running sessions as events are received.
+Such a store could be in RAM (implementation provided) or in something more durable (Redis, SQL, Datomic, Filesystem).
 
-StatechartRegistry:: A protocol that allows a state chart to be saved/retrieved
-by a well-known name. An implementation is provided for tracking them
-in RAM, but you could also choose an execution model that allows your charts
-to be serializable, and then store the charts in something more durable.
+StatechartRegistry:: A protocol that allows a state chart to be saved/retrieved by a well-known name.
+An implementation is provided for tracking them in RAM, but you could also choose an execution model that allows your charts to be serializable, and then store the charts in something more durable.
 
-Session:: The combination of the content of the DataModel and Working Memory. I.e. the data you'd need in order
-to resume working from where you last left off. Sessions typically have a unique ID, which could be used to store
-sessions into durable storage when they are "idle", and are used for cross-session events.
+Session:: The combination of the content of the DataModel and Working Memory.
+I.e. the data you'd need in order to resume working from where you last left off.
+Sessions typically have a unique ID, which could be used to store sessions into durable storage when they are "idle", and are used for cross-session events.
 
 Conditional Element::
-In state charts there is a node type (represented as a diamond) that represents a state in which the chart
-never "rests", but instead immediately transitions to another node based on predicate expressions. In this
-library (and SCXML) this is modelled with a state that has more than one transition, NONE of which have
-and `:event` qualifier (meaning they are exited as soon as they are entered, assuming there is a valid transition).
+In state charts there is a node type (represented as a diamond) that represents a state in which the chart never "rests", but instead immediately transitions to another node based on predicate expressions.
+In this library (and SCXML) this is modelled with a state that has more than one transition, NONE of which have and `:event` qualifier (meaning they are exited as soon as they are entered, assuming there is a valid transition).
 
 == States
 
-States may be atomic, compound (hierarchical), or parallel. The first two are generated with the `state` element, and
-the latter with `parallel`.
+States may be atomic, compound (hierarchical), or parallel.
+The first two are generated with the `state` element, and the latter with `parallel`.
 
 == Transitions
 
-Transitions are the consumers of events. Their "source" is their parent. Transitions can be *eventless*, and
-they can also have no *target* (indicating they do not change the active states, and are only for executing
-their content).
+Transitions are the consumers of events.
+Their "source" is their parent.
+Transitions can be *eventless*, and they can also have no *target* (indicating they do not change the active states, and are only for executing their content).
 
-A state can have any number of transition elements. These are tested *in order* of appearance, and the
-first transition that matches the current circumstance is taken. Transitions are *enabled* when:
+A state can have any number of transition elements.
+These are tested *in order* of appearance, and the first transition that matches the current circumstance is taken.
+Transitions are *enabled* when:
 
 * Their `cond` (if present) evaluates to true AND
 * Their `event` (if present) matches the current event's name (See event name matching)
 * OR neither are present.
 
-A transition that is marked external and targets its enclosing state will cause the exit/entry handlers to fire. An internal
-transition (that has no target at all) will not.
+A transition that is marked external and targets its enclosing state will cause the exit/entry handlers to fire.
+An internal transition (that has no target at all) will not.
 
 See the SCXML standard for other behaviors of `transition`.
 
@@ -234,13 +291,11 @@ See <<Convenience>> for some alternative ways to represent transitions that are 
 
 == "Condition" States
 
-Condition states from classic state charts
-(shown as a diamond in UML state chart notation) can be modelled using eventless transitions.
+Condition states from classic state charts (shown as a diamond in UML state chart notation) can be modelled using eventless transitions.
 
 An "eventless" transition without a `:cond` is always enabled.
 
-Below is a conditional state that when entered will immediately transition to either state :X or :Y, depending
-on the result of the first transition's condition expression:
+Below is a conditional state that when entered will immediately transition to either state :X or :Y, depending on the result of the first transition's condition expression:
 
 [source]
 -----
@@ -251,25 +306,90 @@ on the result of the first transition's condition expression:
 
 NOTE: See <<Convenience>> for a nicer-looking version of this.
 
+== Flow Control Elements
+
+The SCXML standard (Section 3.12) defines flow control elements for conditional branching and iteration within executable content.
+This library provides native Clojure function equivalents:
+
+=== If / elseif / else
+
+Use `If` (capitalized to avoid collision with `clojure.core/if`), `elseif`, and `else` for multi-way branching inside executable content such as `on-entry`, `on-exit`, or `transition` bodies.
+
+The `:cond` on `If` and `elseif` is an expression compatible with your execution model (typically
+`(fn [env data] ...)` returning a truthy value).
+Children before the first `elseif` or `else`
+form the "then" branch:
+
+[source]
+-----
+(on-entry {}
+  (assign {:location [:x] :expr 2})
+  (If {:cond (fn [_ data] (= (:x data) 1))}
+    (assign {:location [:result] :expr :first})
+    (elseif {:cond (fn [_ data] (= (:x data) 2))}
+      (assign {:location [:result] :expr :second}))
+    (elseif {:cond (fn [_ data] (= (:x data) 3))}
+      (assign {:location [:result] :expr :third}))
+    (else {}
+      (assign {:location [:result] :expr :default}))))
+-----
+
+Each branch can contain any executable content (including nested `If` statements). This is
+particularly useful for leveraging nested `raise`, allowing you to conditionally queue events
+on the internal queue without having the write a script or use the external queue.
+
+=== foreach
+
+Use `foreach` to iterate over a collection, executing children for each item:
+
+* `:array` — An expression returning the collection to iterate over
+* `:item` — A location (keyword or vector) where the current item is bound
+* `:index` — (optional) A location where the current zero-based index is bound
+
+[source]
+-----
+(on-entry {}
+  (assign {:location [:evens] :expr []})
+  (foreach {:array (fn [_ _] [1 2 3 4 5 6])
+            :item  [:n]}
+    (If {:cond (fn [_ data] (even? (:n data)))}
+      (assign {:location [:evens]
+               :expr     (fn [_ data]
+                           (conj (:evens data) (:n data)))}))))
+-----
+
+An empty collection simply skips the body. `foreach` and `If` can be freely nested.
+
+=== The `In` Predicate
+
+The W3C SCXML standard defines an `In()` predicate (Section 5.9) for checking whether a state is in the current configuration.
+This library provides `In` as a function that returns a predicate:
+
+[source]
+-----
+(transition {:event :check :target :next :cond (In :some-state)})
+-----
+
+`(In :some-state)` returns a `(fn [env data] ...)` that checks whether `:some-state` is in the active configuration.
+This is useful for guards on transitions in parallel state charts where you need to coordinate across regions.
+
 == Event Processing
 
-In a fully-fleshed system your event queue would have a corresponding runtime story, where `process-event` was
-automatically called on the correct chart/session/invocation/service when an event is available. As such,
-and event queue might be distributed and durable (e.g. using Kafka or the like), or might simply be something
-that runs in-core (a core.async `go-loop`).
+In a fully-fleshed system your event queue would have a corresponding runtime story, where `process-event` was automatically called on the correct chart/session/invocation/service when an event is available.
+As such, and event queue might be distributed and durable (e.g. using Kafka or the like), or might simply be something that runs in-core (a core.async `go-loop`).
 
 The library includes a fully-functional system for simple applications in the `simple` namespace.
 
 === Event Name Matching
 
 The SCXML standard describes a name matching algorithm for event names that allows for wildcard pattern matching.
-Event names are dot-separated, and are prefix-matched. In this library keywords are used for event names, but
-other than that the interpretation is as specified in the standard. For example,
-the event name `:a.b.c` is matched by `:a.b.c.\*`, `:a.b.c`, `:a.b.*`, `:a.b`, etc. That is to say that
-a transition with `:event :a.b` would be enabled by event `:a.b.c`.
+Event names are dot-separated, and are prefix-matched.
+In this library keywords are used for event names, but other than that the interpretation is as specified in the standard.
+For example, the event name `:a.b.c` is matched by `:a.b.c.\*`, `:a.b.c`, `:a.b.*`, `:a.b`, etc.
+That is to say that a transition with `:event :a.b` would be enabled by event `:a.b.c`.
 
-The wildcard is always implied, but can be specified on a transition for clarity. Transitions are enabled and
-matched "in order", so you can model narrowed and catch-all behavior:
+The wildcard is always implied, but can be specified on a transition for clarity.
+Transitions are enabled and matched "in order", so you can model narrowed and catch-all behavior:
 
 [source]
 -----
@@ -278,33 +398,28 @@ matched "in order", so you can model narrowed and catch-all behavior:
   (transition {:event :error} ...))
 -----
 
-where the first transition will be enabled only if the error is a communication one, and all errors will enable
-the second.
+where the first transition will be enabled only if the error is a communication one, and all errors will enable the second.
 
-See the SCXML standard for the rules on transition preemption regarding conflicting transitions that
-match at the same time.
+See the SCXML standard for the rules on transition preemption regarding conflicting transitions that match at the same time.
 
 === Send Targets
 
-The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that
-these are often URLs. The default implementation of the event queue in this library only supports
-targeting other state charts (see Send Types below), and when using the default send type, the target is
-expected to simply be a `session-id`, where `session-id`  is a unique identifier, such as a GUUID.
+The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that these are often URLs.
+The default implementation of the event queue in this library only supports targeting other state charts (see Send Types below), and when using the default send type, the target is expected to simply be a `session-id`, where `session-id`  is a unique identifier, such as a GUUID.
 
 Other implementations of the EventQueue protocol may choose to define further refinements.
 
 === Send Types
 
-The SCXML standard (section 6.2.5) defines types as a URI as well. The internal implementations in this library
-do not enforce this, but this library *does* recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
+The SCXML standard (section 6.2.5) defines types as a URI as well.
+The internal implementations in this library do not enforce this, but this library *does* recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
 as a desire to talk to another state chart session (and is the only/default predefined value).
 
 === Manual Polling Queue
 
-There is a manually polled queue implementation in this library, with *no* automatic processing
-at all. If you want to support events that come from outside of the chart via the queue, then you have
-to create a loop that polls the queue and calls `process-event!`.  If you do this, then event the
-delayed event delivery will work, as long as your code watches for the delayed events to appear on the queue.
+There is a manually polled queue implementation in this library, with *no* automatic processing at all.
+If you want to support events that come from outside of the chart via the queue, then you have to create a loop that polls the queue and calls `process-event!`.
+If you do this, then event the delayed event delivery will work, as long as your code watches for the delayed events to appear on the queue.
 
 [source]
 ------
@@ -314,24 +429,21 @@ include::src/examples/traffic_light.cljc[]
 == Data Models
 
 A data model is a component of the system that holds data for a given state chart's session.
-The SCXML specification allows the implementation quite a bit of latitude in the interpretation of the chart's
-data model. You could define scopes that nest, one global map of data that is visible everywhere, or hook your
-data model to an external database.
+The SCXML specification allows the implementation quite a bit of latitude in the interpretation of the chart's data model.
+You could define scopes that nest, one global map of data that is visible everywhere, or hook your data model to an external database.
 
 See the docstrings in the `protocols` namespace.
 
-There is a predefined `FlatWorkingMemoryDataModel` (in `data-model.working-memory-data-model`) that puts all data into
-a single scope (a map which itself can be a nested data structure). This is the recommended model for ease of use.
+There is a predefined `FlatWorkingMemoryDataModel` (in `data-model.working-memory-data-model`) that puts all data into a single scope (a map which itself can be a nested data structure).
+This is the recommended model for ease of use.
 
 There is also a predefined `WorkingMemoryDataModel` in that scopes data to the state in which it is declared.
 
-Both of these put the real data in the session working memory, allowing the data, for example, to be persisted with the state of
-a running session when pausing it for later revival.
+Both of these put the real data in the session working memory, allowing the data, for example, to be persisted with the state of a running session when pausing it for later revival.
 
 == Execution Models
 
-Most people will probably just use the CLJCExecutionModel, which lets you write executable content
-in CLJC as lambdas:
+Most people will probably just use the CLJCExecutionModel, which lets you write executable content in CLJC as lambdas:
 
 [source]
 -----
@@ -341,8 +453,7 @@ in CLJC as lambdas:
   (script {:expr (fn [env data] ...)}))
 -----
 
-There is a macro version of the `script` element called `script-fn` that can be used as a shorthand for
-script elements:
+There is a macro version of the `script` element called `script-fn` that can be used as a shorthand for script elements:
 
 [source]
 -----
@@ -355,51 +466,45 @@ script elements:
 == Working Memory and Identity
 
 The working memory of the state chart is plain EDN and contains no code.
-It is serializable by nippy, transit, etc. Therefore, you can easily save
-an active state chart by value into any data store. The value
-is intended to be as small as possible so that storage can be efficient.
+It is serializable by nippy, transit, etc.
+Therefore, you can easily save an active state chart by value into any data store.
+The value is intended to be as small as possible so that storage can be efficient.
 
-Every active state chart is assigned a ID on creation (which you
-can override via `initialize`). This is intended as part of the story to
-allow you to coordinate external event sources with working with
-instances of chart that are archived in durable storage while idle.
+Every active state chart is assigned a ID on creation (which you can override via `initialize`).
+This is intended as part of the story to allow you to coordinate external event sources with working with instances of chart that are archived in durable storage while idle.
 
 == Accessing Running Charts from Outside the Chart
 
-While you *can* work with the core algorithms as pure function, you will normally set up a
-standard system environment (where you provide an event queue and working memory store). When working with such a
-system you may have many charts running (stored in the working memory store) and can send them events via the
-event queue.
+While you *can* work with the core algorithms as pure function, you will normally set up a standard system environment (where you provide an event queue and working memory store).
+When working with such a system you may have many charts running (stored in the working memory store) and can send them events via the event queue.
 
-The `com.fulcrologic.statecharts.runtime` namespace includes functions which can be used to work with such a system
-from *outside* the chart itself.
+The `com.fulcrologic.statecharts.runtime` namespace includes functions which can be used to work with such a system from *outside* the chart itself.
 
 `current-configuration`:: Get the set of active states for by session id.
 `processing-env`:: Get a processing env (using a system env and session id)
 `session-data`:: Get internal state chart data from a particular state chart session.
-`send!`:: Send an event. The simple system has this function as well, and it is a standard part of the protocols, but
-          this wrapper makes it a little more convenient to use when you already have a system env map.
+`send!`:: Send an event.
+The simple system has this function as well, and it is a standard part of the protocols, but this wrapper makes it a little more convenient to use when you already have a system env map.
 
-WARNING: Beware the term "env". In this library a system environment is a map that contains a key for the various
-components of the system (e.g. the event queue, processor, execution model, etc.). A *processing env* is an
-system environment _which also includes_ the current details of a *particular session* and is the `env` you see in the lambdas
-in your chart.  The latter *can* be used anywhere the former is needed, but not vice-versa.
+WARNING: Beware the term "env".
+In this library a system environment is a map that contains a key for the various components of the system (e.g. the event queue, processor, execution model, etc.).
+A *processing env* is an system environment _which also includes_ the current details of a *particular session* and is the `env` you see in the lambdas in your chart.
+The latter *can* be used anywhere the former is needed, but not vice-versa.
 
 == Invocations
 
-An invocation is an "external" service/chart/process that can be started when your state chart enters a state,
-exchanges events *while* that state is active (you can forward events and receive them). The invocation can self-terminate
-while the state is still active, but it will also be cancelled if your chart leaves the enclosing state.
+An invocation is an "external" service/chart/process that can be started when your state chart enters a state, exchanges events *while* that state is active (you can forward events and receive them).
+The invocation can self-terminate while the state is still active, but it will also be cancelled if your chart leaves the enclosing state.
 
-Invocations can forward events to the target invocation, and can receive events back. An incoming event will be
-pre-processed by `finalize` elements and can update the data model before the event is further propagated through
-the chart. See the SCXML standard for a full description of how invocations work.
+Invocations can forward events to the target invocation, and can receive events back.
+An incoming event will be pre-processed by `finalize` elements and can update the data model before the event is further propagated through the chart.
+See the SCXML standard for a full description of how invocations work.
 
 === Passing Invocation Data
 
-The `invoke` element has both a `:namelist` and `:params` argument. The former allows you to list data locations
-of the parent that should be copied to the child. `:params` is dynamic, and allows you to specify expressions that
-calculate values to inject into the child data model. These options can be used together, with params taking precedence.
+The `invoke` element has both a `:namelist` and `:params` argument.
+The former allows you to list data locations of the parent that should be copied to the child. `:params` is dynamic, and allows you to specify expressions that calculate values to inject into the child data model.
+These options can be used together, with params taking precedence.
 
 [source]
 -----
@@ -410,8 +515,7 @@ calculate values to inject into the child data model. These options can be used 
 
 === Invoking other State Charts or Futures
 
-The library has a built-in `InvocationProcessor` that knows how to start other state charts via an `invoke`, and in CLJ
-there is also support for futures (which are cancelled if the state containing the invoke is exited).
+The library has a built-in `InvocationProcessor` that knows how to start other state charts via an `invoke`, and in CLJ there is also support for futures (which are cancelled if the state containing the invoke is exited).
 
 The `src/examples` of the repository includes an example, shown below:
 
@@ -430,34 +534,26 @@ You could do something like:
 include::src/examples/custom_invocation.cljc[]
 -----
 
-The `transition` element responds to the events received by the state chart, and the invocation processor for
-an `invoke` can send such events. So, the timer service here is sending `:interval-timer/timeout` events.
+The `transition` element responds to the events received by the state chart, and the invocation processor for an `invoke` can send such events.
+So, the timer service here is sending `:interval-timer/timeout` events.
 
 = Shorthand Convenience [[Convenience]]
 
-Making your state chart definition cleaner is a simple matter, since it
-is nothing more than a nested data structure.
+Making your state chart definition cleaner is a simple matter, since it is nothing more than a nested data structure.
 
-One thing to note is that every element of the state chart can accept a
-nested sequence of children, and it will automatically flatten them. This
-means you can write helper functions that emit sequences of children, which
-in turn can use other helpers that might emit sequences.
+One thing to note is that every element of the state chart can accept a nested sequence of children, and it will automatically flatten them.
+This means you can write helper functions that emit sequences of children, which in turn can use other helpers that might emit sequences.
 
-Thus, macros and functions
-can be used to generate common patterns. The `convenience` and
-`convenience-macros` nses define some examples. These two namespaces
-are currently ALPHA and are not API stable, but it is a simple matter
-to copy their content if you like any of them and want to rely on them.
+Thus, macros and functions can be used to generate common patterns.
+The `convenience` and
+`convenience-macros` nses define some examples.
+These two namespaces are currently ALPHA and are not API stable, but it is a simple matter to copy their content if you like any of them and want to rely on them.
 
-The macro versions expect you to be using the lambda execution model, and
-require that you use a symbol for the expression (that resolves to a function).
-They add some additional `:diagram/???` attributes to the elements that are
-string versions of the expression, for use in diagram tools or possibly even
-export.
+The macro versions expect you to be using the lambda execution model, and require that you use a symbol for the expression (that resolves to a function).
+They add some additional `:diagram/???` attributes to the elements that are string versions of the expression, for use in diagram tools or possibly even export.
 
-One common pattern is to schedule a delayed event on entry to a state, but
-cancel (if non-delivered) on exit. This helper exists in `convenience`, and
-looks like this:
+One common pattern is to schedule a delayed event on entry to a state, but cancel (if non-delivered) on exit.
+This helper exists in `convenience`, and looks like this:
 
 [source]
 -----
@@ -488,10 +584,9 @@ There are also some simple ones (as functions) that clean up readability for com
   (script {:expr expr}))
 -----
 
-A good use-case for a macro comes up when you want to emit nodes that might
-be better suited for a diagram tool. The UML state chart system defines a choice node which is a node that
-makes a decision about where to transition to. In the SCXML standard they are coded as a state that includes
-nothing but event-less transitions with conditions:
+A good use-case for a macro comes up when you want to emit nodes that might be better suited for a diagram tool.
+The UML state chart system defines a choice node which is a node that makes a decision about where to transition to.
+In the SCXML standard they are coded as a state that includes nothing but event-less transitions with conditions:
 
 [source]
 -----
@@ -501,9 +596,8 @@ nothing but event-less transitions with conditions:
     (transition {:target else-target-state})
 -----
 
-Which is not only a bit noisy, but it isn't immediately obvious to the reader that this is a node that
-merely makes a choice. Additionally, with the lambda execution model the predicates are code,
-so there is no way for them to easily be emitted to a diagram.
+Which is not only a bit noisy, but it isn't immediately obvious to the reader that this is a node that merely makes a choice.
+Additionally, with the lambda execution model the predicates are code, so there is no way for them to easily be emitted to a diagram.
 
 So there is a macro version of this called `choice` in the `convenience-macros` namespace:
 
@@ -518,15 +612,14 @@ So there is a macro version of this called `choice` in the `convenience-macros` 
 that is not only more concise, but adds `{:diagram/condition "pred"}`
 to the transitions properties (the stringified expression of the predicate).
 
-There is also a function version of `choice` in `convenience` that does no add the diagram note, but looks identical
-to the reader.
+There is also a function version of `choice` in `convenience` that does no add the diagram note, but looks identical to the reader.
 
 See the docstrings in those namespaces for more functions/macros that can make your charts more concise.
 
 = Custom Executable Content
 
-The SCXML standard defines a number of elements it terms "Executable Content", meaning child nodes that
-do some action. For example, `send` is executable content of this `on-entry` node:
+The SCXML standard defines a number of elements it terms "Executable Content", meaning child nodes that do some action.
+For example, `send` is executable content of this `on-entry` node:
 
 [source]
 -----
@@ -537,18 +630,17 @@ do some action. For example, `send` is executable content of this `on-entry` nod
 
 The standard allows for a compliant implementation to include extra executable content, but since this library is in Clojure you have the power of macros and functions, which XML does not.
 
-The internals allow you to return a collection of elements from a function, which will be "spliced" in place. This allows you to easily create macros and functions that can make your state charts much easier to write. Some examples in the library source code are the
-com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like `com.fulcrologic.statecharts.integration.fulcro.ui-routes/rstate` in the Fulcro UI Routing support.
+The internals allow you to return a collection of elements from a function, which will be "spliced" in place.
+This allows you to easily create macros and functions that can make your state charts much easier to write.
+Some examples in the library source code are the com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like `com.fulcrologic.statecharts.integration.fulcro.ui-routes/rstate` in the Fulcro UI Routing support.
 
 = Integration with Fulcro
 
-The Fulcro integration for state charts has the following general enhancements over the standard
-state charts:
+The Fulcro integration for state charts has the following general enhancements over the standard state charts:
 
 * Use the Fulcro app's state database as the DataModel
 * Use core.async to automatically support an EventQueue
-* Support a "local data" area for the state chart session that won't accidentally collide
-with other database concerns.
+* Support a "local data" area for the state chart session that won't accidentally collide with other database concerns.
 * Allow for the use of actors (a component abstraction) and aliases (to database locations)
 * Supply an extensible set of operations that executable elements can leverage:
 ** The ability to use Fulcro's load to populate the state database.
@@ -568,6 +660,7 @@ Namespace aliases used in this document:
 [com.fulcrologic.statecharts.data-model.operations :as ops]
 [com.fulcrologic.statecharts.integration.fulcro :as scf]
 [com.fulcrologic.statecharts.integration.fulcro.operations :as fop]
+[com.fulcrologic.statecharts.integration.fulcro.async-operations :as afop]
 [com.fulcrologic.statecharts.protocols :as sp]
 -----
 
@@ -599,11 +692,11 @@ There are three basic steps: install the support, register machines, and start t
 
 The Fulcro state charts data model has a number of features to help you work with Fulcro applications.
 
-Two special concepts were take from Fulcro's own UI state machines: aliases and actors. These are implemented
-purely on the data model by simply adding entries to a state chart's local data under the special keys:
+Two special concepts were take from Fulcro's own UI state machines: aliases and actors.
+These are implemented purely on the data model by simply adding entries to a state chart's local data under the special keys:
 
-* `:fulcro/aliases` - A map from a keyword to a path. The path itself can be any legal DataModel path (see later)
-except for another alias.
+* `:fulcro/aliases` - A map from a keyword to a path.
+The path itself can be any legal DataModel path (see later) except for another alias.
 * `:fulcro/actors` - A map from a keyword to an `scf/actor`, which tracks the class and ident of a UI component.
 Can be used to find the UI component (for normalization/loads) and in data paths.
 
@@ -611,14 +704,14 @@ Notes:
 
 * Actors MUST be identified by keywords with an `actor` namespace: e.g. `:actor/thing`.
 * Actor keywords may only appear as the first element of a path.
-* Aliases are NOT used within paths. They define a path. Therefore, arguments that would normally
-take a vector to describe a data path will usually accept an alias keyword instead.
+* Aliases are NOT used within paths.
+They define a path.
+Therefore, arguments that would normally take a vector to describe a data path will usually accept an alias keyword instead.
 
 === Initializing the Data Model
 
-You can use the initial data in `sp/start!` or a top-level `data-model` element to put data into the
-local storage of your state chart. This is particularly useful for specifying things like aliases
-on the chart itself, but defining actors at runtime:
+You can use the initial data in `sp/start!` or a top-level `data-model` element to put data into the local storage of your state chart.
+This is particularly useful for specifying things like aliases on the chart itself, but defining actors at runtime:
 
 [source]
 -----
@@ -634,61 +727,53 @@ on the chart itself, but defining actors at runtime:
                  :data {:fulcro/actors {:actor/this (scf/actor Thing [:thing/id 1])}}})
 -----
 
-The above code defines a chart that will have `:fulcro/aliases` on the local data model
-because of the state chart definition, and will have a runtime value for the `:fulcro/actors` based
-on data that was passed during start. Anything initialized this way will go into the local data
-store (which is a path based on the session id in the app database).
+The above code defines a chart that will have `:fulcro/aliases` on the local data model because of the state chart definition, and will have a runtime value for the `:fulcro/actors` based on data that was passed during start.
+Anything initialized this way will go into the local data store (which is a path based on the session id in the app database).
 
-Changing aliases and actors on the fly is therefore a simple matter of doing an `op/assign` operation on
-the data model.
+Changing aliases and actors on the fly is therefore a simple matter of doing an `op/assign` operation on the data model.
 
 === Data Locations
 
-There are four primary ways to address data in the data model, and
-the standard state chart operations such as `op/assign` already support these abstract paths:
+There are four primary ways to address data in the data model, and the standard state chart operations such as `op/assign` already support these abstract paths:
 
 A keyword (not in a vector):: IF this keyword exists in the `:fulcro/aliases` map, then the value
-of that alias (which can be a path that contains any of the other things in this list) is used
-to find the location; otherwise the keyword is relative in the root of the LOCAL data for the state chart.
+of that alias (which can be a path that contains any of the other things in this list) is used to find the location; otherwise the keyword is relative in the root of the LOCAL data for the state chart.
 A vector starting with `:ROOT` (or a keyword that doesn't match the other cases):: A path in the
-local data of the state chart. Same as using a path without `:ROOT`. Included to be
-compatible with the standard location support.
+local data of the state chart.
+Same as using a path without `:ROOT`.
+Included to be compatible with the standard location support.
 A vector starting with `:fulco/state` or `:fulcro/state-map`:: Indicates an absolute path in the
 Fulcro app database.
-A vector starting with an actor name:: If the first element of the vector matches an entry in the local
-state charts `:fulcro/actors` then `:fulcro/state` and the ident of that actor are spliced together
-in place of that keyword and the resulting path is treated as above.
+A vector starting with an actor name:: If the first element of the vector matches an entry in the local state charts `:fulcro/actors` then `:fulcro/state` and the ident of that actor are spliced together in place of that keyword and the resulting path is treated as above.
 
 == Executable Content
 
-The executable content nodes (predicates and other expressions) in the state chart can be functions of
-two arguments: `env` (the processing environment) and `data`.
+The executable content nodes (predicates and other expressions) in the state chart can be functions of two arguments: `env` (the processing environment) and `data`.
 
-You can get the current state chart session ID using the processing environment, and you can also
-pull the various components of the state chart system from there (e.g. `(::sc/event-queue env)`). The
+You can get the current state chart session ID using the processing environment, and you can also pull the various components of the state chart system from there (e.g. `(::sc/event-queue env)`).
+The
 `data` argument includes ALL the state chart local data (including the special `:fulcro/aliases`
-and `:fulcro/actors`, which have special meaning but are really just normal local data). The `data`
-will also include the standard `:_event` (which is a map that has things like `:target`) and
-an extended key for `:fulcro/state-map` which has the current value of the Fulcro state database.
+and `:fulcro/actors`, which have special meaning but are really just normal local data).
+The `data`
+will also include the standard `:_event` (which is a map that has things like `:target`) and an extended key for `:fulcro/state-map` which has the current value of the Fulcro state database.
 
 === Operations
 
-Non-predicate executable content (e.g. `script`) functions can return a vector of operations to
-run. The standard set (assign and delete) are supported, and use the extended path support
-described for the DataModel.
+Non-predicate executable content (e.g. `script`) functions can return a vector of operations to run.
+The standard set (assign and delete) are supported, and use the extended path support described for the DataModel.
 
 There are some additional operations for doing I/O:
 
 `(fop/invoke-remote txn options)`:: Run a single-mutation txn (e.g. `[(f {:x 1})]`) on a remote.
-The options allow you to specify events to trigger on the results. See `scf/mutation-result`. You can, of course
-use data `:target` and `:returning` to auto-merge graph data return values. The `:target` option can use an
-actor keyword as a convenience. `:target` Can be a normal Fulcro state-map path, a defined alias, or a path
-that can include actors (which will splice the actor's ident into the target path).
+The options allow you to specify events to trigger on the results.
+See `scf/mutation-result`.
+You can, of course use data `:target` and `:returning` to auto-merge graph data return values.
+The `:target` option can use an actor keyword as a convenience. `:target` Can be a normal Fulcro state-map path, a defined alias, or a path that can include actors (which will splice the actor's ident into the target path).
 `(fop/load query-root component-or-actor options)`:: Issue a Fulcro load with an EQL query. `options`
 supposed the normal data fetch arguments, and additionally let's you indicate what events to send when done/failed.
 
-When using `invoke-remote` you will often *not* have a local Fulcro CLJS mutation. This means that you'd normally
-need to syntax-quote the transaction; however, remember that the Fulcro mutations namespace includes a
+When using `invoke-remote` you will often *not* have a local Fulcro CLJS mutation.
+This means that you'd normally need to syntax-quote the transaction; however, remember that the Fulcro mutations namespace includes a
 `declare-mutation` helper that will make a "callable" function-like object that just returns itself as data.
 
 [source]
@@ -702,30 +787,159 @@ need to syntax-quote the transaction; however, remember that the Fulcro mutation
    (script {:expr [(fop/invoke-remote [(login {...})] {:ok-event :event/success :error-event :event/failed)]}))
 -----
 
+=== Async Operations
+
+When using the async execution engine (`:async? true`), you can issue Fulcro loads and remote mutations that resolve as promises within the algorithm.
+The chart transitions atomically — it never observably rests in a "loading" state.
+
+The point is to make async operations "park" (effectively block) the statechart execution until the promise is fulfilled or rejected. This
+allows you to write statecharts that do not need so many intermediate states for tracking if a promise is fulfilled.
+
+To enable async operations, pass `:async? true` when installing statecharts:
+
+[source]
+-----
+(scf/install-fulcro-statecharts! app {:async? true})
+-----
+
+This swaps in the async processor and execution model from the <<Async Execution Engine>> section.
+
+The `com.fulcrologic.statecharts.integration.fulcro.async-operations` namespace (aliased as `afop`) provides two layers of async support.
+
+==== Composable Operation Maps (Recommended)
+
+`afop/load` and `afop/invoke-remote` return *operation maps* that can be mixed into the same result vector as synchronous operations like `ops/assign`.
+The async execution engine detects these maps and awaits the underlying promise automatically:
+
+[source]
+-----
+;; Load data and set a flag — both in one expression result
+(state {:id :loading-user}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     [(ops/assign :loading? true)
+                      (afop/load :user User {::sc/ok-event    :event/user-loaded
+                                             ::sc/error-event :event/load-failed})])}))
+  (transition {:event :event/user-loaded :target :viewing-user})
+  (transition {:event :event/load-failed :target :error}))
+-----
+
+`afop/load` parameters:
+
+* `query-root` — A keyword or ident for the root of the remote query
+* `component-or-actor` — A Fulcro component class, or a keyword naming a known actor
+* `options`:
+** `::sc/ok-event` / `::sc/error-event` — Events to raise on completion/failure
+** `::sc/ok-data` / `::sc/error-data` — Extra data to merge into the event
+** `::sc/target-alias` — Target the load result at a statechart alias
+** Other `df/load!` options (`:marker`, `:remote`, etc.)
+
+`afop/invoke-remote` parameters:
+
+* `txn` — A Fulcro transaction vector containing a single mutation
+* `options`:
+** `:ok-event` / `:error-event` — Events to raise on success/failure
+** `:ok-data` / `:error-data` — Extra data for the events
+** `:target` — Data-targeting path (vector, alias keyword, or actor-prefixed path)
+** `:returning` — Component class or actor keyword for normalization
+** `:mutation-remote` — Remote name (defaults to `:remote`)
+** `:tx-options` — Options passed to `rc/transact!`
+
+[source]
+-----
+;; Remote mutation with optimistic update
+(state {:id :saving}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     [(ops/assign :saving? true)
+                      (afop/invoke-remote [(save-user (:form-data data))]
+                        {:ok-event    :event/saved
+                         :error-event :event/save-failed
+                         :returning   User})])}))
+  (transition {:event :event/saved :target :success})
+  (transition {:event :event/save-failed :target :error}))
+-----
+
+==== Promise Helpers (Advanced)
+
+For complex custom expressions, `afop/await-load` and `afop/await-mutation` are imperative functions that return promesa promises directly.
+These are used internally by the operation-map handlers above, but are also available when you need full control.
+
+Importantly, the async execution engine is not limited to Fulcro I/O — *any* function that returns a promise works.
+This makes it straightforward to integrate with the broader async JS ecosystem (fetch, IndexedDB, Web APIs, third-party SDKs) without needing extra intermediate states in your chart:
+
+[source]
+-----
+;; Using await-load for a Fulcro load
+(script {:expr (fn [env data]
+                 (afop/await-load env :user User
+                   {::sc/ok-event    :event/user-loaded
+                    ::sc/error-event :event/load-failed}))})
+
+;; Using a plain promise for a fetch call
+(script {:expr (fn [env data]
+                 (p/let [response (js/fetch "/api/data")
+                         json     (.json response)]
+                   [(ops/assign :result (js->clj json :keywordize-keys true))]))})
+-----
+
+`await-load` and `await-mutation` accept the same parameters as the operation-map constructors, plus an `env` argument (the statechart environment) as the first parameter.
+
+==== Comparison: Send-based vs Async
+
+With standard operations (`fop/load`), intermediate states are visible:
+
+[source]
+-----
+;; Using fop/load — chart rests in :loading until external event arrives
+(state {:id :loading}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     [(fop/load :user User {::sc/ok-event :event/loaded})])}))
+  (transition {:event :event/loaded :target :viewing}))
+-----
+
+With async operations (`afop/load`), the transition is atomic:
+
+[source]
+-----
+;; Using afop/load — atomic transition, never observably in :loading
+(state {:id :loading}
+  (on-entry {}
+    (script {:expr (fn [env data]
+                     [(afop/load :user User {::sc/ok-event :event/loaded})])}))
+  (transition {:event :event/loaded :target :viewing}))
+-----
+
+NOTE: The existing `fop/load` and `fop/invoke-remote` operations remain unchanged and continue to work with both sync and async execution engines.
+
 == Useful Helpers
 
 === Functions
 
-`(scf/local-data-path session-id)`:: Get the path of the local data for a given session. This
+`(scf/local-data-path session-id)`:: Get the path of the local data for a given session.
+This
 is useful for adding a lookup ref to a UI component whose rendering depends on changes to this local state.
-`(scf/statechart-session-ident session-id)`:: Get the ident of the state chart session itself. This
-is useful for adding a lookup ref to a UI component whose rendering depends on changes to the
-state chart's configuration.
-`(resolve-aliases data)`:: Used in executable content to return a map for all aliases. It looks up every
+`(scf/statechart-session-ident session-id)`:: Get the ident of the state chart session itself.
+This
+is useful for adding a lookup ref to a UI component whose rendering depends on changes to the state chart's configuration.
+`(resolve-aliases data)`:: Used in executable content to return a map for all aliases.
+It looks up every
 alias from `:fulcro/aliases` and returns a map with them as keys, and their extracted data as values.
-`(resolve-actors data :actor/thing :actor/other ...)`:: Resolves the UI props of multiple named actors. The
+`(resolve-actors data :actor/thing :actor/other ...)`:: Resolves the UI props of multiple named actors.
+The
 return value is a map from actor name to the UI props (tree).
 `(resolve-actors data :actor/thing)`:: Resolves the UI props of a single actor, and returns them.
 `(resolve-actor-class data actor-key)`:: Returns the Fulcro component that is currently acting as the UI
 counterpart of the named actor, if known.
 `(scf/send! app-ish session-id event optional-data)`:: Send an event to a running state chart.
 `(scf/current-configuration app-ish session-id)`:: Returns the current configuration (active states) of the given
-state chart instance. Useful in the UI when you need to render content based on state, but remember to add
+state chart instance.
+Useful in the UI when you need to render content based on state, but remember to add
 `(scf/statechart-session-ident session-id)` to any component query where that is necessary (to ensure render updates).
 `(scf/mutation-result data)`:: Extracts the raw return value of a remote mutation when the event being processed
 is the result of a mutation result that was originally triggered by a `fops/invoke-remote`.
-`(m/declare-mutation)`:: Makes a function-like object that can be used to generate remote mutation calls
-in transactions for `invoke-remote`.
+`(m/declare-mutation)`:: Makes a function-like object that can be used to generate remote mutation calls in transactions for `invoke-remote`.
 
 === Content of `data` in Executable Content
 
@@ -753,20 +967,14 @@ The runtime `env` in executable elements includes:
 
 == React Hooks
 
-There is support for using a state chart as a co-located element of a hooks-based
-component.
+There is support for using a state chart as a co-located element of a hooks-based component.
 
-The basic idea is that the state chart will be started when the component
-uses it, and when the component leaves the screen the chart is sent
-an `:event/unmounted`. If the chart reaches a top-level final state, then
-it will be GC'd from state.
+The basic idea is that the state chart will be started when the component uses it, and when the component leaves the screen the chart is sent an `:event/unmounted`.
+If the chart reaches a top-level final state, then it will be GC'd from state.
 
-The session ID of the chart is auto-assigned a random UUID, but you can specify
-a known session ID to allow for a state chart to survive the component mount/unmount
-cycle.
+The session ID of the chart is auto-assigned a random UUID, but you can specify a known session ID to allow for a state chart to survive the component mount/unmount cycle.
 
-Here is an example of using this support to create a simple traffic light that can regulate (red/yellow/green) or
-blink red:
+Here is an example of using this support to create a simple traffic light that can regulate (red/yellow/green) or blink red:
 
 [source]
 -----
@@ -824,24 +1032,75 @@ blink red:
         (if (:blink-mode? local-data) "Blink" "Regulate")))))
 -----
 
+== Hierarchical Routing
+
+STATUS: ALPHA. API IN FLUX.
+
+The intention of this system is to make it possible to completely compose a webapp as a statechart, including the concern
+of UI routing, URL tracking/restore, etc.  Routing actually caused the motivation for statecharts async support.
+
+This documentation will be improved as the feature matures. It is NOT recommended for production use yet.
+
+The routing system supports hierarchical path composition and parameterized URL segments.
+Nested route states can each contribute a piece of the URL path, and keyword placeholders in path segments are matched against URL parts to extract parameters.
+
+=== Path Composition
+
+Each route state can declare a `:route/path` — a vector of strings and keyword placeholders.
+When route states are nested, the paths compose hierarchically.
+For example:
+
+[source]
+-----
+(routes {:routing/root Root :id :routes}
+  (rstate {:route/target UserList :route/path ["users"]}
+    (rstate {:route/target UserDetail :route/path [:id]}
+      (rstate {:route/target UserEdit :route/path ["edit"]}))))
+-----
+
+The full URL path for `UserEdit` would be `/users/42/edit` — each ancestor's `:route/path` segments are prepended automatically.
+
+=== Parameterized Path Segments
+
+Keyword segments (like `:id` above) act as parameter placeholders.
+When a URL is matched, the corresponding path segment is extracted into a parameter map:
+
+[source]
+-----
+;; URL: /users/42/edit
+;; Matched pattern: ["users" :id "edit"]
+;; Extracted params: {:id "42"}
+-----
+
+Parameters are made available via `[:routing/parameters <state-id>]` in the data model, and are also persisted to the URL when navigating programmatically.
+
+=== Key Functions
+
+The `com.fulcrologic.statecharts.integration.fulcro.route-url` namespace provides the pure functions for path operations:
+
+`(resolve-full-path statechart state-id)`:: Walk the parent chain collecting `:route/path` segments
+from each ancestor.
+Returns a flat vector like `["users" :id "edit"]`.
+`(match-path path pattern)`:: Match a URL path (vector of strings) against a pattern (vector of strings
+and keyword placeholders).
+Returns `nil` on mismatch, or a map of extracted params.
+`(build-route-table statechart)`:: Scan all states with `:route/target`, compute full paths, and
+return a sorted vector of route entries ordered by specificity (more literal segments first).
+`(find-route-for-url route-table path)`:: Find the first matching route entry for a given URL path, returning the match with extracted `:route/path-params`.
+
+The `start-routing!` function in `ui-routes` automatically builds the route table and uses it for URL-to-state matching, including on browser back/forward navigation.
+
 = Testing
 
-The main interface to this library is pure and functional, which makes the general job of testing easier in some cases,
-but the fact is that you often need to walk a state chart through several steps in order to get it *into* the
-starting configuration to test.
+The main interface to this library is pure and functional, which makes the general job of testing easier in some cases, but the fact is that you often need to walk a state chart through several steps in order to get it *into* the starting configuration to test.
 
-The fact that nodes can execute (possibly side-effecting) code also means that when testing it is usually desirable to
-eliminate these side effects through some kind of stubbing mechanism.
+The fact that nodes can execute (possibly side-effecting) code also means that when testing it is usually desirable to eliminate these side effects through some kind of stubbing mechanism.
 
-Fortunately the design of the library makes it trivial to plug in a mock execution model, mock event queue,
-and a test data model, which allows you to easily exercise a state chart in tests in ways that do not
-side effect in an uncontrolled fashion.
+Fortunately the design of the library makes it trivial to plug in a mock execution model, mock event queue, and a test data model, which allows you to easily exercise a state chart in tests in ways that do not side effect in an uncontrolled fashion.
 
-The `com.fulcrologic.statecharts.testing` namespace includes mocks for the necessary protocols, allows for
-a pluggable data model (defaults to flat working memory), and has pre-written helpers and predicates.
+The `com.fulcrologic.statecharts.testing` namespace includes mocks for the necessary protocols, allows for a pluggable data model (defaults to flat working memory), and has pre-written helpers and predicates.
 
-The mock execution model allows you to easily set up specific results for expressions and conditions that
-would normally be run.
+The mock execution model allows you to easily set up specific results for expressions and conditions that would normally be run.
 
 Here is an example test (written with fulcro-spec):
 
@@ -852,31 +1111,28 @@ include::src/test/com/fulcrologic/statecharts/testing_spec.cljc[]
 
 == Mocking
 
-The mocking (set when creating the testing env) is a simple map (e.g. `{is-tuesday? true}`). The keys of the map
-must exactly match the expression in question (e.g. use `defn` to make them (as shown above), and then use those as the
-cond/expr so you can match on it). The values in the mocking map can be literal values OR functions. If they are functions
-then they will be passed the `env`, which will include the special key `:ncalls` that will have the count (inclusive) of
-the number of times that expression has run since the test env was created.
+The mocking (set when creating the testing env) is a simple map (e.g. `{is-tuesday? true}`).
+The keys of the map must exactly match the expression in question (e.g. use `defn` to make them (as shown above), and then use those as the cond/expr so you can match on it).
+The values in the mocking map can be literal values OR functions.
+If they are functions then they will be passed the `env`, which will include the special key `:ncalls` that will have the count (inclusive) of the number of times that expression has run since the test env was created.
 
 == Event Sends/Cancels
 
-The sends and cancels will also be auto-recorded. See the docstrings in the testing namespace for more information.
+The sends and cancels will also be auto-recorded.
+See the docstrings in the testing namespace for more information.
 
 == Starting in a Specific Configuration
 
-Most of your tests will need the chart to be in some particular state as part of your setup. You *could* get there
-by triggering a sequence of events while having the mocks in perfect condition, but this creates a fragile
-test where changes to the structure of the chart break a bunch of tests. The testing helpers include
+Most of your tests will need the chart to be in some particular state as part of your setup.
+You *could* get there by triggering a sequence of events while having the mocks in perfect condition, but this creates a fragile test where changes to the structure of the chart break a bunch of tests.
+The testing helpers include
 `(testing/goto-configuration! env data-ops config)` that allows you to set up the data model and configuration.
 
-The `data-ops` is a vector of Data Model operations (e.g. ops/assign) to run on the data model. and `config` is
-a valid configuration (set of active states) for the chart.
-Unfortunately, the configuration of a state chart is non-trivial (it must include all active states in a complex
-hierarchy) and will change when you refactor the chart. So, another helper `testing/configuration-for-states` allows you
-to get a list of *all* of the states that would be active *given* the deepest desired leaf state(s).
+The `data-ops` is a vector of Data Model operations (e.g. ops/assign) to run on the data model. and `config` is a valid configuration (set of active states) for the chart.
+Unfortunately, the configuration of a state chart is non-trivial (it must include all active states in a complex hierarchy) and will change when you refactor the chart.
+So, another helper `testing/configuration-for-states` allows you to get a list of *all* of the states that would be active *given* the deepest desired leaf state(s).
 
-In a chart with no parallel states, there will only ever be one leaf, but when parallel states are active you must
-list a valid leaf from each region.
+In a chart with no parallel states, there will only ever be one leaf, but when parallel states are active you must list a valid leaf from each region.
 
 Thus, a common test setup will look like this:
 
@@ -899,28 +1155,21 @@ Thus, a common test setup will look like this:
 = Relationship to SCXML
 
 This library's internal implementation follows (as closely as possible) the official
-https://www.w3.org/TR/2015/REC-scxml-20150901/#AlgorithmforSCXMLInterpretation[State Chart XML Algorithm]. In fact,
-much of the implementation uses internal volatiles in order to match the imperative style of that doc for easier
-comparison and avoidance of bugs.
+https://www.w3.org/TR/2015/REC-scxml-20150901/#AlgorithmforSCXMLInterpretation[State Chart XML Algorithm].
+In fact, much of the implementation uses internal volatiles in order to match the imperative style of that doc for easier comparison and avoidance of bugs.
 
-The actual structure of the live CLJC data used to represent charts also closely mimics
-the structure described there, but with some differences for convenient use in CLJC.
+The actual structure of the live CLJC data used to represent charts also closely mimics the structure described there, but with some differences for convenient use in CLJC.
 
-Specifically, executable content is *still* treated as *data*, but the XML nodes that
-are described in the standard do *not* all exist in this library, because a conformant
-XML reader (which would need to be aware of the target execution model) can easily
-translate such nodes into the target data representation (even if that target
-representation is script strings).
+Specifically, executable content is *still* treated as *data*.
+The flow control XML nodes from the standard (`if`, `elseif`, `else`, `foreach`) have native Clojure function equivalents (see <<Flow Control Elements>>).
+Some other XML nodes are abbreviated or handled differently, since a conformant XML reader (which would need to be aware of the target execution model) can easily translate such nodes into the target data representation (even if that target representation is script strings).
 
-Some of the data model elements are also abbreviated in a similar manner. See
-the docstrings for details.
+Some of the data model elements are also abbreviated in a similar manner.
+See the docstrings for details.
 
-Thus, if you are trying to read SCXML documents you will need to write (or find) an
-XML reader that can do this interpretation.
+Thus, if you are trying to read SCXML documents you will need to write (or find) an XML reader that can do this interpretation.
 
-For example, an XML reader that targets https://github.com/babashka/sci[sci] (the
-Clojure interpreter) might convert the XML (where `a` and `do-something` are implied
-values in the data and excution model):
+For example, an XML reader that targets https://github.com/babashka/sci[sci] (the Clojure interpreter) might convert the XML (where `a` and `do-something` are implied values in the data and excution model):
 
 [source,xml]
 -----
@@ -958,44 +1207,32 @@ If you're using XML tools to generate your charts, though, it's probably easiest
 
 == Related Work
 
-The primary alternative to this library is https://github.com/lucywang000/clj-statecharts[clj-statecharts],
-which is a fine library modelled after xstate.
+The primary alternative to this library is https://github.com/lucywang000/clj-statecharts[clj-statecharts], which is a fine library modelled after xstate.
 
 This library exists for the following reasons:
 
-* At the time this library was created, https://github.com/lucywang000/clj-statecharts/[clj-statecharts] was missing features. In particular history nodes,
-which we needed. I looked at clj-statecharts in order to try to add history, but some of the internal
-decisions made it more difficult to add (with correct semantics) and the Eclipse license made it less
-appealing for internal customization as a base in commercial software (see https://www.juxt.pro/blog/prefer-mit).
-* To create an SCXML-like implementation that uses the algorithm defined
-in the W3C Recommended document, and can (grow to) run (with minor transformations) SCXML docs that are
-targeted to Clojure with the semantics defined there (such as they are).
-* To define more refined abstract mechanisms such that the state charts can be associated to long-lived things
-(such as a monetary transaction that happens over time) and
-be customized to interface with things like durable queues for events (e.g. AWS SQS) and
-reliable timers.
+* At the time this library was created, https://github.com/lucywang000/clj-statecharts/[clj-statecharts] was missing features.
+In particular history nodes, which we needed.
+I looked at clj-statecharts in order to try to add history, but some of the internal decisions made it more difficult to add (with correct semantics) and the Eclipse license made it less appealing for internal customization as a base in commercial software (see https://www.juxt.pro/blog/prefer-mit).
+* To create an SCXML-like implementation that uses the algorithm defined in the W3C Recommended document, and can (grow to) run (with minor transformations) SCXML docs that are targeted to Clojure with the semantics defined there (such as they are).
+* To define more refined abstract mechanisms such that the state charts can be associated to long-lived things (such as a monetary transaction that happens over time) and be customized to interface with things like durable queues for events (e.g. AWS SQS) and reliable timers.
 * MIT licensing instead of Eclipse.
 
 Other related libraries and implementations:
 
-* https://xstate.js.org/[XState] : Javascript. Could be used from CLJS.
-* https://commons.apache.org/proper/commons-scxml/[Apache SCXML] : Stateful and imperative. Requires writing classes. Requires you use XML.
+* https://xstate.js.org/[XState] : Javascript.
+Could be used from CLJS.
+* https://commons.apache.org/proper/commons-scxml/[Apache SCXML] : Stateful and imperative.
+Requires writing classes.
+Requires you use XML.
 * https://github.com/fulcrologic/fulcro/blob/develop/src/main/com/fulcrologic/fulcro/ui_state_machines.cljc[Fulcro UI State Machines]
-: A finite state machine namespace (part of Fulcro) that is tightly coupled to Fulcro's needs (full stack operation in the context of
-Fulcro UI and I/O).
+: A finite state machine namespace (part of Fulcro) that is tightly coupled to Fulcro's needs (full stack operation in the context of Fulcro UI and I/O).
 
 == Conformance
 
-This library was written using the reference implementation described in
-the https://www.w3.org/TR/scxml[SCXML standard], but without the requirement
-that the chart be written in XML.
+This library was written using the reference implementation described in the https://www.w3.org/TR/scxml[SCXML standard], but without the requirement that the chart be written in XML.
 
-Any deviation from the standard (as far as general operation of state transitions, order
-of execution of entry/exit, etc.) should be considered a bug. Note that it is possible
-for a bugfix in this library to change the behavior of your code (if you wrote it in
-a way that depends on the misbehavior); therefore, even though
-this library does not intend to make breaking changes, it is possible that a bugfix could affect
-your code's operation.
+Any deviation from the standard (as far as general operation of state transitions, order of execution of entry/exit, etc.) should be considered a bug.
+Note that it is possible for a bugfix in this library to change the behavior of your code (if you wrote it in a way that depends on the misbehavior); therefore, even though this library does not intend to make breaking changes, it is possible that a bugfix could affect your code's operation.
 
-If future versions of the standard are released that cause incompatible changes, then
-this library will add a new namespace for that new standard (not break versioning).
+If future versions of the standard are released that cause incompatible changes, then this library will add a new namespace for that new standard (not break versioning).

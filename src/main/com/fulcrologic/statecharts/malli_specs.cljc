@@ -59,7 +59,7 @@
 
 (>def ::sc/event [:map {:closed false}
                   [:name :org.w3.scxml.event/name]
-                  [:data :org.w3.scxml.event/data]
+                  [:data {:optional true} :org.w3.scxml.event/data]
                   [:type :org.w3.scxml.event/type]
                   [:sendid {:optional true} :org.w3.scxml.event/sendid]
                   [:origin {:optional true} :org.w3.scxml.event/origin]

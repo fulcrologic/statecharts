@@ -3,12 +3,13 @@
  :deps    {metosin/malli              {:mvn/version "0.20.0"}
            com.fulcrologic/guardrails {:mvn/version "1.2.16"}
            org.clojure/core.async     {:mvn/version "1.8.741"}
-           com.taoensso/timbre        {:mvn/version "6.8.0"}}
+           com.taoensso/timbre        {:mvn/version "6.8.0"}
+           funcool/promesa            {:mvn/version "11.0.678"}}
 
  :aliases {:test             {:extra-paths ["src/test"]
                               :extra-deps  {lambdaisland/kaocha     {:mvn/version "1.91.1392"}
                                             org.clojure/test.check  {:mvn/version "1.1.2"}
-                                            fulcrologic/fulcro-spec {:mvn/version "3.2.1"}}}
+                                            fulcrologic/fulcro-spec {:mvn/version "3.2.8"}}}
 
            :guardrails-stubs {:override-deps {com.fulcrologic/guardrails {:mvn/version "1.2-stubs-SNAPSHOT"}}}
 
@@ -22,7 +23,7 @@
                               :main-opts   ["-m" "kaocha.runner"]
                               :extra-deps  {lambdaisland/kaocha {:mvn/version "1.91.1392"}}}
 
-           :dev              {:extra-paths ["src/dev" "src/examples"]
+           :dev              {:extra-paths ["src/dev" "src/examples" "src/routing-demo"]
                               :extra-deps  {thheller/shadow-cljs                   {:mvn/version "3.3.4"}
                                             com.fulcrologic/fulcro-devtools-remote {:mvn/version "0.2.8"}
                                             com.fulcrologic/fulcro-inspect         {:mvn/version "1.0.5"}
@@ -30,7 +31,7 @@
                                             com.fulcrologic/fulcro-rad-semantic-ui {:mvn/version "1.4.7"}
                                             hickory/hickory                        {:mvn/version "0.7.1"}
                                             com.rpl/specter                        {:mvn/version "1.1.6"}
-                                            com.fulcrologic/fulcro                 {:mvn/version "3.9.0"}
+                                            com.fulcrologic/fulcro                 {:mvn/version "3.9.3"}
                                             vvvvalvalval/scope-capture             {:mvn/version "0.3.3-s1"}
                                             djblue/portal                          {:mvn/version "0.62.0"}
                                             org.clojure/clojure                    {:mvn/version "1.12.3"}
@@ -44,4 +45,6 @@
                                             ;; Visualization server dependencies
                                             com.wsscode/pathom                     {:mvn/version "2.4.0"}
                                             ring/ring-core                         {:mvn/version "1.15.3"}
-                                            ring/ring-jetty-adapter                {:mvn/version "1.15.3"}}}}}
+                                            ring/ring-jetty-adapter                {:mvn/version "1.15.3"}
+                                            io.github.tonsky/clj-reload            {:mvn/version "1.0.0"}
+                                            expound/expound                        {:mvn/version "0.9.0"}}}}}

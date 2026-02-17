@@ -335,6 +335,69 @@
   (let [id (!? env sendid sendidexpr)]
     (sp/cancel! event-queue env (env/session-id env) id)))
 
+(defmethod execute-element-content! :if [env {:keys [children] :as element}]
+  (log/debug "Evaluating if" element)
+  (let [{::sc/keys [statechart]} env
+        ;; Split children into then-branch and else-branches
+        [then-branch else-branches]
+        (loop [remaining children
+               then []
+               elses []]
+          (if (empty? remaining)
+            [then elses]
+            (let [child-id (first remaining)
+                  {:keys [node-type]} (chart/element statechart child-id)]
+              (if (#{:else-if :else} node-type)
+                (recur (rest remaining) then (conj elses child-id))
+                (recur (rest remaining) (conj then child-id) elses)))))]
+    ;; Evaluate main condition
+    (if (condition-match env element)
+      ;; Execute then-branch
+      (doseq [child-id then-branch]
+        (execute-element-content! env (chart/element statechart child-id)))
+      ;; Check else-if/else branches
+      (letfn [(check-branches [branches]
+                (when (seq branches)
+                  (let [branch-id (first branches)
+                        branch-ele (chart/element statechart branch-id)
+                        {:keys [node-type]} branch-ele]
+                    (cond
+                      (= node-type :else-if)
+                      (if (condition-match env branch-ele)
+                        (execute-element-content! env branch-ele)
+                        (check-branches (rest branches)))
+
+                      (= node-type :else)
+                      (execute-element-content! env branch-ele)
+
+                      :else
+                      (check-branches (rest branches))))))]
+        (check-branches else-branches)))))
+
+(defmethod execute-element-content! :else-if [env {:keys [children] :as element}]
+  (log/debug "Executing else-if branch" element)
+  (let [{::sc/keys [statechart]} env]
+    (doseq [child-id children]
+      (execute-element-content! env (chart/element statechart child-id)))))
+
+(defmethod execute-element-content! :else [env {:keys [children] :as element}]
+  (log/debug "Executing else branch" element)
+  (let [{::sc/keys [statechart]} env]
+    (doseq [child-id children]
+      (execute-element-content! env (chart/element statechart child-id)))))
+
+(defmethod execute-element-content! :for-each [{::sc/keys [data-model statechart] :as env}
+                                                {:keys [array item index children] :as element}]
+  (log/debug "Executing for-each" element)
+  (let [coll (run-expression! (assoc env ::sc/raw-result? true) array)]
+    (doseq [[idx value] (map-indexed vector coll)]
+      (when item
+        (sp/update! data-model env {:ops [(ops/assign item value)]}))
+      (when index
+        (sp/update! data-model env {:ops [(ops/assign index idx)]}))
+      (doseq [child-id children]
+        (execute-element-content! env (chart/element statechart child-id))))))
+
 (>defn execute!
   "Run the executable content (immediate children) of s."
   [{::sc/keys [statechart] :as env} s]

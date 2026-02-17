@@ -6,7 +6,7 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.elements :refer [final on-entry state transition invoke]]
+    [com.fulcrologic.statecharts.elements :refer [final invoke state transition]]
     [com.fulcrologic.statecharts.invocation.statechart :as sut]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
@@ -56,11 +56,10 @@
           (sp/supports-invocation-type? processor :http) => false))))
 
   (component "start-invocation! creates child session"
-    (let [processor (sut/new-invocation-processor)
-          env (simple/simple-env)
-          wmstore (::sc/working-memory-store env)
-          queue (::sc/event-queue env)
-          proc (::sc/processor env)]
+    (let [processor  (sut/new-invocation-processor)
+          env        (simple/simple-env)
+          wmstore    (::sc/working-memory-store env)
+          parent-env (assoc env ::sc/vwmem (volatile! {::sc/session-id :parent-123}))]
 
       ;; Register child chart
       (simple/register! env ::simple-child simple-child)
@@ -70,11 +69,10 @@
         (sp/save-working-memory! wmstore env :parent-123 parent-wmem))
 
       ;; Start invocation
-      (let [parent-env (assoc env ::sc/vwmem (volatile! {::sc/session-id :parent-123}))]
-        (sp/start-invocation! processor parent-env
-          {:invokeid :my-child
-           :src      ::simple-child
-           :params   {:foo :bar}}))
+      (sp/start-invocation! processor parent-env
+        {:invokeid :my-child
+         :src      ::simple-child
+         :params   {:foo :bar}})
 
       (behavior "child working memory exists"
         (let [child-wmem (sp/get-working-memory wmstore env :my-child)]
@@ -89,7 +87,7 @@
             (::sc/invocation-data child-wmem) => {:foo :bar})))
 
       (behavior "start-invocation! returns true"
-        (let [result (sp/start-invocation! processor env
+        (let [result (sp/start-invocation! processor parent-env
                        {:invokeid :another-child
                         :src      ::simple-child
                         :params   {}})]
@@ -97,9 +95,9 @@
             result => true)))))
 
   (component "start-invocation! with missing chart"
-    (let [processor (sut/new-invocation-processor)
-          env (simple/simple-env)
-          queue (::sc/event-queue env)
+    (let [processor  (sut/new-invocation-processor)
+          env        (simple/simple-env)
+          queue      (::sc/event-queue env)
           parent-env (assoc env ::sc/vwmem (volatile! {::sc/session-id :parent-456}))]
 
       ;; Try to invoke non-existent chart
@@ -110,29 +108,28 @@
 
       (behavior "sends error.platform event to parent"
         ;; Check the queue for error event
-        (let [sends @(:session-queues queue)
+        (let [sends         @(:session-queues queue)
               parent-events (get sends :parent-456)
-              error-event (first (filter #(= :error.platform (:event %)) parent-events))]
+              error-event   (first (filter #(= :error.platform (:name %)) parent-events))]
           (assertions
             "error event exists"
             (some? error-event) => true
             "error includes diagnostic data"
             (contains? (:data error-event) :message) => true)))
 
-      (behavior "returns true even on error (known issue)"
-        (let [result (sp/start-invocation! processor parent-env
-                       {:invokeid :test
-                        :src      ::nonexistent
-                        :params   {}})]
-          (assertions
-            "returns true despite failure"
-            result => true)))))
+      (let [result (sp/start-invocation! processor parent-env
+                     {:invokeid :test
+                      :src      ::nonexistent
+                      :params   {}})]
+        (assertions
+          "returns false on failure"
+          result => false))))
 
   (component "stop-invocation! removes child session"
     (let [processor (sut/new-invocation-processor)
-          env (simple/simple-env)
-          wmstore (::sc/working-memory-store env)
-          proc (::sc/processor env)]
+          env       (simple/simple-env)
+          wmstore   (::sc/working-memory-store env)
+          proc      (::sc/processor env)]
 
       ;; Register and start child
       (simple/register! env ::simple-child simple-child)
@@ -155,9 +152,9 @@
           (sp/stop-invocation! processor env {:invokeid :nonexistent}) => true))))
 
   (component "forward-event! sends to child"
-    (let [processor (sut/new-invocation-processor)
-          env (simple/simple-env)
-          queue (::sc/event-queue env)
+    (let [processor  (sut/new-invocation-processor)
+          env        (simple/simple-env)
+          queue      (::sc/event-queue env)
           parent-env (assoc env ::sc/vwmem (volatile! {::sc/session-id :parent-999}))]
 
       ;; Forward event
@@ -168,18 +165,18 @@
                     :data {:x 1}}})
 
       (behavior "event delivered to child"
-        (let [sends @(:session-queues queue)
+        (let [sends        @(:session-queues queue)
               child-events (get sends :child-999)
-              forwarded (first (filter #(= :test-event (:event %)) child-events))]
+              forwarded    (first (filter #(= :test-event (:name %)) child-events))]
           (assertions
             "event exists"
             (some? forwarded) => true
             "event has correct name"
-            (:event forwarded) => :test-event
+            (:name forwarded) => :test-event
             "event includes data"
             (:data forwarded) => {:x 1}
             "event knows source"
-            (:source-session-id forwarded) => :parent-999)))
+            (::sc/source-session-id forwarded) => :parent-999)))
 
       (behavior "forward-event! returns true"
         (assertions
@@ -193,13 +190,12 @@
 
 (specification "StatechartInvocationProcessor - Integration"
   (component "Parent-child lifecycle"
-    (let [env (simple/simple-env)
+    (let [env          (simple/simple-env)
           parent-chart (chart/statechart {}
                          (state {:id :parent/active}
-                           (invoke {:id      :inv1
-                                    :type    :statechart
-                                    :src     ::simple-child
-                                    :invokeid :my-child})
+                           (invoke {:id   :my-child
+                                    :type :statechart
+                                    :src  ::simple-child})
                            (transition {:event  :done.invoke.my-child
                                         :target :parent/complete}))
                          (final {:id :parent/complete}))]
@@ -212,7 +208,7 @@
       (simple/start! env ::parent-chart :parent-session)
 
       (behavior "parent session exists"
-        (let [wmstore (::sc/working-memory-store env)
+        (let [wmstore     (::sc/working-memory-store env)
               parent-wmem (sp/get-working-memory wmstore env :parent-session)]
           (assertions
             (some? parent-wmem) => true
@@ -220,7 +216,7 @@
             (contains? (::sc/configuration parent-wmem) :parent/active) => true)))
 
       (behavior "child session exists"
-        (let [wmstore (::sc/working-memory-store env)
+        (let [wmstore    (::sc/working-memory-store env)
               child-wmem (sp/get-working-memory wmstore env :my-child)]
           (assertions
             "child created"
@@ -242,7 +238,7 @@
 
   (component "Processor handles empty params"
     (let [processor (sut/new-invocation-processor)
-          env (simple/simple-env)]
+          env       (simple/simple-env)]
 
       (simple/register! env ::simple-child simple-child)
 

@@ -26,24 +26,35 @@
           child-session-id  (str source-session-id "." invokeid)
           done-event-name   (evts/invoke-done-event invokeid)]
       (if-not (fn? src)
-        (sp/send! event-queue env {:target            source-session-id
-                                   :sendid            child-session-id
-                                   :source-session-id child-session-id
-                                   :event             :error.platform
-                                   :data              {:message "Could not invoke future. No function supplied."
-                                                       :target  src}})
-        (let [f (future
-                  (try
-                    (let [result (src params)]
-                      (sp/send! event-queue env {:target            source-session-id
-                                                 :sendid            child-session-id
-                                                 :source-session-id child-session-id
-                                                 :event             done-event-name
-                                                 :data              (if (map? result) result {})}))
-                    (finally
-                      (swap! active-futures dissoc child-session-id))))]
-          (swap! active-futures assoc child-session-id f)))
-      true))
+        (do
+          (sp/send! event-queue env {:target            source-session-id
+                                     :sendid            child-session-id
+                                     :source-session-id child-session-id
+                                     :event             :error.platform
+                                     :data              {:message "Could not invoke future. No function supplied."
+                                                         :target  src}})
+          false)
+        (do
+          ;; Use a promise to ensure the future is added to active-futures before the future body runs.
+          ;; This prevents a race condition where the finally block could try to dissoc a key
+          ;; that hasn't been added yet if the future completes very quickly.
+          (let [started (promise)
+                f       (future
+                          @started ;; Block until we're registered in active-futures
+                          (try
+                            (let [result (src params)]
+                              (sp/send! event-queue env {:target            source-session-id
+                                                         :sendid            child-session-id
+                                                         :source-session-id child-session-id
+                                                         :event             done-event-name
+                                                         :data              (if (map? result) result {})}))
+                            (catch Throwable t
+                              (log/error t "Future invocation threw exception"))
+                            (finally
+                              (swap! active-futures dissoc child-session-id))))]
+            (swap! active-futures assoc child-session-id f)
+            (deliver started true))
+          true))))
   (stop-invocation! [_ env {:keys [invokeid]}]
     (log/debug "Stop future" invokeid)
     (let [source-session-id (env/session-id env)

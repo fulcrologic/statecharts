@@ -8,18 +8,13 @@
   (:require
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
-    [com.fulcrologic.fulcro.mutations :as m]
-    [com.fulcrologic.fulcro.raw.application :as rapp]
-    [com.fulcrologic.guardrails.malli.fulcro-spec-helpers :as gsh]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.elements :refer [on-entry script state transition]]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
     [com.fulcrologic.statecharts.integration.fulcro.operations :as fop]
-    [com.fulcrologic.statecharts.protocols :as sp]
-    [com.fulcrologic.statecharts.util :refer [new-uuid]]
-    [fulcro-spec.core :refer [=> assertions behavior component specification]]))
+    [fulcro-spec.core :refer [=> assertions behavior specification]]))
 
 ;; Test components
 (defsc Item [this props]
@@ -34,7 +29,7 @@
 (defsc ItemList [this props]
   {:query         [:list/id {:list/items (comp/get-query Item)}]
    :ident         :list/id
-   :initial-state {:list/id 1 :list/items []}})
+   :initial-state {:list/id 1 :list/items [{}]}})
 
 (defsc TestRoot [this props]
   {:query         [:ui/mode {:item-list (comp/get-query ItemList)}]
@@ -58,9 +53,9 @@
     (scf/register-statechart! app ::test-chart chart)
 
     (behavior "assigns values via aliases"
-      (let [session-id (scf/start! app {:machine    ::test-chart
-                                        :data       {:fulcro/aliases {:name [:fulcro/state :person/name]
-                                                                      :age  [:fulcro/state :person/age]}}})]
+      (let [session-id (scf/start! app {:machine ::test-chart
+                                        :data    {:fulcro/aliases {:name [:fulcro/state :person/name]
+                                                                   :age  [:fulcro/state :person/age]}}})]
         ;; Process entry actions
         (scf/process-events! app)
 
@@ -78,9 +73,9 @@
                                               [(fop/assoc-alias :item-label "Updated Label")])}))))
             session-id (do
                          (scf/register-statechart! app ::test-chart2 chart2)
-                         (scf/start! app {:machine    ::test-chart2
-                                          :data       {:fulcro/aliases {:item-label [:actor/item :item/label]}
-                                                       :fulcro/actors  {:actor/item (scf/actor Item [:item/id 1])}}}))]
+                         (scf/start! app {:machine ::test-chart2
+                                          :data    {:fulcro/aliases {:item-label [:actor/item :item/label]}
+                                                    :fulcro/actors  {:actor/item (scf/actor Item [:item/id 1])}}}))]
         (scf/process-events! app)
 
         (assertions
@@ -159,8 +154,8 @@
                          (state {:id :changed}))
             session-id (do
                          (scf/register-statechart! app ::test-chart2 chart)
-                         (scf/start! app {:machine    ::test-chart2
-                                          :data       {:fulcro/actors {:actor/item (scf/actor Item [:item/id 1])}}}))]
+                         (scf/start! app {:machine ::test-chart2
+                                          :data    {:fulcro/actors {:actor/item (scf/actor Item [:item/id 1])}}}))]
         (scf/send! app session-id :change-ident)
         (scf/process-events! app)
 
@@ -180,8 +175,8 @@
                          (state {:id :changed}))
             session-id (do
                          (scf/register-statechart! app ::test-chart3 chart)
-                         (scf/start! app {:machine    ::test-chart3
-                                          :data       {:fulcro/actors {:actor/item (scf/actor Item [:item/id 1])}}}))]
+                         (scf/start! app {:machine ::test-chart3
+                                          :data    {:fulcro/actors {:actor/item (scf/actor Item [:item/id 1])}}}))]
         (scf/send! app session-id :change-class)
         (scf/process-events! app)
 
@@ -213,9 +208,9 @@
           (:component-or-actor load-op) => :actor/item)))
 
     (behavior "passes through options"
-      (let [load-op (fop/load :all-items Item {:marker     :loading
-                                                :params     {:filter "active"}
-                                                ::sc/target-alias :items-list})]
+      (let [load-op (fop/load :all-items Item {:marker           :loading
+                                               :params           {:filter "active"}
+                                               ::sc/target-alias :items-list})]
         (assertions
           "marker option preserved"
           (get-in load-op [:options :marker]) => :loading
@@ -225,6 +220,7 @@
           (get-in load-op [:options ::sc/target-alias]) => :items-list)))
 
     (behavior "execution triggers ok-event on success"
+      ;; TODO: This should really set up an app with a mock remote instead of pretending like this
       (let [events-received (atom [])
             chart           (chart/statechart {:initial :loading}
                               (state {:id :loading}
@@ -281,9 +277,9 @@
 
     (behavior "accepts ok-event and error-event"
       (let [remote-op (fop/invoke-remote `[(save-data {})] {:ok-event    :save-success
-                                                             :error-event :save-failed
-                                                             :ok-data     {:status :ok}
-                                                             :error-data  {:reason "network"}})]
+                                                            :error-event :save-failed
+                                                            :ok-data     {:status :ok}
+                                                            :error-data  {:reason "network"}})]
         (assertions
           "ok-event preserved"
           (:ok-event remote-op) => :save-success
@@ -320,8 +316,8 @@
                                                (ops/assign [:local/value] 42)])}))))
             session-id (do
                          (scf/register-statechart! app ::combined-chart chart)
-                         (scf/start! app {:machine    ::combined-chart
-                                          :data       {:fulcro/aliases {:mode [:fulcro/state :ui/mode]}}}))]
+                         (scf/start! app {:machine ::combined-chart
+                                          :data    {:fulcro/aliases {:mode [:fulcro/state :ui/mode]}}}))]
         (scf/process-events! app)
 
         (assertions
@@ -332,7 +328,7 @@
           "local assign executed"
           (get-in @state-atom (scf/local-data-path session-id :local/value)) => 42)))))
 
-(specification "Operation integration with actors and aliases"
+(specification "Operation integration with actors and aliases" :focus
   (let [app        (test-app)
         state-atom (::app/state-atom app)]
 
@@ -344,8 +340,8 @@
                                               [(ops/assign [:actor/item :item/value] 999)])}))))
             session-id (do
                          (scf/register-statechart! app ::actor-ops-chart chart)
-                         (scf/start! app {:machine    ::actor-ops-chart
-                                          :data       {:fulcro/actors {:actor/item (scf/actor Item [:item/id 1])}}}))]
+                         (scf/start! app {:machine ::actor-ops-chart
+                                          :data    {:fulcro/actors {:actor/item (scf/actor Item [:item/id 1])}}}))]
         (scf/process-events! app)
 
         (assertions
@@ -353,17 +349,17 @@
           (get-in @state-atom [:item/id 1 :item/value]) => 999)))
 
     (behavior "operations can read and write via aliases"
-      (let [chart      (chart/statechart {:initial :active}
-                         (state {:id :active}
-                           (on-entry {}
-                             (script {:expr (fn [env data _ _]
-                                              (let [aliases (scf/resolve-aliases data)]
-                                                [(fop/assoc-alias :label (str "Updated: " (:label aliases)))]))}))))
-            session-id (do
-                         (scf/register-statechart! app ::alias-ops-chart chart)
-                         (scf/start! app {:machine    ::alias-ops-chart
-                                          :data       {:fulcro/aliases {:label [:actor/item :item/label]}
-                                                       :fulcro/actors  {:actor/item (scf/actor Item [:item/id 1])}}}))]
+      (let [chart       (chart/statechart {:initial :active}
+                          (state {:id :active}
+                            (on-entry {}
+                              (script {:expr (fn [env data _ _]
+                                               (let [aliases (scf/resolve-aliases data)]
+                                                 [(fop/assoc-alias :label (str "Updated: " (:label aliases)))]))}))))
+            _session-id (do
+                          (scf/register-statechart! app ::alias-ops-chart chart)
+                          (scf/start! app {:machine ::alias-ops-chart
+                                           :data    {:fulcro/aliases {:label [:actor/item :item/label]}
+                                                     :fulcro/actors  {:actor/item (scf/actor Item [:item/id 1])}}}))]
         (scf/process-events! app)
 
         (assertions

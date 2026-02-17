@@ -37,16 +37,19 @@
     [com.fulcrologic.guardrails.malli.core :refer [=> >def >defn ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.algorithms.v20150901 :as alg]
+    [com.fulcrologic.statecharts.algorithms.v20150901-async :as aalg]
     [com.fulcrologic.statecharts.environment]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.event-queue.core-async-event-loop :as cael]
     [com.fulcrologic.statecharts.event-queue.manually-polled-queue :as mpq]
     [com.fulcrologic.statecharts.execution-model.lambda :as lambda]
+    [com.fulcrologic.statecharts.execution-model.lambda-async :as alambda]
     [com.fulcrologic.statecharts.integration.fulcro-impl :as impl]
     [com.fulcrologic.statecharts.invocation.statechart :as i.statechart]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.registry.local-memory-registry :as lmr]
-    [com.fulcrologic.statecharts.util :refer [new-uuid]]))
+    [com.fulcrologic.statecharts.util :refer [new-uuid]]
+    [promesa.core :as p]))
 
 (def local-data-path
   "[session-id & ks]
@@ -114,8 +117,8 @@
       actor-names)))
 
 (>defn resolve-actor
-  "Returns the UI props of a single actor. Use env. `data` is allowed to prevent a non-breaking change, but doesn't work
-   when a non-even predicate is evaluated."
+  "Returns the UI props of a single actor. Use `env` as the first argument. `data` is allowed to prevent a non-breaking change, but doesn't work
+   when a non-event predicate is evaluated."
   [data-or-env actor-name]
   [[:or
     ::env
@@ -128,11 +131,11 @@
   [[:map [:fulcro/actors {:optional true} map?]] :keyword => (? [:fn rc/component-class?])]
   (some-> data :fulcro/actors actor-key :component rc/registry-key->class))
 
-(>def ::ident [:tuple :some :some])
+(>def ::ident [:tuple :any :any])
 (>def ::actor [:map
                [:component qualified-keyword?]
                [:ident [:or :nil
-                        [:tuple some? some?]]]])
+                        ::ident]]])
 (>def ::class [:fn rc/component-class?])
 
 (>defn actor
@@ -203,7 +206,7 @@ Returns the new session-id of the statechart."
   [::fulcro-appish [:map
                     [:machine :keyword]
                     [:session-id {:optional true} ::sc/id]
-                    [:data {:optional true} map?]] => (? ::sc/session-id)]
+                    [:data {:optional true} map?]] => [:maybe [:or ::sc/session-id [:fn p/promise?]]]]
   (when machine
     (let [env (or
                 (statechart-env app-ish)
@@ -213,8 +216,13 @@ Returns the new session-id of the statechart."
                                                         :org.w3.scxml.event/invokeid                   (new-uuid)
                                                         :com.fulcrologic.statecharts/parent-session-id impl/master-chart-id}
                                                  (map? data) (assoc :com.fulcrologic.statecharts/invocation-data data)))]
-      (sp/save-working-memory! working-memory-store env session-id s0)
-      session-id)))
+      (if (p/promise? s0)
+        (p/then s0 (fn [wmem]
+                     (sp/save-working-memory! working-memory-store env session-id wmem)
+                     session-id))
+        (do
+          (sp/save-working-memory! working-memory-store env session-id s0)
+          session-id)))))
 
 ;; Might need to defonce this so things don't restart. One coreasync queue. Timers???
 (>defn install-fulcro-statecharts!
@@ -222,14 +230,19 @@ Returns the new session-id of the statechart."
 
   Options can include:
 
-  `:extra-env` - A map of things to include in the `env` parameter that all executable content receives.
-  `:on-save` - A `(fn [session-id EDN])` that is called every time the statechart reaches a stable state and
+  * `:extra-env` - A map of additional keys to include in the `env` parameter that all executable content receives.
+  * `:on-save` - A `(fn [session-id EDN])` that is called every time the statechart reaches a stable state and
            has working memory saved to the Fulcro app database. Allows you to do things like make statechart
            data durable across sessions.
-  `:on-delete` - A `(fn [session-id])` that is called when a statechart reaches a final state and is removed.
-  `:event-loop?` - If true (the default), start the async core.async event loop to process statechart events
+  * `:on-delete` - A `(fn [session-id])` that is called when a statechart reaches a final state and is removed.
+  * `:event-loop?` - If true (the default), start the async core.async event loop to process statechart events
         automatically. If false, you must process events manually by calling `process-events!`. Set to false
         for deterministic testing or when you want external control over event processing.
+  * `:async?` - If true, use the async-capable processor and execution model (promesa-based). This enables
+        expressions to return promises that the algorithm awaits, allowing `afop/await-load` and
+        `afop/await-mutation` to work. Requires promesa on the classpath. Defaults to false. When enabled,
+        the chart will atomically transition through states awaiting promise resolution, rather than
+        resting in intermediate states.
 
    IMPORTANT: The execution model for Fulcro calls expressions with 4 args: env, data, event-name, and event-data. The
    last two are available in `:_event` of `data`, but are passed as addl args for convenience. If you use this
@@ -245,12 +258,13 @@ Returns the new session-id of the statechart."
   ([app]
    [::fulcro-app => ::sc/env]
    (install-fulcro-statecharts! app {}))
-  ([app {:keys [extra-env on-save on-delete event-loop?] :or {event-loop? true}}]
+  ([app {:keys [extra-env on-save on-delete event-loop? async?] :or {event-loop? true async? false}}]
    [::fulcro-app [:map
                   [:extra-env {:optional true} map?]
                   [:on-save {:optional true} fn?]
                   [:on-delete {:optional true} fn?]
-                  [:event-loop? {:optional true} :boolean]] => ::sc/env]
+                  [:event-loop? {:optional true} :boolean]
+                  [:async? {:optional true} :boolean]] => ::sc/env]
    (let [runtime-atom (:com.fulcrologic.fulcro.application/runtime-atom app)]
      (when-not (contains? @runtime-atom ::sc/env)
        (let [dm                 (impl/new-fulcro-data-model app)
@@ -269,7 +283,9 @@ Returns the new session-id of the statechart."
                                                                 (impl/statechart-event! app session-id (:name event) (:data event) configuration)
                                                                 (impl/statechart-event! app session-id event {} configuration))))]
                                       (sp/receive-events! real-queue env wrapped-handler options))))
-             ex                 (lambda/new-execution-model dm instrumented-queue {:explode-event? true})
+             ex                 (if async?
+                                  (alambda/new-execution-model dm instrumented-queue {:explode-event? true})
+                                  (lambda/new-execution-model dm instrumented-queue {:explode-event? true}))
              registry           (lmr/new-registry)
              wmstore            (impl/->FulcroWorkingMemoryStore app on-save on-delete)
              env                (merge {:fulcro/app                app
@@ -277,7 +293,9 @@ Returns the new session-id of the statechart."
                                         ::sc/data-model            dm
                                         ::sc/event-queue           instrumented-queue
                                         ::sc/working-memory-store  wmstore
-                                        ::sc/processor             (alg/new-processor)
+                                        ::sc/processor             (if async?
+                                                                     (aalg/new-processor)
+                                                                     (alg/new-processor))
                                         ::sc/invocation-processors [(i.statechart/new-invocation-processor)]
                                         ::sc/execution-model       ex}
                                   extra-env)
@@ -334,10 +352,14 @@ Returns the new session-id of the statechart."
     (sp/receive-events! (::sc/event-queue env) env
       (fn [{::sc/keys [working-memory-store processor] :as env} {:keys [target] :as event}]
         (when target
-          (let [wmem     (sp/get-working-memory working-memory-store env target)
-                next-mem (when wmem (sp/process-event! processor env wmem event))]
-            (when next-mem
-              (sp/save-working-memory! working-memory-store env target next-mem)))))
+          (let [wmem    (sp/get-working-memory working-memory-store env target)
+                result  (when wmem (sp/process-event! processor env wmem event))
+                save-fn (fn [next-mem]
+                          (when next-mem
+                            (sp/save-working-memory! working-memory-store env target next-mem)))]
+            (if (p/promise? result)
+              (p/then result save-fn)
+              (save-fn result)))))
       {})))
 
 (defn mutation-result
