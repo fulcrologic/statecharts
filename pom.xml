@@ -85,6 +85,11 @@
             <version>0.20.0</version>
         </dependency>
         <dependency>
+            <groupId>funcool</groupId>
+            <artifactId>promesa</artifactId>
+            <version>11.0.678</version>
+        </dependency>
+        <dependency>
             <groupId>org.clojure</groupId>
             <artifactId>core.async</artifactId>
             <version>1.8.741</version>
