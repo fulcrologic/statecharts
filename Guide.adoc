@@ -632,7 +632,7 @@ The standard allows for a compliant implementation to include extra executable c
 
 The internals allow you to return a collection of elements from a function, which will be "spliced" in place.
 This allows you to easily create macros and functions that can make your state charts much easier to write.
-Some examples in the library source code are the com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like `com.fulcrologic.statecharts.integration.fulcro.ui-routes/rstate` in the Fulcro UI Routing support.
+Some examples in the library source code are the com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like `com.fulcrologic.statecharts.integration.fulcro.routing/rstate` in the Fulcro UI Routing support.
 
 = Integration with Fulcro
 
@@ -1034,61 +1034,1018 @@ Here is an example of using this support to create a simple traffic light that c
 
 == Hierarchical Routing
 
-STATUS: ALPHA. API IN FLUX.
+NOTE: The legacy `com.fulcrologic.statecharts.integration.fulcro.ui-routes` namespace is
+deprecated. All examples below use the new `routing` namespace. The old namespace
+remains available for backward compatibility but does not include URL sync, cross-chart
+routing, or configuration validation.
 
-The intention of this system is to make it possible to completely compose a webapp as a statechart, including the concern
-of UI routing, URL tracking/restore, etc.  Routing actually caused the motivation for statecharts async support.
+=== Why Statechart-Driven Routing?
 
-This documentation will be improved as the feature matures. It is NOT recommended for production use yet.
+Routing in a web application is fundamentally a state machine problem.
+You have a set of possible screens, transitions between them, guards that prevent certain transitions, and side effects (loading data) that must occur when entering a screen.
+Traditional routing libraries model this implicitly with callback chains, middleware stacks, and ad-hoc guard logic.
+Statecharts make it explicit.
 
-The routing system supports hierarchical path composition and parameterized URL segments.
-Nested route states can each contribute a piece of the URL path, and keyword placeholders in path segments are matched against URL parts to extract parameters.
+With statechart-driven routing you get:
 
-=== Path Composition
+* **Guards and denial are first-class.**
+A dirty form blocking navigation is not a bolt-on: it is a guard condition on the transition.
+The statechart naturally holds the "denied" state and lets you offer "Continue anyway?" or "Cancel" without juggling flags.
 
-Each route state can declare a `:route/path` — a vector of strings and keyword placeholders.
-When route states are nested, the paths compose hierarchically.
-For example:
+* **Async side effects on entry.**
+When a user navigates to a project detail page, the statechart's `on-entry` handler can fire a data load.
+Because this library supports async processing (see <<Asynchronous Processing>>), the load completes before the next event is processed.
+This eliminates the class of complexity where you have to model async tracking with states/transitions.
 
-[source]
+* **Composable child charts.**
+An module of the app can be a self-contained statechart invoked by the parent routing chart.
+The module's chart manages its own sub-routes, its own guards, and its own data loads -- yet the parent chart sees it as a single state.
+This enables code splitting, module boundaries, and isolated testing.
+
+* **Bidirectional URL sync.**
+The URL is derived from the statechart configuration -- not the other way around.
+Browser back/forward triggers a statechart event that goes through the same guard and transition logic as programmatic navigation.
+
+IMPORTANT: Routing works best with async statechart processing. When calling `install-fulcro-statecharts!`, pass `:async? true` so that on-entry handlers (which often trigger data loads) complete before the next event is processed. The demo code in this section assumes async mode.
+
+=== End-to-End Setup Walkthrough
+
+This section walks through every step to get routing working, from zero to a running application.
+The code mirrors the `routing-demo2` example included in the source tree.
+
+==== Step 1: Create the Fulcro Application
+
+[source,clojure]
 -----
-(routes {:routing/root Root :id :routes}
-  (rstate {:route/target UserList :route/path ["users"]}
-    (rstate {:route/target UserDetail :route/path [:id]}
-      (rstate {:route/target UserEdit :route/path ["edit"]}))))
+(ns app.main
+  (:require
+    [com.fulcrologic.fulcro.application :as app]
+    ;; These requires pull in the async implementations -- needed for :async? true
+    [com.fulcrologic.statecharts.algorithms.v20150901-async]
+    [com.fulcrologic.statecharts.event-queue.async-event-loop]
+    [com.fulcrologic.statecharts.execution-model.lambda-async]
+    [com.fulcrologic.statecharts.integration.fulcro :as scf]
+    [com.fulcrologic.statecharts.integration.fulcro.routing :as sroute]
+    ;; Pull in browser history implementation (CLJS dead-code elimination safe)
+    [com.fulcrologic.statecharts.integration.fulcro.routing.browser-history]))
+
+(defonce app-instance
+  (app/fulcro-app
+    {:remotes {:remote (my-remote)}}))
 -----
 
-The full URL path for `UserEdit` would be `/users/42/edit` — each ancestor's `:route/path` segments are prepended automatically.
+==== Step 2: Install Statechart Infrastructure
 
-=== Parameterized Path Segments
-
-Keyword segments (like `:id` above) act as parameter placeholders.
-When a URL is matched, the corresponding path segment is extracted into a parameter map:
-
-[source]
+[source,clojure]
 -----
-;; URL: /users/42/edit
-;; Matched pattern: ["users" :id "edit"]
-;; Extracted params: {:id "42"}
+(scf/install-fulcro-statecharts! app-instance
+  {:async?      true
+   :event-loop? true
+   :on-save     (fn [session-id wmem]
+                  ;; Required: drives state-to-URL synchronization
+                  (sroute/url-sync-on-save session-id wmem app-instance))})
 -----
 
-Parameters are made available via `[:routing/parameters <state-id>]` in the data model, and are also persisted to the URL when navigating programmatically.
+The `:on-save` callback fires every time a statechart session's working memory is persisted.
+Calling `sroute/url-sync-on-save` inside it is what makes state-to-URL synchronization work.
+Passing `app-instance` as the third argument enables child chart URL tracking -- when a child chart transitions, the URL updates to reflect the full nested path.
 
-=== Key Functions
+==== Step 3: Define and Start the Routing Chart
 
-The `com.fulcrologic.statecharts.integration.fulcro.route-url` namespace provides the pure functions for path operations:
+[source,clojure]
+-----
+(sroute/start! app-instance my-routing-chart)
+-----
 
-`(resolve-full-path statechart state-id)`:: Walk the parent chain collecting `:route/path` segments
-from each ancestor.
-Returns a flat vector like `["users" :id "edit"]`.
-`(match-path path pattern)`:: Match a URL path (vector of strings) against a pattern (vector of strings
-and keyword placeholders).
-Returns `nil` on mismatch, or a map of extracted params.
-`(build-route-table statechart)`:: Scan all states with `:route/target`, compute full paths, and
-return a sorted vector of route entries ordered by specificity (more literal segments first).
-`(find-route-for-url route-table path)`:: Find the first matching route entry for a given URL path, returning the match with extracted `:route/path-params`.
+`start!` registers the chart under `sroute/session-id` and starts a session.
+No manual session ID or registration key management is needed.
 
-The `start-routing!` function in `ui-routes` automatically builds the route table and uses it for URL-to-state matching, including on browser back/forward navigation.
+==== Step 4: Install URL Synchronization
+
+[source,clojure]
+-----
+;; Store cleanup fn so shadow-cljs hot reload does not leak popstate listeners
+(defonce url-sync-cleanup (atom nil))
+
+;; In your init function:
+(when-let [old-cleanup @url-sync-cleanup] (old-cleanup))
+(reset! url-sync-cleanup
+  (sroute/install-url-sync! app-instance))
+-----
+
+`install-url-sync!` must be called *after* `start!`.
+It returns a cleanup function that removes all listeners -- the `defonce` + `atom` pattern above ensures hot reloads do not accumulate stale popstate handlers.
+
+On CLJS, a `BrowserURLHistory` provider is used by default.
+On CLJ, you must pass a `:provider` explicitly (see <<Headless Testing>>).
+
+==== Step 5: Mount the UI
+
+[source,clojure]
+-----
+(app/set-root! app-instance ui/Root {:initialize-state? true})
+(app/mount! app-instance ui/Root "app")
+-----
+
+==== Complete init Function
+
+Here is the full initialization sequence (simplified from `routing-demo2/app.cljs`):
+
+[source,clojure]
+-----
+(defn ^:export init []
+  (app/set-root! app-instance ui/Root {:initialize-state? true})
+  (scf/install-fulcro-statecharts! app-instance
+    {:async?      true
+     :event-loop? true
+     :on-save     (fn [sid wmem]
+                    (sroute/url-sync-on-save sid wmem app-instance))})
+  ;; Register any child charts that istates reference by ID
+  (scf/register-statechart! app-instance :app/admin-chart admin-chart/admin-chart)
+  ;; Start main routing chart
+  (sroute/start! app-instance chart/routing-chart)
+  ;; Install URL sync (after start!)
+  (when-let [old-cleanup @url-sync-cleanup] (old-cleanup))
+  (reset! url-sync-cleanup (sroute/install-url-sync! app-instance))
+  (app/mount! app-instance ui/Root "app"))
+
+(defn ^:export refresh []
+  (app/force-root-render! app-instance))
+-----
+
+[[DefiningRoutes]]
+=== Defining Routes
+
+A routing chart is built from four DSL functions: `routing-regions`, `routes`, `rstate`, and `istate`.
+
+==== routing-regions
+
+`routing-regions` wraps a `routes` node in a parallel state that includes a small internal state machine for route denial (the "routing info" region).
+This is what enables the denial modal pattern (see <<BusyGuards>>).
+
+[source,clojure]
+-----
+(sroute/routing-regions
+  (sroute/routes {...}
+    ...route states...))
+-----
+
+The result is a state node `:state/route-root` containing a parallel node with two regions: the routing info state machine and your routes.
+
+==== routes
+
+`routes` is the container for all route states within a routing region.
+It generates transitions for every descendant `:route/target` and for every cross-chart target declared via `:route/reachable` on `istate` children.
+
+[source,clojure]
+-----
+(sroute/routes {:id :region/main :routing/root `ui/RoutingRoot}
+  (sroute/rstate {:route/target `ui/Dashboard})
+  (sroute/rstate {:route/target `ui/ProjectList :route/segment "projects"})
+  (sroute/rstate {:route/target `ui/ProjectDetail :route/params #{:project-id}}))
+-----
+
+Required options:
+
+`:id`:: The state ID for this routes node.
+`:routing/root`:: The Fulcro component that serves as the rendering parent for these routes. Must have a constant ident (e.g. `[:component/id ::RoutingRoot]`) or be the app root (no ident).
+
+Optional:
+
+`:initial`:: The state ID of the initial route (defaults to first child).
+
+==== rstate
+
+`rstate` creates a route state node.
+When the statechart enters this state, three things happen automatically:
+
+1. **Route parameters** from the event data are stored in the data model at `[:routing/parameters <state-id>]`.
+2. **The target component is initialized** in Fulcro's state database (controlled by `sfro/initialize`).
+3. **The parent component's query is rewritten** to include a join to the target, so the correct component renders.
+
+[source,clojure]
+-----
+(sroute/rstate {:route/target `ui/ProjectDetail
+                :route/segment "detail"
+                :route/params #{:project-id}})
+-----
+
+Options:
+
+`:route/target`:: (Required) A component class or anything accepted by `comp/registry-key->class`. The state ID is automatically derived from this -- do not pass an explicit `:id`. Prefer using the class directly (via syntax-quote, e.g. pass:[<code>`ui/Dashboard</code>]) rather than a keyword symbol — using the class forces a `require` on the target namespace, so the compiler catches missing dependencies at build time. Use a keyword only when necessary to break circular requires.
+`:route/segment`:: (Optional) Custom URL path segment string. When absent, defaults to the simple name of the target (e.g. `ProjectDetail`). Used by the default URLCodec, which is customizable.
+`:route/params`:: (Optional) A set of keywords. When present in the routing event data, these keys are extracted and stored at `[:routing/parameters <state-id>]` in the data model.
+`:parallel?`:: (Optional) When true, this node is a parallel state.
+
+You can nest `rstate` nodes to create hierarchical routes:
+
+[source,clojure]
+-----
+(sroute/routes {:routing/root `ui/Root :id :routes}
+  (sroute/rstate {:route/target `ui/UserList :route/segment "users"}
+    (sroute/rstate {:route/target `ui/UserDetail}
+      (sroute/rstate {:route/target `ui/UserEdit :route/segment "edit"}))))
+-----
+
+The full URL for `UserEdit` composes as `/users/UserDetail/edit` -- each ancestor's segment is prepended.
+
+==== Segment Composition
+
+Each route state contributes one URL path segment in the default URLCodec.
+By default the segment is the simple name of its `:route/target`.
+Use `:route/segment` to override with a human-friendly string.
+
+Segments compose from the routing root down to the active leaf:
+
+[cols="2,3"]
+|===
+| Route Target | URL
+
+| `Dashboard` (no custom segment) | `/Dashboard`
+| `ProjectList` with `:route/segment "projects"` | `/projects`
+| `ProjectDetail` nested under `ProjectList` | `/projects/ProjectDetail`
+| `UserEdit` with `:route/segment "edit"` nested under `UserDetail` nested under `UserList` with `:route/segment "users"` | `/users/UserDetail/edit`
+|===
+
+==== Route Parameters
+
+In the default URL encoding route parameters are **not** encoded in URL path segments.
+Instead they travel through event data and are persisted to the URL via a single opaque `_p` query parameter:
+
+[source,clojure]
+-----
+;; Navigating with params:
+(sroute/route-to! app ProjectDetail {:project-id 42})
+;; URL: /projects/ProjectDetail?_p=<base64-encoded-transit>
+-----
+
+To declare which keys should be extracted from event data:
+
+[source,clojure]
+-----
+(sroute/rstate {:route/target `ui/ProjectDetail :route/params #{:project-id}})
+-----
+
+Parameters are then available in the data model at `[:routing/parameters <state-id>]`, where `<state-id>` is the keyword derived from the `:route/target`.
+
+You can install an alternate `URLCodec` to customize this behavior.
+
+[[ComponentSetup]]
+=== Component Setup Requirements
+
+Route target components must follow certain conventions for the routing system to manage their state and rendering correctly.
+
+==== Constant Ident
+
+Every route target must have an ident.
+For singleton screens (dashboards, settings pages), use a constant ident:
+
+[source,clojure]
+-----
+(defsc Dashboard [this {:dashboard/keys [greeting]}]
+  {:query         [:dashboard/greeting]
+   :ident         (fn [] [:component/id ::Dashboard])
+   :initial-state {:dashboard/greeting "Welcome!"}})
+-----
+
+For entity-based screens (project detail, user profile), use a data-driven ident:
+
+[source,clojure]
+-----
+(defsc ProjectDetail [this {:project/keys [id name description]}]
+  {:query [:project/id :project/name :project/description]
+   :ident :project/id})
+-----
+
+When using a data-driven ident, you will typically need `sfro/initial-props` to provide the ident key from event data (see <<ComponentOptions>>).
+
+==== preserve-dynamic-query?
+
+The routing system dynamically rewrites parent component queries to include a join to the active route target.
+Fulcro hot code reload resets queries to their original values -- which would break active routes.
+To prevent this, **every component that renders a subroute must set the option to preserve dynamic queries**:
+
+[source,clojure]
+-----
+(defsc RoutingRoot [this {:ui/keys [current-route]}]
+  {:query                   [:ui/current-route]
+   :ident                   (fn [] [:component/id ::RoutingRoot])
+   :preserve-dynamic-query? true   ;; REQUIRED
+   :initial-state           {:ui/current-route {}}})
+-----
+
+==== Rendering Subroutes
+
+Use `sroute/ui-current-subroute` to render the active child in a standard (non-parallel) routing region:
+
+[source,clojure]
+-----
+(defsc RoutingRoot [this {:ui/keys [current-route]}]
+  {:query                   [:ui/current-route]
+   :ident                   (fn [] [:component/id ::RoutingRoot])
+   :preserve-dynamic-query? true
+   :initial-state           {:ui/current-route {}}}
+  (dom/div {}
+    (sroute/ui-current-subroute this comp/factory)))
+-----
+
+For parallel routing regions, use `sroute/ui-parallel-route` with the target's registry key:
+
+[source,clojure]
+-----
+(sroute/ui-parallel-route this ::SomeTarget comp/factory)
+-----
+
+==== Navigation
+
+Navigate programmatically using `route-to!`:
+
+[source,clojure]
+-----
+;; From a component's event handler:
+(sroute/route-to! this ::ProjectList)
+
+;; With route parameters:
+(sroute/route-to! this ::ProjectDetail {:project-id 42})
+
+;; From anywhere with access to the app:
+(sroute/route-to! app ::Dashboard)
+-----
+
+Browser back and forward (when URL sync is installed):
+
+[source,clojure]
+-----
+(sroute/route-back! app)
+(sroute/route-forward! app)
+-----
+
+[[IstateDeepDive]]
+=== Composed Routing with istate
+
+`istate` is the mechanism for composing independently-defined statecharts into a routing hierarchy.
+It creates a route state that, when entered, **invokes a child statechart** on the target component.
+
+This is powerful for several reasons:
+
+* **Code splitting**: The child chart can be in a separate namespace, loaded lazily.
+* **Team boundaries**: Different teams own different sub-charts without coordination.
+* **Isolated testing**: Each child chart can be tested in isolation.
+* **Encapsulated lifecycle**: The child chart manages its own sub-routes, data loads, and guards.
+
+==== How istate Differs from rstate
+
+An `rstate` is a simple route: entering it initializes a component and sets up a query join.
+
+An `istate` does all of that AND invokes a child statechart.
+The child chart runs as a separate session, with its own configuration, data model, and event processing.
+When the parent exits the `istate`, the child session is terminated.
+
+==== Co-located Charts (sfro/statechart)
+
+The simplest way to associate a child chart with a component is to put it directly on the component:
+
+[source,clojure]
+-----
+(defsc AdminPanel [this {:ui/keys [current-route]}]
+  {:query                   [:ui/current-route]
+   :ident                   (fn [] [:component/id ::AdminPanel])
+   :preserve-dynamic-query? true
+   sfro/statechart          admin-chart/admin-chart    ;; <-- co-located chart
+   :initial-state           {:ui/current-route {}}})
+-----
+
+When the routing system enters this `istate`, it reads `sfro/statechart` from the component, registers it under the component's registry key, and invokes it.
+
+==== Pre-registered Charts (sfro/statechart-id)
+
+For code splitting, register the chart separately and reference it by ID:
+
+[source,clojure]
+-----
+;; At startup:
+(scf/register-statechart! app :my-app/admin-chart admin-chart/admin-chart)
+
+;; On the component:
+(defsc AdminPanel [this {:ui/keys [current-route]}]
+  {:query                   [:ui/current-route]
+   :ident                   (fn [] [:component/id ::AdminPanel])
+   :preserve-dynamic-query? true
+   sfro/statechart-id       :my-app/admin-chart    ;; <-- reference by ID
+   :initial-state           {:ui/current-route {}}})
+-----
+
+This is the pattern used in the demo application.
+
+==== Cross-Chart Routing via :route/reachable
+
+The parent chart needs to know which targets exist inside the child chart so it can generate transitions to them.
+
+**Auto-derivation (recommended):** When the `istate` target component has a co-located chart via `sfro/statechart`, the reachable targets are **automatically derived** by walking the child chart's route targets. You do not need to declare `:route/reachable` at all:
+
+[source,clojure]
+-----
+;; In the parent chart — reachable targets are auto-derived from AdminPanel's sfro/statechart:
+(sroute/istate {:route/target `ui/AdminPanel})
+-----
+
+This works because `istate` calls `reachable-targets` on the co-located child chart at chart construction time, collecting all `:route/target` values transitively (including nested child charts).
+
+NOTE: Auto-derivation requires `sfro/statechart` on the target component (not `sfro/statechart-id`). If neither an explicit `:route/reachable` nor a resolvable `sfro/statechart` is found, `istate` throws an error at chart construction time.
+
+**Manual override:** You can still provide an explicit `:route/reachable` set, which takes precedence over auto-derivation. This is useful when you want to do code splitting and don't have the component available at initial base load.
+
+[source,clojure]
+-----
+;; Explicit reachable — good for code splitting
+(sroute/istate {:route/target    `ui/AdminPanel
+                :route/reachable #{::ui/AdminUsersList
+                                   ::ui/AdminUserDetail
+                                   ::ui/AdminSettings}})
+-----
+
+With reachable targets (whether auto-derived or explicit), `sroute/route-to!` can navigate directly to any child from anywhere in the parent chart.
+
+Two mechanisms handle this:
+
+1. **Not yet in the owner istate**: The parent transitions into the istate and stores the desired route as `::pending-child-route`. When the child chart starts, its `routes` on-entry handler detects the pending route and raises it as an event.
+
+2. **Already in the owner istate**: The parent sends the route event directly to the child session via `scp/send!`. The child chart transitions internally without re-entering the `istate`.
+
+==== The Child Chart
+
+A child chart used with `istate` is just a normal routing chart.
+The key differences are:
+
+* Its `:routing/root` is the parent `istate`'s target component (e.g. `AdminPanel`).
+* The `::pending-child-route` mechanism is handled automatically by `routes` on-entry.
+
+[source,clojure]
+-----
+(ns app.admin-chart
+  (:require
+    [com.fulcrologic.statecharts.chart :as chart]
+    [com.fulcrologic.statecharts.integration.fulcro.routing :as sroute]))
+
+(def admin-chart
+  (chart/statechart {:initial :admin/routes}
+    (sroute/routes {:id :admin/routes :routing/root `ui/AdminPanel}
+      (sroute/rstate {:route/target `ui/AdminUsersList})
+      (sroute/rstate {:route/target `ui/AdminUserDetail :route/params #{:user-id}})
+      (sroute/rstate {:route/target `ui/AdminSettings}))))
+-----
+
+==== Advanced istate Options
+
+The `istate` function accepts additional options for controlling the child statechart invocation lifecycle. These are less commonly needed but available for advanced use cases:
+
+`on-done`:: Transition target when the child chart reaches a final state.
+`exit-target`:: Target to transition to when the istate is exited (before the child chart is torn down).
+`invoke-params`:: Additional parameters to pass to the child chart invocation.
+`child-session-id`:: Override the auto-generated child session ID.
+`autoforward`:: When true, forwards all unhandled events to the child chart.
+
+See the `istate` docstring in `routing.cljc` for full details.
+
+==== send-to-self! for Child Chart Communication
+
+When a component has a co-located child statechart (via `istate`), it can send events to the child session:
+
+[source,clojure]
+-----
+;; From the istate target component or any of its UI children:
+(sroute/send-to-self! this :event/save {:some "data"})
+-----
+
+This walks up the Fulcro component parent chain starting from `this` to find the nearest ancestor whose registry key has an invocation session ID.
+This means you can call `send-to-self!` from a child component rendered inside a route target — it will find the route target's co-located chart automatically.
+
+==== Inspecting Child State
+
+To read the current configuration of a child chart from the route target or any of its UI children:
+
+[source,clojure]
+-----
+(sroute/current-invocation-configuration this)
+;; => #{:admin/routes :region/routing-info ...}
+-----
+
+Like `send-to-self!`, this walks the parent chain to find the nearest ancestor with a co-located chart.
+
+==== sfro/actors
+
+When the child chart is invoked, `:actor/component` is automatically set to the target component.
+If the child chart needs additional actors, declare them on the component:
+
+[source,clojure]
+-----
+(defsc AdminPanel [this props]
+  {sfro/actors (fn [env data]
+                 {:actor/sidebar (scf/actor Sidebar (comp/get-ident Sidebar {}))})
+   ...})
+-----
+
+=== Authentication Guard Pattern
+
+A common requirement is redirecting unauthenticated users to a login screen, then returning them to their original destination after login.
+There is no built-in library code for this, because the elements allow you to build the pattern and customize it to your
+application's needs via things that statecharts can already do.
+
+The demo application (`routing-demo2/chart.cljc`) demonstrates this pattern.
+
+==== Structure
+
+The auth guard is a **plain state** (not `rstate` or `istate`) that wraps the login screen and an initializing state.
+It sits inside the `routes` node alongside the authenticated route states:
+
+[source,clojure]
+-----
+(sroute/routes {:id :region/main :routing/root `ui/RoutingRoot}
+  ;; Auth guard: intercepts route-to.* when unauthenticated
+  (state {:id :state/unauthenticated :initial :state/initializing}
+    ;; Wildcard transition: catches ANY route-to.* event
+    (transition {:event :route-to.* :target ::ui/LoginScreen}
+      (script {:expr save-bookmark}))
+    (state {:id :state/initializing}
+      (on-entry {} (script {:expr check-session!}))
+      (transition {:event :auth/session-valid :target ::ui/Dashboard})
+      (transition {:event :auth/session-invalid :target ::ui/LoginScreen}))
+    (sroute/rstate {:route/target `ui/LoginScreen}
+      ;; Login transitions...
+      ))
+
+  ;; Authenticated routes (outside the unauthenticated state)
+  (sroute/rstate {:route/target `ui/Dashboard}
+    (on-entry {} (script {:expr replay-bookmark!})))
+  (sroute/rstate {:route/target `ui/ProjectList :route/segment "projects"})
+  ;; ...more routes...
+  )
+-----
+
+==== How the Bookmark Works
+
+1. The user bookmarks or deep-links to `/projects/ProjectDetail?_p=...`.
+2. On page load, the statechart starts in `:state/unauthenticated`, which checks the session.
+3. If unauthenticated, the `route-to.*` wildcard transition fires first (document order), saving the original event as a bookmark.
+4. The user logs in successfully, transitioning to `Dashboard`.
+5. `Dashboard`'s on-entry replays the bookmark by raising the saved event via `senv/raise`.
+6. The routing system processes the replayed event and navigates to the bookmarked destination.
+
+The bookmark is stored as a data model assignment (`ops/assign`) and cleared after replay:
+
+[source,clojure]
+-----
+(defn- save-bookmark [_env _data event-name event-data]
+  (let [login-event (sroute/route-to-event-name ::ui/LoginScreen)]
+    (if (= event-name login-event)
+      nil  ;; don't save login route as bookmark (avoids loops)
+      [(ops/assign ::bookmark {:event-name event-name :event-data event-data})])))
+
+(defn- replay-bookmark! [env data & _]
+  (let [bookmark (get data ::bookmark)]
+    (when bookmark
+      (senv/raise env (:event-name bookmark) (:event-data bookmark)))
+    ;; Clear bookmark after use
+    [(ops/assign ::bookmark nil)]))
+-----
+
+=== Pluggable URL Codec
+
+URL encoding and decoding is handled by the `URLCodec` protocol defined in `routing.url-codec`:
+
+[source,clojure]
+-----
+(defprotocol URLCodec
+  (encode-url [this context]
+    "Given a context map, return a URL path string (with query if needed).
+     Context keys: :segments, :params, :route-elements")
+  (decode-url [this href route-elements]
+    "Given a URL string and route-elements map, return {:leaf-id :params} or nil."))
+-----
+
+==== Default: TransitBase64Codec
+
+The default implementation (`routing.url-codec-transit`) encodes route parameters as transit, then base64, into a `_p` query parameter.
+URL shape: `/Seg1/Seg2?_p=<base64-encoded-transit>`.
+
+This is created automatically by `install-url-sync!` if you do not pass a `:url-codec` option.
+
+==== Custom Codec
+
+To implement a custom codec (e.g. human-readable query params, path-based params), implement the `URLCodec` protocol:
+
+[source,clojure]
+-----
+(require '[com.fulcrologic.statecharts.integration.fulcro.routing.url-codec :as ruc])
+
+(def my-codec
+  (reify ruc/URLCodec
+    (encode-url [_ {:keys [segments route-elements params]}]
+      ;; Build path from segments
+      (let [seg-strs (mapv (fn [state-id]
+                             (ruc/element-segment (get route-elements state-id)))
+                       segments)
+            path     (str "/" (clojure.string/join "/" seg-strs))]
+        ;; Add params however you prefer
+        (if (seq params)
+          (str path "?" (my-param-encoder params))
+          path)))
+    (decode-url [_ href route-elements]
+      ;; Parse href, find matching leaf, extract params
+      ...)))
+
+;; Pass to install-url-sync!
+(sroute/install-url-sync! app {:url-codec my-codec})
+-----
+
+The `ruc/element-segment` helper returns `:route/segment` if present, otherwise `(name (:route/target element))`.
+
+[[BusyGuards]]
+=== Busy Guards
+
+Busy guards prevent navigation away from a route when work would be lost -- for example, an unsaved form.
+
+==== How It Works
+
+When `routes` generates transitions for each route target, it also generates a **catch-all** `route-to.*` transition with `sroute/busy?` as its guard condition.
+Because statecharts evaluate transitions in document order, this catch-all fires *before* the specific target transitions when the guard returns true.
+
+The `sroute/busy?` function performs a **deep recursive check**:
+
+1. For each active route state, it checks if the target component has a `sfro/busy?` predicate or is a dirty Fulcro form.
+2. If the route state has an invoked child chart, it recursively checks the child chart's active states.
+3. If any component at any depth returns busy, the route change is denied.
+
+==== Adding a Busy Predicate
+
+Add `sfro/busy?` to any route target component:
+
+[source,clojure]
+-----
+(defsc BusyForm [this {:ui/keys [notes]}]
+  {:query         [:ui/notes]
+   :ident         (fn [] [:component/id ::BusyForm])
+   :initial-state {:ui/notes ""}
+   sfro/busy?     (fn [{:fulcro/keys [app]} _data]
+                    (let [state-map (rapp/current-state app)
+                          notes     (get-in state-map [:component/id ::BusyForm :ui/notes])]
+                      (and (string? notes) (pos? (count notes)))))})
+-----
+
+==== Denial Lifecycle
+
+When a route transition is denied:
+
+1. `record-failed-route!` stores the failed event in the data model.
+2. The routing info region transitions to `:routing-info/open`.
+3. `sroute/route-denied?` returns `true`.
+4. Your UI renders a confirmation dialog.
+5. The user chooses one of:
+   - `(sroute/force-continue-routing! app)` -- resends the failed event with a `::force?` flag that bypasses the busy check.
+   - `(sroute/abandon-route-change! app)` -- closes the routing info and stays on the current route.
+
+[source,clojure]
+-----
+;; In your Root component's render:
+(when (sroute/route-denied? this)
+  (dom/div {} ; possibly render as a modal, etc. Use ui props to optionally customize messages. None of that needs statechart specifics.
+    (dom/p {} "You have unsaved changes. Leave anyway?")
+    (dom/button {:onClick #(sroute/force-continue-routing! this)} "Leave")
+    (dom/button {:onClick #(sroute/abandon-route-change! this)} "Stay")))
+-----
+
+==== URL Sync Interaction with Denial
+
+When URL sync is installed and the user presses the browser back button:
+
+1. The popstate listener fires, sending a route event.
+2. If the route is denied, `install-url-sync!` detects the mismatch between the statechart state and the browser URL.
+3. It automatically restores the URL to its pre-navigation value (using `go-forward!` or `go-back!` depending on direction).
+4. If an `:on-route-denied` callback was provided to `install-url-sync!`, it is called with the denied URL.
+
+[[HeadlessTesting]]
+=== Headless Testing
+
+The `SimulatedURLHistory` provider enables full routing testing without a browser.
+It is cross-platform (CLJ + CLJS) and works in kaocha, REPL, and CI environments.
+
+==== Test Setup
+
+[source,clojure]
+-----
+(require '[com.fulcrologic.fulcro.application :as app]
+         '[com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+         '[com.fulcrologic.statecharts.integration.fulcro :as scf]
+         '[com.fulcrologic.statecharts.integration.fulcro.routing :as sroute]
+         '[com.fulcrologic.statecharts.integration.fulcro.routing.simulated-history :as rsh]
+         '[com.fulcrologic.statecharts.integration.fulcro.routing.url-history :as ruh])
+
+;; Minimal route components
+(defsc RootComp [_ _]
+  {:query [:ui/current-route]
+   :ident (fn [] [:component/id ::root])
+   :initial-state {:ui/current-route {}}})
+
+(defsc PageA [_ _]
+  {:query [:page/id]
+   :ident :page/id
+   :initial-state {:page/id :a}})
+
+(defsc PageB [_ _]
+  {:query [:page/id]
+   :ident :page/id
+   :initial-state {:page/id :b}})
+
+;; Create headless app with synchronous processing
+(defn test-app []
+  (let [a (app/fulcro-app)]
+    (app/set-root! a RootComp {:initialize-state? true})
+    (scf/install-fulcro-statecharts! a {:event-loop? false})
+    a))
+-----
+
+==== Testing Programmatic Navigation
+
+[source,clojure]
+-----
+(let [app      (test-app)
+      provider (rsh/simulated-url-history "/")]
+  (sroute/start! app my-routing-chart)
+  (scf/process-events! app)
+  (let [cleanup (sroute/install-url-sync! app {:provider provider})]
+    (sroute/url-sync-on-save sroute/session-id nil app)
+
+    ;; Navigate
+    (sroute/route-to! app `PageB)
+    (scf/process-events! app)
+    (sroute/url-sync-on-save sroute/session-id nil app)
+
+    ;; Assert URL and route state
+    (assert (= "/PageB" (ruh/current-href provider)))
+    (assert (= 2 (count (rsh/history-stack provider))))
+
+    (cleanup)))
+-----
+
+==== Testing Browser Back/Forward (CLJ Only)
+
+Browser back/forward requires synchronous event processing, so these tests must be CLJ-only:
+
+[source,clojure]
+-----
+;; After programmatic navigation A -> B -> C:
+(ruh/go-back! provider)
+(scf/process-events! app)
+(sroute/url-sync-on-save sroute/session-id nil app)
+;; Now on page B; history stack unchanged
+
+(ruh/go-forward! provider)
+(scf/process-events! app)
+(sroute/url-sync-on-save sroute/session-id nil app)
+;; Back on page C
+-----
+
+==== Testing Route Denial
+
+[source,clojure]
+-----
+;; Navigate to a busy page, then try to go back
+(ruh/go-back! provider)
+(scf/process-events! app)
+(sroute/url-sync-on-save sroute/session-id nil app)
+
+(assert (true? (sroute/route-denied? app)))
+;; URL is restored to the busy page's URL
+
+;; Force continue
+(sroute/force-continue-routing! app)
+(scf/process-events! app)
+(scf/process-events! app)  ;; extra round for re-queued event
+(sroute/url-sync-on-save sroute/session-id nil app)
+
+(assert (false? (sroute/route-denied? app)))
+-----
+
+==== SimulatedURLHistory Inspection Helpers
+
+`(rsh/history-stack provider)`:: Returns a vector of URL strings.
+`(rsh/history-cursor provider)`:: Returns the current cursor position (zero-based index).
+`(rsh/history-entries provider)`:: Returns the full entries vector with `:url` and `:index` keys.
+
+See `url_sync_headless_spec.cljc` in the test suite for comprehensive examples covering cross-chart routing, custom segments, and denial recovery.
+
+=== API Reference
+
+==== Chart Construction
+
+[cols="3,4"]
+|===
+| Function | Description
+
+| `sroute/routing-regions` | Wraps routes in parallel state with denial modal support.
+| `sroute/routes` | Container for route states. Generates transitions for all targets.
+| `sroute/rstate` | Route state. On-entry: params, init, query rewrite.
+| `sroute/istate` | Route state that invokes a child statechart. Auto-derives `:route/reachable` from `sfro/statechart` when not explicitly provided.
+|===
+
+==== Lifecycle
+
+[cols="3,4"]
+|===
+| Function | Description
+
+| `sroute/start! [app chart]` | Registers chart and starts routing session.
+| `sroute/start! [app chart opts]` | Same, with `:routing/checks` option.
+| `sroute/install-url-sync! [app]` | Installs URL sync with defaults. Returns cleanup fn.
+| `sroute/install-url-sync! [app opts]` | With `:provider`, `:url-codec`, `:prefix`, `:on-route-denied`, `:routing/checks`.
+|===
+
+==== Navigation
+
+[cols="3,4"]
+|===
+| Function | Description
+
+| `sroute/route-to! [app-ish target]` | Navigate to target (class or keyword).
+| `sroute/route-to! [app-ish target data]` | Navigate with route params.
+| `sroute/route-back! [app-ish]` | Browser back via URL sync provider.
+| `sroute/route-forward! [app-ish]` | Browser forward via URL sync provider.
+| `sroute/send-to-self! [this event data]` | Send event to nearest ancestor's co-located child chart.
+|===
+
+==== Guard and Denial
+
+[cols="3,4"]
+|===
+| Function | Description
+
+| `sroute/busy? [env data]` | Deep recursive busy check (guard condition).
+| `sroute/route-denied? [app-ish]` | True if routing info is in open/denied state.
+| `sroute/force-continue-routing! [app-ish]` | Override guard and retry denied route.
+| `sroute/abandon-route-change! [app-ish]` | Cancel denied route, close routing info.
+|===
+
+==== State Inspection
+
+[cols="3,4"]
+|===
+| Function | Description
+
+| `sroute/active-leaf-routes [app-ish]` | Set of active leaf route state IDs (cross-chart).
+| `sroute/reachable-targets [chart]` | Set of all reachable target keywords in a chart, including transitive targets from co-located child charts. Useful for debugging and inspection.
+| `sroute/current-invocation-configuration [this]` | Child chart's configuration from `this` or nearest ancestor with a co-located chart.
+| `sroute/has-routes? [chart id]` | True if state contains routes (single chart).
+| `sroute/leaf-route? [chart id]` | True if state is a leaf route (single chart).
+|===
+
+==== Rendering
+
+[cols="3,4"]
+|===
+| Function | Description
+
+| `sroute/ui-current-subroute [this factory-fn]` | Render active child in standard routing region.
+| `sroute/ui-parallel-route [this key factory-fn]` | Render one child in a parallel routing region.
+|===
+
+==== URL Sync Helpers
+
+[cols="3,4"]
+|===
+| Function | Description
+
+| `sroute/url-sync-on-save [sid wmem app]` | Call from `:on-save` to drive URL sync.
+| `sroute/url-sync-provider [app-ish]` | Returns installed URLHistoryProvider.
+| `sroute/url-sync-installed? [app-ish]` | True if URL sync is active.
+| `sroute/route-current-url [app-ish]` | Current URL from provider.
+| `sroute/route-history-index [app-ish]` | Current history index from provider.
+| `sroute/route-sync-from-url! [app-ish]` | Re-parse current URL and route to match.
+|===
+
+==== Constants
+
+[cols="3,4"]
+|===
+| Var | Description
+
+| `sroute/session-id` | The well-known session ID (`::session`) for routing.
+|===
+
+==== Utilities
+
+[cols="3,4"]
+|===
+| Function | Description
+
+| `sroute/route-to-event-name [target]` | Converts a target (class or keyword) to the `:route-to.<fqn>` event keyword. Useful in auth guard patterns.
+|===
+
+NOTE: Functions like `route-to!`, `route-back!`, and others accept either a Fulcro app instance or a component instance (referred to as `app-ish` in the source). Use whichever is convenient in your context.
+
+[[ComponentOptions]]
+=== Component Options Reference
+
+Route target components can declare these options via `rc/component-options` (namespace alias `sfro` for `routing-options`):
+
+`sfro/initialize`:: One of `:once` (default), `:always`, or `:never`. Controls when the routing on-entry handler initializes the target component's state. Forms default to `:always`; reports and plain components default to `:once`.
+
+`sfro/initial-props`:: A `(fn [env data] props-map)` that returns initial state for the route target. Defaults to `rc/get-initial-state`. Required when the target has a dynamic ident that depends on event data.
+
+`sfro/busy?`:: A `(fn [env data] boolean?)` predicate. When true, routing away from this target is denied. Forms with `form-state` are auto-guarded (dirty form = busy).
+
+`sfro/statechart`:: A co-located statechart definition. Auto-registered using the component's registry key when the `istate` is entered. Also enables auto-derivation of `:route/reachable` targets — `istate` walks this chart to discover all route targets transitively.
+
+`sfro/statechart-id`:: The ID of a pre-registered statechart to invoke when the component is routed to (alternative to `sfro/statechart`).
+
+`sfro/actors`:: A `(fn [env data] actors-map)` returning additional actors for the co-located statechart. The `:actor/component` actor is always set automatically.
+
+=== Route Configuration Validation
+
+`start!` and `install-url-sync!` accept a `:routing/checks` option that controls how route configuration problems are reported:
+
+[source,clojure]
+-----
+;; Default: warnings are logged but execution continues
+(sroute/start! app routing-chart)
+
+;; Strict mode: throws ex-info on any configuration problem
+(sroute/start! app routing-chart {:routing/checks :strict})
+-----
+
+The validator detects:
+
+* **Duplicate leaf names** -- two route targets whose URL segment (`:route/segment` or `(name target)`) collides, causing ambiguous URL matching.
+* **Duplicate segment chains** -- two leaf routes with identical full segment paths (e.g. both resolve to `/users/edit`).
+* **Reachable collisions** -- a `:route/reachable` target (whether auto-derived or explicit) whose simple name collides with a direct route target.
+* **Invalid routing root** -- a `routes` node with a nil or non-coercible `:routing/root`.
+
+TIP: Use `:routing/checks :strict` during development to catch configuration problems as thrown exceptions rather than logged warnings.
+
+=== Routing Invariants
+
+The following invariants hold for statechart-driven routing:
+
+Constant ident roots:: The `:routing/root` component MUST have a constant ident (e.g. `[:component/id ::Root]`). A nil second element in the ident is an error and the routing entry handler will log an error and skip query rewriting. The app root (no ident) is also acceptable.
+
+Dynamic query preservation:: Route target parents MUST set `:preserve-dynamic-query? true` in their component options. Without this, Fulcro hot code reload will reset the dynamically-rewritten query, breaking the active route's rendering.
+
+Unique URL segments:: Each route target's URL segment (`:route/segment` or the simple name of `:route/target`) must be unique within its routing region. Duplicate segments cause ambiguous URL-to-route matching. Use `:routing/checks :strict` during development to catch these early.
+
+Guard evaluation order:: When a route transition is attempted, `sroute/busy?` is evaluated first. If any active route target (at any depth in the invocation tree) returns busy, the transition is denied and `record-failed-route!` stores the event for potential retry via `force-continue-routing!`.
+
+Single routing session:: All routing goes through the single `sroute/session-id` session. Parallel regions within the routing chart handle multiple independent routing areas -- do not create multiple routing sessions.
+
+State ID derivation:: Both `rstate` and `istate` derive their `:id` from `:route/target`. Passing an explicit `:id` throws an exception. This ensures state IDs and route targets are always consistent.
+
+=== Common Gotchas and Troubleshooting
+
+==== Route renders blank / no props
+
+The most common cause is a missing `:preserve-dynamic-query? true` on the parent component that renders `ui-current-subroute`.
+Without it, Fulcro hot reload resets the query, losing the join to the active route target.
+
+Also verify that the `:routing/root` component has a constant ident.
+A nil ident second element causes the routing entry handler to skip query rewriting entirely.
+
+==== Route transition does nothing
+
+Check whether the route is being denied by a busy guard.
+Call `(sroute/route-denied? app)` to verify.
+If the route is denied, either clear the busy condition or use `force-continue-routing!`.
+
+Also ensure the target is reachable: for targets inside a child chart, the parent's `istate` must have reachable targets (auto-derived from `sfro/statechart` or explicitly declared via `:route/reachable`). Use `(sroute/reachable-targets chart)` to inspect what targets are visible.
+
+==== URL does not update after navigation
+
+Verify that:
+
+1. `sroute/url-sync-on-save` is being called from the `:on-save` handler of `install-fulcro-statecharts!`.
+2. `install-url-sync!` was called *after* `start!`.
+3. The app instance passed to `url-sync-on-save` is the same one passed to `install-url-sync!`.
+
+==== Bookmarked URL does not restore after login
+
+The auth guard pattern (see above) requires that:
+
+1. The `route-to.*` wildcard transition is *before* the specific login route transition in document order.
+2. The save-bookmark function skips saving when the event targets the login screen itself (to avoid infinite loops).
+3. The replay-bookmark function uses `senv/raise` to re-inject the saved event.
+
+==== Child chart routes show wrong URL
+
+When URL sync is installed, pass `app` (not just `session-id`) to `url-sync-on-save`.
+This enables the parent chain lookup that delegates child session saves to the root session's URL handler.
+Without it, child chart transitions do not update the URL.
+
+==== Hot reload breaks routing
+
+Use the `defonce` + cleanup atom pattern shown in the setup section.
+Without cleanup, each hot reload adds another popstate listener, causing duplicate event processing.
+
+==== install-url-sync! throws "no routing session found"
+
+`install-url-sync!` must be called after `start!`.
+It reads the routing session's working memory to find the statechart registration key.
 
 = Testing
 

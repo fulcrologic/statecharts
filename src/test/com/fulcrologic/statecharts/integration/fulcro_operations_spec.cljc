@@ -36,7 +36,7 @@
    :initial-state {:ui/mode :viewing :item-list {}}})
 
 (defn test-app []
-  (let [a (app/fulcro-app)]
+  (let [a (app/fulcro-app {:remotes {:remote (fn [_] nil)}})]
     (app/set-root! a TestRoot {:initialize-state? true})
     (scf/install-fulcro-statecharts! a {:event-loop? false})
     a))

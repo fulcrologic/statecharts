@@ -602,9 +602,20 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_react_hooks">7.5. React Hooks</a></li>
 <li><a href="#_hierarchical_routing">7.6. Hierarchical Routing</a>
 <ul class="sectlevel3">
-<li><a href="#_path_composition">7.6.1. Path Composition</a></li>
-<li><a href="#_parameterized_path_segments">7.6.2. Parameterized Path Segments</a></li>
-<li><a href="#_key_functions">7.6.3. Key Functions</a></li>
+<li><a href="#_why_statechart_driven_routing">7.6.1. Why Statechart-Driven Routing?</a></li>
+<li><a href="#_end_to_end_setup_walkthrough">7.6.2. End-to-End Setup Walkthrough</a></li>
+<li><a href="#DefiningRoutes">7.6.3. Defining Routes</a></li>
+<li><a href="#ComponentSetup">7.6.4. Component Setup Requirements</a></li>
+<li><a href="#IstateDeepDive">7.6.5. Composed Routing with istate</a></li>
+<li><a href="#_authentication_guard_pattern">7.6.6. Authentication Guard Pattern</a></li>
+<li><a href="#_pluggable_url_codec">7.6.7. Pluggable URL Codec</a></li>
+<li><a href="#BusyGuards">7.6.8. Busy Guards</a></li>
+<li><a href="#HeadlessTesting">7.6.9. Headless Testing</a></li>
+<li><a href="#_api_reference">7.6.10. API Reference</a></li>
+<li><a href="#ComponentOptions">7.6.11. Component Options Reference</a></li>
+<li><a href="#_route_configuration_validation">7.6.12. Route Configuration Validation</a></li>
+<li><a href="#_routing_invariants">7.6.13. Routing Invariants</a></li>
+<li><a href="#_common_gotchas_and_troubleshooting">7.6.14. Common Gotchas and Troubleshooting</a></li>
 </ul>
 </li>
 </ul>
@@ -2061,7 +2072,7 @@ For example, <code>send</code> is executable content of this <code>on-entry</cod
 <div class="paragraph">
 <p>The internals allow you to return a collection of elements from a function, which will be "spliced" in place.
 This allows you to easily create macros and functions that can make your state charts much easier to write.
-Some examples in the library source code are the com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like <code>com.fulcrologic.statecharts.integration.fulcro.ui-routes/rstate</code> in the Fulcro UI Routing support.</p>
+Some examples in the library source code are the com.fulcrologic.statecharts.convenience-macros/choice macro, and functions like <code>com.fulcrologic.statecharts.integration.fulcro.routing/rstate</code> in the Fulcro UI Routing support.</p>
 </div>
 </div>
 </div>
@@ -2703,88 +2714,1591 @@ If the chart reaches a top-level final state, then it will be GC&#8217;d from st
 </div>
 <div class="sect2">
 <h3 id="_hierarchical_routing"><a class="anchor" href="#_hierarchical_routing"></a><a class="link" href="#_hierarchical_routing">7.6. Hierarchical Routing</a></h3>
-<div class="paragraph">
-<p>STATUS: ALPHA. API IN FLUX.</p>
-</div>
-<div class="paragraph">
-<p>The intention of this system is to make it possible to completely compose a webapp as a statechart, including the concern
-of UI routing, URL tracking/restore, etc.  Routing actually caused the motivation for statecharts async support.</p>
-</div>
-<div class="paragraph">
-<p>This documentation will be improved as the feature matures. It is NOT recommended for production use yet.</p>
-</div>
-<div class="paragraph">
-<p>The routing system supports hierarchical path composition and parameterized URL segments.
-Nested route states can each contribute a piece of the URL path, and keyword placeholders in path segments are matched against URL parts to extract parameters.</p>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The legacy <code>com.fulcrologic.statecharts.integration.fulcro.ui-routes</code> namespace is
+deprecated. All examples below use the new <code>routing</code> namespace. The old namespace
+remains available for backward compatibility but does not include URL sync, cross-chart
+routing, or configuration validation.
+</td>
+</tr>
+</table>
 </div>
 <div class="sect3">
-<h4 id="_path_composition"><a class="anchor" href="#_path_composition"></a><a class="link" href="#_path_composition">7.6.1. Path Composition</a></h4>
+<h4 id="_why_statechart_driven_routing"><a class="anchor" href="#_why_statechart_driven_routing"></a><a class="link" href="#_why_statechart_driven_routing">7.6.1. Why Statechart-Driven Routing?</a></h4>
 <div class="paragraph">
-<p>Each route state can declare a <code>:route/path</code> — a vector of strings and keyword placeholders.
-When route states are nested, the paths compose hierarchically.
-For example:</p>
+<p>Routing in a web application is fundamentally a state machine problem.
+You have a set of possible screens, transitions between them, guards that prevent certain transitions, and side effects (loading data) that must occur when entering a screen.
+Traditional routing libraries model this implicitly with callback chains, middleware stacks, and ad-hoc guard logic.
+Statecharts make it explicit.</p>
+</div>
+<div class="paragraph">
+<p>With statechart-driven routing you get:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Guards and denial are first-class.</strong>
+A dirty form blocking navigation is not a bolt-on: it is a guard condition on the transition.
+The statechart naturally holds the "denied" state and lets you offer "Continue anyway?" or "Cancel" without juggling flags.</p>
+</li>
+<li>
+<p><strong>Async side effects on entry.</strong>
+When a user navigates to a project detail page, the statechart&#8217;s <code>on-entry</code> handler can fire a data load.
+Because this library supports async processing (see <a href="#Asynchronous Processing">[Asynchronous Processing]</a>), the load completes before the next event is processed.
+This eliminates the class of complexity where you have to model async tracking with states/transitions.</p>
+</li>
+<li>
+<p><strong>Composable child charts.</strong>
+An module of the app can be a self-contained statechart invoked by the parent routing chart.
+The module&#8217;s chart manages its own sub-routes, its own guards, and its own data loads&#8201;&#8212;&#8201;yet the parent chart sees it as a single state.
+This enables code splitting, module boundaries, and isolated testing.</p>
+</li>
+<li>
+<p><strong>Bidirectional URL sync.</strong>
+The URL is derived from the statechart configuration&#8201;&#8212;&#8201;not the other way around.
+Browser back/forward triggers a statechart event that goes through the same guard and transition logic as programmatic navigation.</p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Important</div>
+</td>
+<td class="content">
+Routing works best with async statechart processing. When calling <code>install-fulcro-statecharts!</code>, pass <code>:async? true</code> so that on-entry handlers (which often trigger data loads) complete before the next event is processed. The demo code in this section assumes async mode.
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_end_to_end_setup_walkthrough"><a class="anchor" href="#_end_to_end_setup_walkthrough"></a><a class="link" href="#_end_to_end_setup_walkthrough">7.6.2. End-to-End Setup Walkthrough</a></h4>
+<div class="paragraph">
+<p>This section walks through every step to get routing working, from zero to a running application.
+The code mirrors the <code>routing-demo2</code> example included in the source tree.</p>
+</div>
+<div class="sect4">
+<h5 id="_step_1_create_the_fulcro_application"><a class="anchor" href="#_step_1_create_the_fulcro_application"></a><a class="link" href="#_step_1_create_the_fulcro_application">Step 1: Create the Fulcro Application</a></h5>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">app.main</span>
+  (<span class="symbol">:require</span>
+    [com.fulcrologic.fulcro.application <span class="symbol">:as</span> app]
+    <span class="comment">;; These requires pull in the async implementations -- needed for :async? true</span>
+    [com.fulcrologic.statecharts.algorithms.v20150901-async]
+    [com.fulcrologic.statecharts.event-queue.async-event-loop]
+    [com.fulcrologic.statecharts.execution-model.lambda-async]
+    [com.fulcrologic.statecharts.integration.fulcro <span class="symbol">:as</span> scf]
+    [com.fulcrologic.statecharts.integration.fulcro.routing <span class="symbol">:as</span> sroute]
+    <span class="comment">;; Pull in browser history implementation (CLJS dead-code elimination safe)</span>
+    [com.fulcrologic.statecharts.integration.fulcro.routing.browser-history]))
+
+(<span class="keyword">defonce</span> <span class="function">app-instance</span>
+  (app/fulcro-app
+    {<span class="symbol">:remotes</span> {<span class="symbol">:remote</span> (my-remote)}}))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_step_2_install_statechart_infrastructure"><a class="anchor" href="#_step_2_install_statechart_infrastructure"></a><a class="link" href="#_step_2_install_statechart_infrastructure">Step 2: Install Statechart Infrastructure</a></h5>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(scf/install-fulcro-statecharts! app-instance
+  {<span class="symbol">:async?</span>      <span class="predefined-constant">true</span>
+   <span class="symbol">:event-loop?</span> <span class="predefined-constant">true</span>
+   <span class="symbol">:on-save</span>     (<span class="keyword">fn</span> [session-id wmem]
+                  <span class="comment">;; Required: drives state-to-URL synchronization</span>
+                  (sroute/url-sync-on-save session-id wmem app-instance))})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>:on-save</code> callback fires every time a statechart session&#8217;s working memory is persisted.
+Calling <code>sroute/url-sync-on-save</code> inside it is what makes state-to-URL synchronization work.
+Passing <code>app-instance</code> as the third argument enables child chart URL tracking&#8201;&#8212;&#8201;when a child chart transitions, the URL updates to reflect the full nested path.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_step_3_define_and_start_the_routing_chart"><a class="anchor" href="#_step_3_define_and_start_the_routing_chart"></a><a class="link" href="#_step_3_define_and_start_the_routing_chart">Step 3: Define and Start the Routing Chart</a></h5>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/start! app-instance my-routing-chart)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>start!</code> registers the chart under <code>sroute/session-id</code> and starts a session.
+No manual session ID or registration key management is needed.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_step_4_install_url_synchronization"><a class="anchor" href="#_step_4_install_url_synchronization"></a><a class="link" href="#_step_4_install_url_synchronization">Step 4: Install URL Synchronization</a></h5>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; Store cleanup fn so shadow-cljs hot reload does not leak popstate listeners</span>
+(<span class="keyword">defonce</span> <span class="function">url-sync-cleanup</span> (<span class="keyword">atom</span> <span class="predefined-constant">nil</span>))
+
+<span class="comment">;; In your init function:</span>
+(<span class="keyword">when-let</span> [old-cleanup @url-sync-cleanup] (old-cleanup))
+(<span class="keyword">reset!</span> url-sync-cleanup
+  (sroute/install-url-sync! app-instance))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>install-url-sync!</code> must be called <strong>after</strong> <code>start!</code>.
+It returns a cleanup function that removes all listeners&#8201;&#8212;&#8201;the <code>defonce</code> + <code>atom</code> pattern above ensures hot reloads do not accumulate stale popstate handlers.</p>
+</div>
+<div class="paragraph">
+<p>On CLJS, a <code>BrowserURLHistory</code> provider is used by default.
+On CLJ, you must pass a <code>:provider</code> explicitly (see <a href="#HeadlessTesting">Headless Testing</a>).</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_step_5_mount_the_ui"><a class="anchor" href="#_step_5_mount_the_ui"></a><a class="link" href="#_step_5_mount_the_ui">Step 5: Mount the UI</a></h5>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(app/set-root! app-instance ui/Root {<span class="symbol">:initialize-state?</span> <span class="predefined-constant">true</span>})
+(app/mount! app-instance ui/Root <span class="string"><span class="delimiter">&quot;</span><span class="content">app</span><span class="delimiter">&quot;</span></span>)</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_complete_init_function"><a class="anchor" href="#_complete_init_function"></a><a class="link" href="#_complete_init_function">Complete init Function</a></h5>
+<div class="paragraph">
+<p>Here is the full initialization sequence (simplified from <code>routing-demo2/app.cljs</code>):</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure">(routes {<span class="symbol">:routing/root</span> Root <span class="symbol">:id</span> <span class="symbol">:routes</span>}
-  (rstate {<span class="symbol">:route/target</span> UserList <span class="symbol">:route/path</span> [<span class="string"><span class="delimiter">&quot;</span><span class="content">users</span><span class="delimiter">&quot;</span></span>]}
-    (rstate {<span class="symbol">:route/target</span> UserDetail <span class="symbol">:route/path</span> [<span class="symbol">:id</span>]}
-      (rstate {<span class="symbol">:route/target</span> UserEdit <span class="symbol">:route/path</span> [<span class="string"><span class="delimiter">&quot;</span><span class="content">edit</span><span class="delimiter">&quot;</span></span>]}))))</code></pre>
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">defn</span> ^<span class="symbol">:export</span> init []
+  (app/set-root! app-instance ui/Root {<span class="symbol">:initialize-state?</span> <span class="predefined-constant">true</span>})
+  (scf/install-fulcro-statecharts! app-instance
+    {<span class="symbol">:async?</span>      <span class="predefined-constant">true</span>
+     <span class="symbol">:event-loop?</span> <span class="predefined-constant">true</span>
+     <span class="symbol">:on-save</span>     (<span class="keyword">fn</span> [sid wmem]
+                    (sroute/url-sync-on-save sid wmem app-instance))})
+  <span class="comment">;; Register any child charts that istates reference by ID</span>
+  (scf/register-statechart! app-instance <span class="symbol">:app/admin-chart</span> admin-chart/admin-chart)
+  <span class="comment">;; Start main routing chart</span>
+  (sroute/start! app-instance chart/routing-chart)
+  <span class="comment">;; Install URL sync (after start!)</span>
+  (<span class="keyword">when-let</span> [old-cleanup @url-sync-cleanup] (old-cleanup))
+  (<span class="keyword">reset!</span> url-sync-cleanup (sroute/install-url-sync! app-instance))
+  (app/mount! app-instance ui/Root <span class="string"><span class="delimiter">&quot;</span><span class="content">app</span><span class="delimiter">&quot;</span></span>))
+
+(<span class="keyword">defn</span> ^<span class="symbol">:export</span> refresh []
+  (app/force-root-render! app-instance))</code></pre>
 </div>
 </div>
-<div class="paragraph">
-<p>The full URL path for <code>UserEdit</code> would be <code>/users/42/edit</code> — each ancestor&#8217;s <code>:route/path</code> segments are prepended automatically.</p>
 </div>
 </div>
 <div class="sect3">
-<h4 id="_parameterized_path_segments"><a class="anchor" href="#_parameterized_path_segments"></a><a class="link" href="#_parameterized_path_segments">7.6.2. Parameterized Path Segments</a></h4>
+<h4 id="DefiningRoutes"><a class="anchor" href="#DefiningRoutes"></a><a class="link" href="#DefiningRoutes">7.6.3. Defining Routes</a></h4>
 <div class="paragraph">
-<p>Keyword segments (like <code>:id</code> above) act as parameter placeholders.
-When a URL is matched, the corresponding path segment is extracted into a parameter map:</p>
+<p>A routing chart is built from four DSL functions: <code>routing-regions</code>, <code>routes</code>, <code>rstate</code>, and <code>istate</code>.</p>
+</div>
+<div class="sect4">
+<h5 id="_routing_regions"><a class="anchor" href="#_routing_regions"></a><a class="link" href="#_routing_regions">routing-regions</a></h5>
+<div class="paragraph">
+<p><code>routing-regions</code> wraps a <code>routes</code> node in a parallel state that includes a small internal state machine for route denial (the "routing info" region).
+This is what enables the denial modal pattern (see <a href="#BusyGuards">Busy Guards</a>).</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; URL: /users/42/edit</span>
-<span class="comment">;; Matched pattern: [&quot;users&quot; :id &quot;edit&quot;]</span>
-<span class="comment">;; Extracted params: {:id &quot;42&quot;}</span></code></pre>
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/routing-regions
+  (sroute/routes {<span class="keyword">..</span><span class="keyword">.</span>}
+    <span class="keyword">..</span><span class="keyword">.</span>route states.<span class="keyword">..</span>))</code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>Parameters are made available via <code>[:routing/parameters &lt;state-id&gt;]</code> in the data model, and are also persisted to the URL when navigating programmatically.</p>
+<p>The result is a state node <code>:state/route-root</code> containing a parallel node with two regions: the routing info state machine and your routes.</p>
 </div>
 </div>
-<div class="sect3">
-<h4 id="_key_functions"><a class="anchor" href="#_key_functions"></a><a class="link" href="#_key_functions">7.6.3. Key Functions</a></h4>
+<div class="sect4">
+<h5 id="_routes"><a class="anchor" href="#_routes"></a><a class="link" href="#_routes">routes</a></h5>
 <div class="paragraph">
-<p>The <code>com.fulcrologic.statecharts.integration.fulcro.route-url</code> namespace provides the pure functions for path operations:</p>
+<p><code>routes</code> is the container for all route states within a routing region.
+It generates transitions for every descendant <code>:route/target</code> and for every cross-chart target declared via <code>:route/reachable</code> on <code>istate</code> children.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/routes {<span class="symbol">:id</span> <span class="symbol">:region/main</span> <span class="symbol">:routing/root</span> `ui/RoutingRoot}
+  (sroute/rstate {<span class="symbol">:route/target</span> `ui/Dashboard})
+  (sroute/rstate {<span class="symbol">:route/target</span> `ui/ProjectList <span class="symbol">:route/segment</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">projects</span><span class="delimiter">&quot;</span></span>})
+  (sroute/rstate {<span class="symbol">:route/target</span> `ui/ProjectDetail <span class="symbol">:route/params</span> #{<span class="symbol">:project-id</span>}}))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Required options:</p>
 </div>
 <div class="dlist">
 <dl>
-<dt class="hdlist1"><code>(resolve-full-path statechart state-id)</code></dt>
+<dt class="hdlist1"><code>:id</code></dt>
 <dd>
-<p>Walk the parent chain collecting <code>:route/path</code> segments
-from each ancestor.
-Returns a flat vector like <code>["users" :id "edit"]</code>.</p>
+<p>The state ID for this routes node.</p>
 </dd>
-<dt class="hdlist1"><code>(match-path path pattern)</code></dt>
+<dt class="hdlist1"><code>:routing/root</code></dt>
 <dd>
-<p>Match a URL path (vector of strings) against a pattern (vector of strings
-and keyword placeholders).
-Returns <code>nil</code> on mismatch, or a map of extracted params.</p>
-</dd>
-<dt class="hdlist1"><code>(build-route-table statechart)</code></dt>
-<dd>
-<p>Scan all states with <code>:route/target</code>, compute full paths, and
-return a sorted vector of route entries ordered by specificity (more literal segments first).</p>
-</dd>
-<dt class="hdlist1"><code>(find-route-for-url route-table path)</code></dt>
-<dd>
-<p>Find the first matching route entry for a given URL path, returning the match with extracted <code>:route/path-params</code>.</p>
+<p>The Fulcro component that serves as the rendering parent for these routes. Must have a constant ident (e.g. <code>[:component/id ::RoutingRoot]</code>) or be the app root (no ident).</p>
 </dd>
 </dl>
 </div>
 <div class="paragraph">
-<p>The <code>start-routing!</code> function in <code>ui-routes</code> automatically builds the route table and uses it for URL-to-state matching, including on browser back/forward navigation.</p>
+<p>Optional:</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><code>:initial</code></dt>
+<dd>
+<p>The state ID of the initial route (defaults to first child).</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_rstate"><a class="anchor" href="#_rstate"></a><a class="link" href="#_rstate">rstate</a></h5>
+<div class="paragraph">
+<p><code>rstate</code> creates a route state node.
+When the statechart enters this state, three things happen automatically:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><strong>Route parameters</strong> from the event data are stored in the data model at <code>[:routing/parameters &lt;state-id&gt;]</code>.</p>
+</li>
+<li>
+<p><strong>The target component is initialized</strong> in Fulcro&#8217;s state database (controlled by <code>sfro/initialize</code>).</p>
+</li>
+<li>
+<p><strong>The parent component&#8217;s query is rewritten</strong> to include a join to the target, so the correct component renders.</p>
+</li>
+</ol>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/rstate {<span class="symbol">:route/target</span> `ui/ProjectDetail
+                <span class="symbol">:route/segment</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">detail</span><span class="delimiter">&quot;</span></span>
+                <span class="symbol">:route/params</span> #{<span class="symbol">:project-id</span>}})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Options:</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><code>:route/target</code></dt>
+<dd>
+<p>(Required) A component class or anything accepted by <code>comp/registry-key&#8594;class</code>. The state ID is automatically derived from this&#8201;&#8212;&#8201;do not pass an explicit <code>:id</code>.</p>
+</dd>
+<dt class="hdlist1"><code>:route/segment</code></dt>
+<dd>
+<p>(Optional) Custom URL path segment string. When absent, defaults to the simple name of the target (e.g. <code>ProjectDetail</code>). Used by the default URLCodec, which is customizable.</p>
+</dd>
+<dt class="hdlist1"><code>:route/params</code></dt>
+<dd>
+<p>(Optional) A set of keywords. When present in the routing event data, these keys are extracted and stored at <code>[:routing/parameters &lt;state-id&gt;]</code> in the data model.</p>
+</dd>
+<dt class="hdlist1"><code>:parallel?</code></dt>
+<dd>
+<p>(Optional) When true, this node is a parallel state.</p>
+</dd>
+</dl>
+</div>
+<div class="paragraph">
+<p>You can nest <code>rstate</code> nodes to create hierarchical routes:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/routes {<span class="symbol">:routing/root</span> `ui/Root <span class="symbol">:id</span> <span class="symbol">:routes</span>}
+  (sroute/rstate {<span class="symbol">:route/target</span> `ui/UserList <span class="symbol">:route/segment</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">users</span><span class="delimiter">&quot;</span></span>}
+    (sroute/rstate {<span class="symbol">:route/target</span> `ui/UserDetail}
+      (sroute/rstate {<span class="symbol">:route/target</span> `ui/UserEdit <span class="symbol">:route/segment</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">edit</span><span class="delimiter">&quot;</span></span>}))))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The full URL for <code>UserEdit</code> composes as <code>/users/UserDetail/edit</code>&#8201;&#8212;&#8201;each ancestor&#8217;s segment is prepended.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_segment_composition"><a class="anchor" href="#_segment_composition"></a><a class="link" href="#_segment_composition">Segment Composition</a></h5>
+<div class="paragraph">
+<p>Each route state contributes one URL path segment.
+By default the segment is the simple name of its <code>:route/target</code>.
+Use <code>:route/segment</code> to override with a human-friendly string.</p>
+</div>
+<div class="paragraph">
+<p>Segments compose from the routing root down to the active leaf:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Route Target</th>
+<th class="tableblock halign-left valign-top">URL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>Dashboard</code> (no custom segment)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/Dashboard</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>ProjectList</code> with <code>:route/segment "projects"</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/projects</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>ProjectDetail</code> nested under <code>ProjectList</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/projects/ProjectDetail</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>UserEdit</code> with <code>:route/segment "edit"</code> nested under <code>UserDetail</code> nested under <code>UserList</code> with <code>:route/segment "users"</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/users/UserDetail/edit</code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_route_parameters"><a class="anchor" href="#_route_parameters"></a><a class="link" href="#_route_parameters">Route Parameters</a></h5>
+<div class="paragraph">
+<p>In the default URL encoding route parameters are <strong>not</strong> encoded in URL path segments.
+Instead they travel through event data and are persisted to the URL via a single opaque <code>_p</code> query parameter:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; Navigating with params:</span>
+(sroute/route-to! app ProjectDetail {<span class="symbol">:project-id</span> <span class="integer">42</span>})
+<span class="comment">;; URL: /projects/ProjectDetail?_p=&lt;base64-encoded-transit&gt;</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To declare which keys should be extracted from event data:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/rstate {<span class="symbol">:route/target</span> `ui/ProjectDetail <span class="symbol">:route/params</span> #{<span class="symbol">:project-id</span>}})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Parameters are then available in the data model at <code>[:routing/parameters &lt;state-id&gt;]</code>, where <code>&lt;state-id&gt;</code> is the keyword derived from the <code>:route/target</code>.</p>
+</div>
+<div class="paragraph">
+<p>You can install an alternate <code>URLCodec</code> to customize this behavior.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="ComponentSetup"><a class="anchor" href="#ComponentSetup"></a><a class="link" href="#ComponentSetup">7.6.4. Component Setup Requirements</a></h4>
+<div class="paragraph">
+<p>Route target components must follow certain conventions for the routing system to manage their state and rendering correctly.</p>
+</div>
+<div class="sect4">
+<h5 id="_constant_ident"><a class="anchor" href="#_constant_ident"></a><a class="link" href="#_constant_ident">Constant Ident</a></h5>
+<div class="paragraph">
+<p>Every route target must have an ident.
+For singleton screens (dashboards, settings pages), use a constant ident:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(defsc Dashboard [this {<span class="symbol">:dashboard/keys</span> [greeting]}]
+  {<span class="symbol">:query</span>         [<span class="symbol">:dashboard/greeting</span>]
+   <span class="symbol">:ident</span>         (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::Dashboard</span>])
+   <span class="symbol">:initial-state</span> {<span class="symbol">:dashboard/greeting</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">Welcome!</span><span class="delimiter">&quot;</span></span>}})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For entity-based screens (project detail, user profile), use a data-driven ident:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(defsc ProjectDetail [this {<span class="symbol">:project/keys</span> [id <span class="keyword">name</span> description]}]
+  {<span class="symbol">:query</span> [<span class="symbol">:project/id</span> <span class="symbol">:project/name</span> <span class="symbol">:project/description</span>]
+   <span class="symbol">:ident</span> <span class="symbol">:project/id</span>})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>When using a data-driven ident, you will typically need <code>sfro/initial-props</code> to provide the ident key from event data (see <a href="#ComponentOptions">Component Options Reference</a>).</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_preserve_dynamic_query"><a class="anchor" href="#_preserve_dynamic_query"></a><a class="link" href="#_preserve_dynamic_query">preserve-dynamic-query?</a></h5>
+<div class="paragraph">
+<p>The routing system dynamically rewrites parent component queries to include a join to the active route target.
+Fulcro hot code reload resets queries to their original values&#8201;&#8212;&#8201;which would break active routes.
+To prevent this, <strong>every component that renders a subroute must set</strong>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(defsc RoutingRoot [this {<span class="symbol">:ui/keys</span> [current-route]}]
+  {<span class="symbol">:query</span>                   [<span class="symbol">:ui/current-route</span>]
+   <span class="symbol">:ident</span>                   (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::RoutingRoot</span>])
+   <span class="symbol">:preserve-dynamic-query?</span> <span class="predefined-constant">true</span>   <span class="comment">;; REQUIRED</span>
+   <span class="symbol">:initial-state</span>           {<span class="symbol">:ui/current-route</span> {}}})</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_rendering_subroutes"><a class="anchor" href="#_rendering_subroutes"></a><a class="link" href="#_rendering_subroutes">Rendering Subroutes</a></h5>
+<div class="paragraph">
+<p>Use <code>sroute/ui-current-subroute</code> to render the active child in a standard (non-parallel) routing region:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(defsc RoutingRoot [this {<span class="symbol">:ui/keys</span> [current-route]}]
+  {<span class="symbol">:query</span>                   [<span class="symbol">:ui/current-route</span>]
+   <span class="symbol">:ident</span>                   (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::RoutingRoot</span>])
+   <span class="symbol">:preserve-dynamic-query?</span> <span class="predefined-constant">true</span>
+   <span class="symbol">:initial-state</span>           {<span class="symbol">:ui/current-route</span> {}}}
+  (dom/div {}
+    (sroute/ui-current-subroute this comp/factory)))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For parallel routing regions, use <code>sroute/ui-parallel-route</code> with the target&#8217;s registry key:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/ui-parallel-route this <span class="symbol">::SomeTarget</span> comp/factory)</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_navigation"><a class="anchor" href="#_navigation"></a><a class="link" href="#_navigation">Navigation</a></h5>
+<div class="paragraph">
+<p>Navigate programmatically using <code>route-to!</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; From a component's event handler:</span>
+(sroute/route-to! this <span class="symbol">::ProjectList</span>)
+
+<span class="comment">;; With route parameters:</span>
+(sroute/route-to! this <span class="symbol">::ProjectDetail</span> {<span class="symbol">:project-id</span> <span class="integer">42</span>})
+
+<span class="comment">;; From anywhere with access to the app:</span>
+(sroute/route-to! app <span class="symbol">::Dashboard</span>)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Browser back and forward (when URL sync is installed):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/route-back! app)
+(sroute/route-forward! app)</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="IstateDeepDive"><a class="anchor" href="#IstateDeepDive"></a><a class="link" href="#IstateDeepDive">7.6.5. Composed Routing with istate</a></h4>
+<div class="paragraph">
+<p><code>istate</code> is the mechanism for composing independently-defined statecharts into a routing hierarchy.
+It creates a route state that, when entered, <strong>invokes a child statechart</strong> on the target component.</p>
+</div>
+<div class="paragraph">
+<p>This is powerful for several reasons:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Code splitting</strong>: The child chart can be in a separate namespace, loaded lazily.</p>
+</li>
+<li>
+<p><strong>Team boundaries</strong>: Different teams own different sub-charts without coordination.</p>
+</li>
+<li>
+<p><strong>Isolated testing</strong>: Each child chart can be tested in isolation.</p>
+</li>
+<li>
+<p><strong>Encapsulated lifecycle</strong>: The child chart manages its own sub-routes, data loads, and guards.</p>
+</li>
+</ul>
+</div>
+<div class="sect4">
+<h5 id="_how_istate_differs_from_rstate"><a class="anchor" href="#_how_istate_differs_from_rstate"></a><a class="link" href="#_how_istate_differs_from_rstate">How istate Differs from rstate</a></h5>
+<div class="paragraph">
+<p>An <code>rstate</code> is a simple route: entering it initializes a component and sets up a query join.</p>
+</div>
+<div class="paragraph">
+<p>An <code>istate</code> does all of that AND invokes a child statechart.
+The child chart runs as a separate session, with its own configuration, data model, and event processing.
+When the parent exits the <code>istate</code>, the child session is terminated.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_co_located_charts_sfrostatechart"><a class="anchor" href="#_co_located_charts_sfrostatechart"></a><a class="link" href="#_co_located_charts_sfrostatechart">Co-located Charts (sfro/statechart)</a></h5>
+<div class="paragraph">
+<p>The simplest way to associate a child chart with a component is to put it directly on the component:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(defsc AdminPanel [this {<span class="symbol">:ui/keys</span> [current-route]}]
+  {<span class="symbol">:query</span>                   [<span class="symbol">:ui/current-route</span>]
+   <span class="symbol">:ident</span>                   (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::AdminPanel</span>])
+   <span class="symbol">:preserve-dynamic-query?</span> <span class="predefined-constant">true</span>
+   sfro/statechart          admin-chart/admin-chart    <span class="comment">;; &lt;-- co-located chart</span>
+   <span class="symbol">:initial-state</span>           {<span class="symbol">:ui/current-route</span> {}}})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>When the routing system enters this <code>istate</code>, it reads <code>sfro/statechart</code> from the component, registers it under the component&#8217;s registry key, and invokes it.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_pre_registered_charts_sfrostatechart_id"><a class="anchor" href="#_pre_registered_charts_sfrostatechart_id"></a><a class="link" href="#_pre_registered_charts_sfrostatechart_id">Pre-registered Charts (sfro/statechart-id)</a></h5>
+<div class="paragraph">
+<p>For code splitting, register the chart separately and reference it by ID:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; At startup:</span>
+(scf/register-statechart! app <span class="symbol">:my-app/admin-chart</span> admin-chart/admin-chart)
+
+<span class="comment">;; On the component:</span>
+(defsc AdminPanel [this {<span class="symbol">:ui/keys</span> [current-route]}]
+  {<span class="symbol">:query</span>                   [<span class="symbol">:ui/current-route</span>]
+   <span class="symbol">:ident</span>                   (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::AdminPanel</span>])
+   <span class="symbol">:preserve-dynamic-query?</span> <span class="predefined-constant">true</span>
+   sfro/statechart-id       <span class="symbol">:my-app/admin-chart</span>    <span class="comment">;; &lt;-- reference by ID</span>
+   <span class="symbol">:initial-state</span>           {<span class="symbol">:ui/current-route</span> {}}})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is the pattern used in the demo application.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_cross_chart_routing_via_routereachable"><a class="anchor" href="#_cross_chart_routing_via_routereachable"></a><a class="link" href="#_cross_chart_routing_via_routereachable">Cross-Chart Routing via :route/reachable</a></h5>
+<div class="paragraph">
+<p>The parent chart needs to know which targets exist inside the child chart so it can generate transitions to them.
+This is declared with <code>:route/reachable</code> on the <code>istate</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; In the parent chart:</span>
+(sroute/istate {<span class="symbol">:route/target</span>    `ui/AdminPanel
+                <span class="symbol">:route/reachable</span> #{<span class="symbol">::ui/AdminUsersList</span>
+                                   <span class="symbol">::ui/AdminUserDetail</span>
+                                   <span class="symbol">::ui/AdminSettings</span>}})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With this declaration, <code>sroute/route-to!</code> can navigate directly to <code>::ui/AdminUsersList</code> from anywhere in the parent chart.
+Two mechanisms handle this:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><strong>Not yet in the owner istate</strong>: The parent transitions into the <code>AdminPanel</code> istate and stores the desired route as <code>::pending-child-route</code>. When the child chart starts, its <code>routes</code> on-entry handler detects the pending route and raises it as an event.</p>
+</li>
+<li>
+<p><strong>Already in the owner istate</strong>: The parent sends the route event directly to the child session via <code>scp/send!</code>. The child chart transitions internally without re-entering the <code>istate</code>.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_the_child_chart"><a class="anchor" href="#_the_child_chart"></a><a class="link" href="#_the_child_chart">The Child Chart</a></h5>
+<div class="paragraph">
+<p>A child chart used with <code>istate</code> is just a normal routing chart.
+The key differences are:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Its <code>:routing/root</code> is the <code>istate</code> target component (e.g. <code>AdminPanel</code>).</p>
+</li>
+<li>
+<p>The <code>::pending-child-route</code> mechanism is handled automatically by <code>routes</code> on-entry.</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">ns</span> <span class="namespace">app.admin-chart</span>
+  (<span class="symbol">:require</span>
+    [com.fulcrologic.statecharts.chart <span class="symbol">:as</span> chart]
+    [com.fulcrologic.statecharts.integration.fulcro.routing <span class="symbol">:as</span> sroute]))
+
+(<span class="keyword">def</span> <span class="function">admin-chart</span>
+  (chart/statechart {<span class="symbol">:initial</span> <span class="symbol">:admin/routes</span>}
+    (sroute/routes {<span class="symbol">:id</span> <span class="symbol">:admin/routes</span> <span class="symbol">:routing/root</span> `ui/AdminPanel}
+      (sroute/rstate {<span class="symbol">:route/target</span> `ui/AdminUsersList})
+      (sroute/rstate {<span class="symbol">:route/target</span> `ui/AdminUserDetail <span class="symbol">:route/params</span> #{<span class="symbol">:user-id</span>}})
+      (sroute/rstate {<span class="symbol">:route/target</span> `ui/AdminSettings}))))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_advanced_istate_options"><a class="anchor" href="#_advanced_istate_options"></a><a class="link" href="#_advanced_istate_options">Advanced istate Options</a></h5>
+<div class="paragraph">
+<p>The <code>istate</code> function accepts additional options for controlling the child statechart invocation lifecycle. These are less commonly needed but available for advanced use cases:</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><code>on-done</code></dt>
+<dd>
+<p>Transition target when the child chart reaches a final state.</p>
+</dd>
+<dt class="hdlist1"><code>exit-target</code></dt>
+<dd>
+<p>Target to transition to when the istate is exited (before the child chart is torn down).</p>
+</dd>
+<dt class="hdlist1"><code>invoke-params</code></dt>
+<dd>
+<p>Additional parameters to pass to the child chart invocation.</p>
+</dd>
+<dt class="hdlist1"><code>child-session-id</code></dt>
+<dd>
+<p>Override the auto-generated child session ID.</p>
+</dd>
+<dt class="hdlist1"><code>autoforward</code></dt>
+<dd>
+<p>When true, forwards all unhandled events to the child chart.</p>
+</dd>
+</dl>
+</div>
+<div class="paragraph">
+<p>See the <code>istate</code> docstring in <code>routing.cljc</code> for full details.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_send_to_self_for_child_chart_communication"><a class="anchor" href="#_send_to_self_for_child_chart_communication"></a><a class="link" href="#_send_to_self_for_child_chart_communication">send-to-self! for Child Chart Communication</a></h5>
+<div class="paragraph">
+<p>When a component has a co-located child statechart (via <code>istate</code>), it can send events to the child session:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; From a component that is an istate target:</span>
+(sroute/send-to-self! this <span class="symbol">:event/save</span> {<span class="symbol">:some</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">data</span><span class="delimiter">&quot;</span></span>})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This looks up the child session ID from the Fulcro state (at <code>[:invocation/id &lt;target-key&gt;]</code> in the routing session&#8217;s local data) and forwards the event.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_inspecting_child_state"><a class="anchor" href="#_inspecting_child_state"></a><a class="link" href="#_inspecting_child_state">Inspecting Child State</a></h5>
+<div class="paragraph">
+<p>To read the current configuration of a child chart from its parent component:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/current-invocation-configuration this)
+<span class="comment">;; =&gt; #{:admin/routes :region/routing-info ...}</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_sfroactors"><a class="anchor" href="#_sfroactors"></a><a class="link" href="#_sfroactors">sfro/actors</a></h5>
+<div class="paragraph">
+<p>When the child chart is invoked, <code>:actor/component</code> is automatically set to the target component.
+If the child chart needs additional actors, declare them on the component:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(defsc AdminPanel [this props]
+  {sfro/actors (<span class="keyword">fn</span> [env data]
+                 {<span class="symbol">:actor/sidebar</span> (scf/actor Sidebar (comp/get-ident Sidebar {}))})
+   <span class="keyword">..</span><span class="keyword">.</span>})</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_authentication_guard_pattern"><a class="anchor" href="#_authentication_guard_pattern"></a><a class="link" href="#_authentication_guard_pattern">7.6.6. Authentication Guard Pattern</a></h4>
+<div class="paragraph">
+<p>A common requirement is redirecting unauthenticated users to a login screen, then returning them to their original destination after login.
+The demo application (<code>routing-demo2/chart.cljc</code>) demonstrates this pattern.</p>
+</div>
+<div class="sect4">
+<h5 id="_structure"><a class="anchor" href="#_structure"></a><a class="link" href="#_structure">Structure</a></h5>
+<div class="paragraph">
+<p>The auth guard is a <strong>plain state</strong> (not <code>rstate</code> or <code>istate</code>) that wraps the login screen and an initializing state.
+It sits inside the <code>routes</code> node alongside the authenticated route states:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(sroute/routes {<span class="symbol">:id</span> <span class="symbol">:region/main</span> <span class="symbol">:routing/root</span> `ui/RoutingRoot}
+  <span class="comment">;; Auth guard: intercepts route-to.* when unauthenticated</span>
+  (state {<span class="symbol">:id</span> <span class="symbol">:state/unauthenticated</span> <span class="symbol">:initial</span> <span class="symbol">:state/initializing</span>}
+    <span class="comment">;; Wildcard transition: catches ANY route-to.* event</span>
+    (transition {<span class="symbol">:event</span> <span class="symbol">:route-to.*</span> <span class="symbol">:target</span> <span class="symbol">::ui/LoginScreen</span>}
+      (script {<span class="symbol">:expr</span> save-bookmark}))
+    (state {<span class="symbol">:id</span> <span class="symbol">:state/initializing</span>}
+      (on-entry {} (script {<span class="symbol">:expr</span> check-session!}))
+      (transition {<span class="symbol">:event</span> <span class="symbol">:auth/session-valid</span> <span class="symbol">:target</span> <span class="symbol">::ui/Dashboard</span>})
+      (transition {<span class="symbol">:event</span> <span class="symbol">:auth/session-invalid</span> <span class="symbol">:target</span> <span class="symbol">::ui/LoginScreen</span>}))
+    (sroute/rstate {<span class="symbol">:route/target</span> `ui/LoginScreen}
+      <span class="comment">;; Login transitions...</span>
+      ))
+
+  <span class="comment">;; Authenticated routes (outside the unauthenticated state)</span>
+  (sroute/rstate {<span class="symbol">:route/target</span> `ui/Dashboard}
+    (on-entry {} (script {<span class="symbol">:expr</span> replay-bookmark!})))
+  (sroute/rstate {<span class="symbol">:route/target</span> `ui/ProjectList <span class="symbol">:route/segment</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">projects</span><span class="delimiter">&quot;</span></span>})
+  <span class="comment">;; ...more routes...</span>
+  )</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_how_the_bookmark_works"><a class="anchor" href="#_how_the_bookmark_works"></a><a class="link" href="#_how_the_bookmark_works">How the Bookmark Works</a></h5>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The user bookmarks or deep-links to <code>/projects/ProjectDetail?_p=&#8230;&#8203;</code>.</p>
+</li>
+<li>
+<p>On page load, the statechart starts in <code>:state/unauthenticated</code>, which checks the session.</p>
+</li>
+<li>
+<p>If unauthenticated, the <code>route-to.*</code> wildcard transition fires first (document order), saving the original event as a bookmark.</p>
+</li>
+<li>
+<p>The user logs in successfully, transitioning to <code>Dashboard</code>.</p>
+</li>
+<li>
+<p><code>Dashboard&#8217;s on-entry replays the bookmark by raising the saved event via `senv/raise</code>.</p>
+</li>
+<li>
+<p>The routing system processes the replayed event and navigates to the bookmarked destination.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>The bookmark is stored as a data model assignment (<code>ops/assign</code>) and cleared after replay:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">defn-</span> <span class="function">save-bookmark</span> [_env _data event-name event-data]
+  (<span class="keyword">let</span> [login-event (sroute/route-to-event-name <span class="symbol">::ui/LoginScreen</span>)]
+    (<span class="keyword">if</span> (<span class="keyword">=</span> event-name login-event)
+      <span class="predefined-constant">nil</span>  <span class="comment">;; don't save login route as bookmark (avoids loops)</span>
+      [(ops/assign <span class="symbol">::bookmark</span> {<span class="symbol">:event-name</span> event-name <span class="symbol">:event-data</span> event-data})])))
+
+(<span class="keyword">defn-</span> <span class="function">replay-bookmark!</span> [env data &amp; _]
+  (<span class="keyword">let</span> [bookmark (<span class="keyword">get</span> data <span class="symbol">::bookmark</span>)]
+    (<span class="keyword">when</span> bookmark
+      (senv/raise env (<span class="symbol">:event-name</span> bookmark) (<span class="symbol">:event-data</span> bookmark)))
+    <span class="comment">;; Clear bookmark after use</span>
+    [(ops/assign <span class="symbol">::bookmark</span> <span class="predefined-constant">nil</span>)]))</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_pluggable_url_codec"><a class="anchor" href="#_pluggable_url_codec"></a><a class="link" href="#_pluggable_url_codec">7.6.7. Pluggable URL Codec</a></h4>
+<div class="paragraph">
+<p>URL encoding and decoding is handled by the <code>URLCodec</code> protocol defined in <code>routing.url-codec</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">defprotocol</span> <span class="class">URLCodec</span>
+  (encode-url [this context]
+    <span class="string"><span class="delimiter">&quot;</span><span class="content">Given a context map, return a URL path string (with query if needed).
+     Context keys: :segments, :params, :route-elements</span><span class="delimiter">&quot;</span></span>)
+  (decode-url [this href route-elements]
+    <span class="string"><span class="delimiter">&quot;</span><span class="content">Given a URL string and route-elements map, return {:leaf-id :params} or nil.</span><span class="delimiter">&quot;</span></span>))</code></pre>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_default_transitbase64codec"><a class="anchor" href="#_default_transitbase64codec"></a><a class="link" href="#_default_transitbase64codec">Default: TransitBase64Codec</a></h5>
+<div class="paragraph">
+<p>The default implementation (<code>routing.url-codec-transit</code>) encodes route parameters as transit, then base64, into a <code>_p</code> query parameter.
+URL shape: <code>/Seg1/Seg2?_p=&lt;base64-encoded-transit&gt;</code>.</p>
+</div>
+<div class="paragraph">
+<p>This is created automatically by <code>install-url-sync!</code> if you do not pass a <code>:url-codec</code> option.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_custom_codec"><a class="anchor" href="#_custom_codec"></a><a class="link" href="#_custom_codec">Custom Codec</a></h5>
+<div class="paragraph">
+<p>To implement a custom codec (e.g. human-readable query params, path-based params), implement the <code>URLCodec</code> protocol:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">require</span> '[com.fulcrologic.statecharts.integration.fulcro.routing.url-codec <span class="symbol">:as</span> ruc])
+
+(<span class="keyword">def</span> <span class="function">my-codec</span>
+  (<span class="keyword">reify</span> ruc/URLCodec
+    (encode-url [_ {<span class="symbol">:keys</span> [segments route-elements params]}]
+      <span class="comment">;; Build path from segments</span>
+      (<span class="keyword">let</span> [seg-strs (mapv (<span class="keyword">fn</span> [state-id]
+                             (ruc/element-segment (<span class="keyword">get</span> route-elements state-id)))
+                       segments)
+            path     (<span class="keyword">str</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span> (clojure.string/join <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span> seg-strs))]
+        <span class="comment">;; Add params however you prefer</span>
+        (<span class="keyword">if</span> (<span class="keyword">seq</span> params)
+          (<span class="keyword">str</span> path <span class="string"><span class="delimiter">&quot;</span><span class="content">?</span><span class="delimiter">&quot;</span></span> (my-param-encoder params))
+          path)))
+    (decode-url [_ href route-elements]
+      <span class="comment">;; Parse href, find matching leaf, extract params</span>
+      <span class="keyword">..</span><span class="keyword">.</span>)))
+
+<span class="comment">;; Pass to install-url-sync!</span>
+(sroute/install-url-sync! app {<span class="symbol">:url-codec</span> my-codec})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>ruc/element-segment</code> helper returns <code>:route/segment</code> if present, otherwise <code>(name (:route/target element))</code>.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="BusyGuards"><a class="anchor" href="#BusyGuards"></a><a class="link" href="#BusyGuards">7.6.8. Busy Guards</a></h4>
+<div class="paragraph">
+<p>Busy guards prevent navigation away from a route when work would be lost&#8201;&#8212;&#8201;for example, an unsaved form.</p>
+</div>
+<div class="sect4">
+<h5 id="_how_it_works"><a class="anchor" href="#_how_it_works"></a><a class="link" href="#_how_it_works">How It Works</a></h5>
+<div class="paragraph">
+<p>When <code>routes</code> generates transitions for each route target, it also generates a <strong>catch-all</strong> <code>route-to.<strong></code> transition with <code>sroute/busy?</code> as its guard condition.
+Because statecharts evaluate transitions in document order, this catch-all fires *before</strong> the specific target transitions when the guard returns true.</p>
+</div>
+<div class="paragraph">
+<p>The <code>sroute/busy?</code> function performs a <strong>deep recursive check</strong>:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>For each active route state, it checks if the target component has a <code>sfro/busy?</code> predicate or is a dirty Fulcro form.</p>
+</li>
+<li>
+<p>If the route state has an invoked child chart, it recursively checks the child chart&#8217;s active states.</p>
+</li>
+<li>
+<p>If any component at any depth returns busy, the route change is denied.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_adding_a_busy_predicate"><a class="anchor" href="#_adding_a_busy_predicate"></a><a class="link" href="#_adding_a_busy_predicate">Adding a Busy Predicate</a></h5>
+<div class="paragraph">
+<p>Add <code>sfro/busy?</code> to any route target component:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(defsc BusyForm [this {<span class="symbol">:ui/keys</span> [notes]}]
+  {<span class="symbol">:query</span>         [<span class="symbol">:ui/notes</span>]
+   <span class="symbol">:ident</span>         (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::BusyForm</span>])
+   <span class="symbol">:initial-state</span> {<span class="symbol">:ui/notes</span> <span class="string"><span class="delimiter">&quot;</span><span class="delimiter">&quot;</span></span>}
+   sfro/busy?     (<span class="keyword">fn</span> [{<span class="symbol">:fulcro/keys</span> [app]} _data]
+                    (<span class="keyword">let</span> [state-map (rapp/current-state app)
+                          notes     (<span class="keyword">get-in</span> state-map [<span class="symbol">:component/id</span> <span class="symbol">::BusyForm</span> <span class="symbol">:ui/notes</span>])]
+                      (<span class="keyword">and</span> (<span class="keyword">string?</span> notes) (<span class="keyword">pos?</span> (<span class="keyword">count</span> notes)))))})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Fulcro forms using <code>form-state</code> are <strong>auto-guarded</strong>: a dirty form is automatically considered busy without any extra configuration.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_denial_lifecycle"><a class="anchor" href="#_denial_lifecycle"></a><a class="link" href="#_denial_lifecycle">Denial Lifecycle</a></h5>
+<div class="paragraph">
+<p>When a route transition is denied:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>record-failed-route!</code> stores the failed event in the data model.</p>
+</li>
+<li>
+<p>The routing info region transitions to <code>:routing-info/open</code>.</p>
+</li>
+<li>
+<p><code>sroute/route-denied?</code> returns <code>true</code>.</p>
+</li>
+<li>
+<p>Your UI renders a confirmation dialog.</p>
+</li>
+<li>
+<p>The user chooses one of:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>(sroute/force-continue-routing! app)</code>&#8201;&#8212;&#8201;resends the failed event with a <code>::force?</code> flag that bypasses the busy check.</p>
+</li>
+<li>
+<p><code>(sroute/abandon-route-change! app)</code>&#8201;&#8212;&#8201;closes the routing info and stays on the current route.</p>
+</li>
+</ul>
+</div>
+</li>
+</ol>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; In your Root component's render:</span>
+(<span class="keyword">when</span> (sroute/route-denied? this)
+  (dom/div {}
+    (dom/p {} <span class="string"><span class="delimiter">&quot;</span><span class="content">You have unsaved changes. Leave anyway?</span><span class="delimiter">&quot;</span></span>)
+    (dom/button {<span class="symbol">:onClick</span> #(sroute/force-continue-routing! this)} <span class="string"><span class="delimiter">&quot;</span><span class="content">Leave</span><span class="delimiter">&quot;</span></span>)
+    (dom/button {<span class="symbol">:onClick</span> #(sroute/abandon-route-change! this)} <span class="string"><span class="delimiter">&quot;</span><span class="content">Stay</span><span class="delimiter">&quot;</span></span>)))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_url_sync_interaction_with_denial"><a class="anchor" href="#_url_sync_interaction_with_denial"></a><a class="link" href="#_url_sync_interaction_with_denial">URL Sync Interaction with Denial</a></h5>
+<div class="paragraph">
+<p>When URL sync is installed and the user presses the browser back button:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The popstate listener fires, sending a route event.</p>
+</li>
+<li>
+<p>If the route is denied, <code>install-url-sync!</code> detects the mismatch between the statechart state and the browser URL.</p>
+</li>
+<li>
+<p>It automatically restores the URL to its pre-navigation value (using <code>go-forward!</code> or <code>go-back!</code> depending on direction).</p>
+</li>
+<li>
+<p>If an <code>:on-route-denied</code> callback was provided to <code>install-url-sync!</code>, it is called with the denied URL.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_disabling_guards"><a class="anchor" href="#_disabling_guards"></a><a class="link" href="#_disabling_guards">Disabling Guards</a></h5>
+
+</div>
+</div>
+<div class="sect3">
+<h4 id="HeadlessTesting"><a class="anchor" href="#HeadlessTesting"></a><a class="link" href="#HeadlessTesting">7.6.9. Headless Testing</a></h4>
+<div class="paragraph">
+<p>The <code>SimulatedURLHistory</code> provider enables full routing testing without a browser.
+It is cross-platform (CLJ + CLJS) and works in kaocha, REPL, and CI environments.</p>
+</div>
+<div class="sect4">
+<h5 id="_test_setup"><a class="anchor" href="#_test_setup"></a><a class="link" href="#_test_setup">Test Setup</a></h5>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">require</span> '[com.fulcrologic.fulcro.application <span class="symbol">:as</span> app]
+         '[com.fulcrologic.fulcro.components <span class="symbol">:as</span> <span class="keyword">comp</span> <span class="symbol">:refer</span> [defsc]]
+         '[com.fulcrologic.statecharts.integration.fulcro <span class="symbol">:as</span> scf]
+         '[com.fulcrologic.statecharts.integration.fulcro.routing <span class="symbol">:as</span> sroute]
+         '[com.fulcrologic.statecharts.integration.fulcro.routing.simulated-history <span class="symbol">:as</span> rsh]
+         '[com.fulcrologic.statecharts.integration.fulcro.routing.url-history <span class="symbol">:as</span> ruh])
+
+<span class="comment">;; Minimal route components</span>
+(defsc RootComp [_ _]
+  {<span class="symbol">:query</span> [<span class="symbol">:ui/current-route</span>]
+   <span class="symbol">:ident</span> (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::root</span>])
+   <span class="symbol">:initial-state</span> {<span class="symbol">:ui/current-route</span> {}}})
+
+(defsc PageA [_ _]
+  {<span class="symbol">:query</span> [<span class="symbol">:page/id</span>]
+   <span class="symbol">:ident</span> <span class="symbol">:page/id</span>
+   <span class="symbol">:initial-state</span> {<span class="symbol">:page/id</span> <span class="symbol">:a</span>}})
+
+(defsc PageB [_ _]
+  {<span class="symbol">:query</span> [<span class="symbol">:page/id</span>]
+   <span class="symbol">:ident</span> <span class="symbol">:page/id</span>
+   <span class="symbol">:initial-state</span> {<span class="symbol">:page/id</span> <span class="symbol">:b</span>}})
+
+<span class="comment">;; Create headless app with synchronous processing</span>
+(<span class="keyword">defn</span> <span class="function">test-app</span> []
+  (<span class="keyword">let</span> [a (app/fulcro-app)]
+    (app/set-root! a RootComp {<span class="symbol">:initialize-state?</span> <span class="predefined-constant">true</span>})
+    (scf/install-fulcro-statecharts! a {<span class="symbol">:event-loop?</span> <span class="predefined-constant">false</span>})
+    a))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_testing_programmatic_navigation"><a class="anchor" href="#_testing_programmatic_navigation"></a><a class="link" href="#_testing_programmatic_navigation">Testing Programmatic Navigation</a></h5>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">let</span> [app      (test-app)
+      provider (rsh/simulated-url-history <span class="string"><span class="delimiter">&quot;</span><span class="content">/</span><span class="delimiter">&quot;</span></span>)]
+  (sroute/start! app my-routing-chart)
+  (scf/process-events! app)
+  (<span class="keyword">let</span> [cleanup (sroute/install-url-sync! app {<span class="symbol">:provider</span> provider})]
+    (sroute/url-sync-on-save sroute/session-id <span class="predefined-constant">nil</span> app)
+
+    <span class="comment">;; Navigate</span>
+    (sroute/route-to! app `PageB)
+    (scf/process-events! app)
+    (sroute/url-sync-on-save sroute/session-id <span class="predefined-constant">nil</span> app)
+
+    <span class="comment">;; Assert URL and route state</span>
+    (<span class="keyword">assert</span> (<span class="keyword">=</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">/PageB</span><span class="delimiter">&quot;</span></span> (ruh/current-href provider)))
+    (<span class="keyword">assert</span> (<span class="keyword">=</span> <span class="integer">2</span> (<span class="keyword">count</span> (rsh/history-stack provider))))
+
+    (cleanup)))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_testing_browser_backforward_clj_only"><a class="anchor" href="#_testing_browser_backforward_clj_only"></a><a class="link" href="#_testing_browser_backforward_clj_only">Testing Browser Back/Forward (CLJ Only)</a></h5>
+<div class="paragraph">
+<p>Browser back/forward requires synchronous event processing, so these tests must be CLJ-only:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; After programmatic navigation A -&gt; B -&gt; C:</span>
+(ruh/go-back! provider)
+(scf/process-events! app)
+(sroute/url-sync-on-save sroute/session-id <span class="predefined-constant">nil</span> app)
+<span class="comment">;; Now on page B; history stack unchanged</span>
+
+(ruh/go-forward! provider)
+(scf/process-events! app)
+(sroute/url-sync-on-save sroute/session-id <span class="predefined-constant">nil</span> app)
+<span class="comment">;; Back on page C</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_testing_route_denial"><a class="anchor" href="#_testing_route_denial"></a><a class="link" href="#_testing_route_denial">Testing Route Denial</a></h5>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; Navigate to a busy page, then try to go back</span>
+(ruh/go-back! provider)
+(scf/process-events! app)
+(sroute/url-sync-on-save sroute/session-id <span class="predefined-constant">nil</span> app)
+
+(<span class="keyword">assert</span> (<span class="keyword">true?</span> (sroute/route-denied? app)))
+<span class="comment">;; URL is restored to the busy page's URL</span>
+
+<span class="comment">;; Force continue</span>
+(sroute/force-continue-routing! app)
+(scf/process-events! app)
+(scf/process-events! app)  <span class="comment">;; extra round for re-queued event</span>
+(sroute/url-sync-on-save sroute/session-id <span class="predefined-constant">nil</span> app)
+
+(<span class="keyword">assert</span> (<span class="keyword">false?</span> (sroute/route-denied? app)))</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_simulatedurlhistory_inspection_helpers"><a class="anchor" href="#_simulatedurlhistory_inspection_helpers"></a><a class="link" href="#_simulatedurlhistory_inspection_helpers">SimulatedURLHistory Inspection Helpers</a></h5>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><code>(rsh/history-stack provider)</code></dt>
+<dd>
+<p>Returns a vector of URL strings.</p>
+</dd>
+<dt class="hdlist1"><code>(rsh/history-cursor provider)</code></dt>
+<dd>
+<p>Returns the current cursor position (zero-based index).</p>
+</dd>
+<dt class="hdlist1"><code>(rsh/history-entries provider)</code></dt>
+<dd>
+<p>Returns the full entries vector with <code>:url</code> and <code>:index</code> keys.</p>
+</dd>
+</dl>
+</div>
+<div class="paragraph">
+<p>See <code>url_sync_headless_spec.cljc</code> in the test suite for comprehensive examples covering cross-chart routing, custom segments, and denial recovery.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_api_reference"><a class="anchor" href="#_api_reference"></a><a class="link" href="#_api_reference">7.6.10. API Reference</a></h4>
+<div class="sect4">
+<h5 id="_chart_construction"><a class="anchor" href="#_chart_construction"></a><a class="link" href="#_chart_construction">Chart Construction</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Function</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/routing-regions</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Wraps routes in parallel state with denial modal support.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/routes</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Container for route states. Generates transitions for all targets.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/rstate</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Route state. On-entry: params, init, query rewrite.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/istate</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Route state that invokes a child statechart.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_lifecycle"><a class="anchor" href="#_lifecycle"></a><a class="link" href="#_lifecycle">Lifecycle</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Function</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/start! [app chart]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Registers chart and starts routing session.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/start! [app chart opts]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Same, with <code>:routing/checks</code> option.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/install-url-sync! [app]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Installs URL sync with defaults. Returns cleanup fn.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/install-url-sync! [app opts]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">With <code>:provider</code>, <code>:url-codec</code>, <code>:prefix</code>, <code>:on-route-denied</code>, <code>:routing/checks</code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_navigation_2"><a class="anchor" href="#_navigation_2"></a><a class="link" href="#_navigation_2">Navigation</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Function</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-to! [app-ish target]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Navigate to target (class or keyword).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-to! [app-ish target data]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Navigate with route params.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-back! [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Browser back via URL sync provider.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-forward! [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Browser forward via URL sync provider.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/send-to-self! [this event data]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Send event to co-located child chart.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_guard_and_denial"><a class="anchor" href="#_guard_and_denial"></a><a class="link" href="#_guard_and_denial">Guard and Denial</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Function</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/busy? [env data]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Deep recursive busy check (guard condition).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-denied? [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">True if routing info is in open/denied state.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/force-continue-routing! [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Override guard and retry denied route.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/abandon-route-change! [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Cancel denied route, close routing info.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_state_inspection"><a class="anchor" href="#_state_inspection"></a><a class="link" href="#_state_inspection">State Inspection</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Function</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/active-leaf-routes [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Set of active leaf route state IDs (cross-chart).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/reachable-targets [chart]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Set of all reachable target keywords in a chart.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/current-invocation-configuration [this]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Child chart&#8217;s configuration from parent component.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/has-routes? [chart id]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">True if state contains routes (single chart).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/leaf-route? [chart id]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">True if state is a leaf route (single chart).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_rendering"><a class="anchor" href="#_rendering"></a><a class="link" href="#_rendering">Rendering</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Function</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/ui-current-subroute [this factory-fn]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Render active child in standard routing region.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/ui-parallel-route [this key factory-fn]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Render one child in a parallel routing region.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_url_sync_helpers"><a class="anchor" href="#_url_sync_helpers"></a><a class="link" href="#_url_sync_helpers">URL Sync Helpers</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Function</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/url-sync-on-save [sid wmem app]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Call from <code>:on-save</code> to drive URL sync.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/url-sync-provider [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Returns installed URLHistoryProvider.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/url-sync-installed? [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">True if URL sync is active.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-current-url [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Current URL from provider.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-history-index [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Current history index from provider.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-sync-from-url! [app-ish]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Re-parse current URL and route to match.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_constants"><a class="anchor" href="#_constants"></a><a class="link" href="#_constants">Constants</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Var</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/session-id</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The well-known session ID (<code>::session</code>) for routing.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_utilities"><a class="anchor" href="#_utilities"></a><a class="link" href="#_utilities">Utilities</a></h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 42.8571%;">
+<col style="width: 57.1429%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Function</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-to-event-name [target]</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Converts a target (class or keyword) to the <code>:route-to.&lt;fqn&gt;</code> event keyword. Useful in auth guard patterns.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Functions like <code>route-to!</code>, <code>route-back!</code>, and others accept either a Fulcro app instance or a component instance (referred to as <code>app-ish</code> in the source). Use whichever is convenient in your context.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="ComponentOptions"><a class="anchor" href="#ComponentOptions"></a><a class="link" href="#ComponentOptions">7.6.11. Component Options Reference</a></h4>
+<div class="paragraph">
+<p>Route target components can declare these options via <code>rc/component-options</code> (namespace alias <code>sfro</code> for <code>routing-options</code>):</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><code>sfro/initialize</code></dt>
+<dd>
+<p>One of <code>:once</code> (default), <code>:always</code>, or <code>:never</code>. Controls when the routing on-entry handler initializes the target component&#8217;s state. Forms default to <code>:always</code>; reports and plain components default to <code>:once</code>.</p>
+</dd>
+<dt class="hdlist1"><code>sfro/initial-props</code></dt>
+<dd>
+<p>A <code>(fn [env data] props-map)</code> that returns initial state for the route target. Defaults to <code>rc/get-initial-state</code>. Required when the target has a dynamic ident that depends on event data.</p>
+</dd>
+<dt class="hdlist1"><code>sfro/busy?</code></dt>
+<dd>
+<p>A <code>(fn [env data] boolean?)</code> predicate. When true, routing away from this target is denied. Forms with <code>form-state</code> are auto-guarded (dirty form = busy).</p>
+</dd>
+<dt class="hdlist1"><code>sfro/statechart</code></dt>
+<dd>
+<p>A co-located statechart definition. Auto-registered using the component&#8217;s registry key when the <code>istate</code> is entered.</p>
+</dd>
+<dt class="hdlist1"><code>sfro/statechart-id</code></dt>
+<dd>
+<p>The ID of a pre-registered statechart to invoke when the component is routed to (alternative to <code>sfro/statechart</code>).</p>
+</dd>
+<dt class="hdlist1"><code>sfro/actors</code></dt>
+<dd>
+<p>A <code>(fn [env data] actors-map)</code> returning additional actors for the co-located statechart. The <code>:actor/component</code> actor is always set automatically.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_route_configuration_validation"><a class="anchor" href="#_route_configuration_validation"></a><a class="link" href="#_route_configuration_validation">7.6.12. Route Configuration Validation</a></h4>
+<div class="paragraph">
+<p><code>start!</code> and <code>install-url-sync!</code> accept a <code>:routing/checks</code> option that controls how route configuration problems are reported:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; Default: warnings are logged but execution continues</span>
+(sroute/start! app routing-chart)
+
+<span class="comment">;; Strict mode: throws ex-info on any configuration problem</span>
+(sroute/start! app routing-chart {<span class="symbol">:routing/checks</span> <span class="symbol">:strict</span>})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The validator detects:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Duplicate leaf names</strong>&#8201;&#8212;&#8201;two route targets whose URL segment (<code>:route/segment</code> or <code>(name target)</code>) collides, causing ambiguous URL matching.</p>
+</li>
+<li>
+<p><strong>Duplicate segment chains</strong>&#8201;&#8212;&#8201;two leaf routes with identical full segment paths (e.g. both resolve to <code>/users/edit</code>).</p>
+</li>
+<li>
+<p><strong>Reachable collisions</strong>&#8201;&#8212;&#8201;a <code>:route/reachable</code> target whose simple name collides with a direct route target.</p>
+</li>
+<li>
+<p><strong>Invalid routing root</strong>&#8201;&#8212;&#8201;a <code>routes</code> node with a nil or non-coercible <code>:routing/root</code>.</p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+Use <code>:routing/checks :strict</code> during development to catch configuration problems as thrown exceptions rather than logged warnings.
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_routing_invariants"><a class="anchor" href="#_routing_invariants"></a><a class="link" href="#_routing_invariants">7.6.13. Routing Invariants</a></h4>
+<div class="paragraph">
+<p>The following invariants hold for statechart-driven routing:</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Constant ident roots</dt>
+<dd>
+<p>The <code>:routing/root</code> component MUST have a constant ident (e.g. <code>[:component/id ::Root]</code>). A nil second element in the ident is an error and the routing entry handler will log an error and skip query rewriting. The app root (no ident) is also acceptable.</p>
+</dd>
+<dt class="hdlist1">Dynamic query preservation</dt>
+<dd>
+<p>Route target parents MUST set <code>:preserve-dynamic-query? true</code> in their component options. Without this, Fulcro hot code reload will reset the dynamically-rewritten query, breaking the active route&#8217;s rendering.</p>
+</dd>
+<dt class="hdlist1">Unique URL segments</dt>
+<dd>
+<p>Each route target&#8217;s URL segment (<code>:route/segment</code> or the simple name of <code>:route/target</code>) must be unique within its routing region. Duplicate segments cause ambiguous URL-to-route matching. Use <code>:routing/checks :strict</code> during development to catch these early.</p>
+</dd>
+<dt class="hdlist1">Guard evaluation order</dt>
+<dd>
+<p>When a route transition is attempted, <code>sroute/busy?</code> is evaluated first. If any active route target (at any depth in the invocation tree) returns busy, the transition is denied and <code>record-failed-route!</code> stores the event for potential retry via <code>force-continue-routing!</code>.</p>
+</dd>
+<dt class="hdlist1">Single routing session</dt>
+<dd>
+<p>All routing goes through the single <code>sroute/session-id</code> session. Parallel regions within the routing chart handle multiple independent routing areas&#8201;&#8212;&#8201;do not create multiple routing sessions.</p>
+</dd>
+<dt class="hdlist1">State ID derivation</dt>
+<dd>
+<p>Both <code>rstate</code> and <code>istate</code> derive their <code>:id</code> from <code>:route/target</code>. Passing an explicit <code>:id</code> throws an exception. This ensures state IDs and route targets are always consistent.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_common_gotchas_and_troubleshooting"><a class="anchor" href="#_common_gotchas_and_troubleshooting"></a><a class="link" href="#_common_gotchas_and_troubleshooting">7.6.14. Common Gotchas and Troubleshooting</a></h4>
+<div class="sect4">
+<h5 id="_route_renders_blank_no_props"><a class="anchor" href="#_route_renders_blank_no_props"></a><a class="link" href="#_route_renders_blank_no_props">Route renders blank / no props</a></h5>
+<div class="paragraph">
+<p>The most common cause is a missing <code>:preserve-dynamic-query? true</code> on the parent component that renders <code>ui-current-subroute</code>.
+Without it, Fulcro hot reload resets the query, losing the join to the active route target.</p>
+</div>
+<div class="paragraph">
+<p>Also verify that the <code>:routing/root</code> component has a constant ident.
+A nil ident second element causes the routing entry handler to skip query rewriting entirely.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_route_transition_does_nothing"><a class="anchor" href="#_route_transition_does_nothing"></a><a class="link" href="#_route_transition_does_nothing">Route transition does nothing</a></h5>
+<div class="paragraph">
+<p>Check whether the route is being denied by a busy guard.
+Call <code>(sroute/route-denied? app)</code> to verify.
+If the route is denied, either clear the busy condition or use <code>force-continue-routing!</code>.</p>
+</div>
+<div class="paragraph">
+<p>Also ensure the target is reachable: for targets inside a child chart, the parent&#8217;s <code>istate</code> must declare the target in <code>:route/reachable</code>.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_url_does_not_update_after_navigation"><a class="anchor" href="#_url_does_not_update_after_navigation"></a><a class="link" href="#_url_does_not_update_after_navigation">URL does not update after navigation</a></h5>
+<div class="paragraph">
+<p>Verify that:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>sroute/url-sync-on-save</code> is being called from the <code>:on-save</code> handler of <code>install-fulcro-statecharts!</code>.</p>
+</li>
+<li>
+<p><code>install-url-sync!</code> was called <strong>after</strong> <code>start!</code>.</p>
+</li>
+<li>
+<p>The app instance passed to <code>url-sync-on-save</code> is the same one passed to <code>install-url-sync!</code>.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_bookmarked_url_does_not_restore_after_login"><a class="anchor" href="#_bookmarked_url_does_not_restore_after_login"></a><a class="link" href="#_bookmarked_url_does_not_restore_after_login">Bookmarked URL does not restore after login</a></h5>
+<div class="paragraph">
+<p>The auth guard pattern (see above) requires that:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The <code>route-to.<strong></code> wildcard transition is *before</strong> the specific login route transition in document order.</p>
+</li>
+<li>
+<p>The save-bookmark function skips saving when the event targets the login screen itself (to avoid infinite loops).</p>
+</li>
+<li>
+<p>The replay-bookmark function uses <code>senv/raise</code> to re-inject the saved event.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_child_chart_routes_show_wrong_url"><a class="anchor" href="#_child_chart_routes_show_wrong_url"></a><a class="link" href="#_child_chart_routes_show_wrong_url">Child chart routes show wrong URL</a></h5>
+<div class="paragraph">
+<p>When URL sync is installed, pass <code>app</code> (not just <code>session-id</code>) to <code>url-sync-on-save</code>.
+This enables the parent chain lookup that delegates child session saves to the root session&#8217;s URL handler.
+Without it, child chart transitions do not update the URL.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_hot_reload_breaks_routing"><a class="anchor" href="#_hot_reload_breaks_routing"></a><a class="link" href="#_hot_reload_breaks_routing">Hot reload breaks routing</a></h5>
+<div class="paragraph">
+<p>Use the <code>defonce</code> + cleanup atom pattern shown in the setup section.
+Without cleanup, each hot reload adds another popstate listener, causing duplicate event processing.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_install_url_sync_throws_no_routing_session_found"><a class="anchor" href="#_install_url_sync_throws_no_routing_session_found"></a><a class="link" href="#_install_url_sync_throws_no_routing_session_found">install-url-sync! throws "no routing session found"</a></h5>
+<div class="paragraph">
+<p><code>install-url-sync!</code> must be called after <code>start!</code>.
+It reads the routing session&#8217;s working memory to find the statechart registration key.</p>
+</div>
 </div>
 </div>
 </div>
@@ -3033,7 +4547,7 @@ Note that it is possible for a bugfix in this library to change the behavior of 
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2026-02-17 16:51:50 -0500
+Last updated 2026-02-19 19:56:38 -0500
 </div>
 </div>
 </body>

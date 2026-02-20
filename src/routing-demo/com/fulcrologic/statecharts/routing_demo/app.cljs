@@ -77,14 +77,9 @@
   []
   (log/info "Initializing async routing demo")
   (app/set-root! app-instance ui/Root {:initialize-state? true})
-  ;; Install with async support and on-save to trigger re-renders
   (scf/install-fulcro-statecharts! app-instance
     {:async?      true
-     :event-loop? true
-     :on-save     (fn [_session-id]
-                    ;; Bump a trigger key to force Root re-render
-                    (swap! (::app/state-atom app-instance)
-                      update :root/trigger (fnil inc 0)))})
+     :event-loop? true})
   (scf/register-statechart! app-instance chart-key demo-chart/routing-chart)
   (scf/start! app-instance {:machine    chart-key
                              :session-id ui/session-id

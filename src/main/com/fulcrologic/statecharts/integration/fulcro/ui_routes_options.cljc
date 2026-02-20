@@ -1,5 +1,5 @@
-(ns com.fulcrologic.statecharts.integration.fulcro.ui-routes-options
-  "ALPHA. This namespace's API is subject to change.")
+(ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.ui-routes-options
+  "DEPRECATED. Use routing package instead.")
 
 (def initialize
   "Component option. One of :once, :always, or :never. Indicates when the ui routing entry

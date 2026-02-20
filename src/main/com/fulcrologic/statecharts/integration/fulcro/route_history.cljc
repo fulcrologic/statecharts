@@ -1,5 +1,5 @@
-(ns com.fulcrologic.statecharts.integration.fulcro.route-history
-  "ALPHA. This namespace's API is subject to change."
+(ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.route-history
+  "DEPRECATED. use routing package."
   (:require
     #?(:cljs [goog.object :as gobj])
     [clojure.set :as set]
@@ -43,6 +43,8 @@
      :cljs (js/encodeURIComponent v)))
 
 (defn query-params
+  "Decodes query params from a raw search string. The `_p` param is decoded as transit+base64
+   into a CLJ map and merged into the result. Other params are decoded as simple string key-values."
   [raw-search-string]
   (try
     (let [param-string (str/replace raw-search-string #"^[?]" "")]
@@ -50,7 +52,7 @@
         (fn [result assignment]
           (let [[k v] (str/split assignment #"=")]
             (cond
-              (and k v (= k "_rp_")) (merge result (transit-str->clj (base64-decode (decode-uri-component v))))
+              (and k v (= k "_p")) (merge result (transit-str->clj (base64-decode (decode-uri-component v))))
               (and k v) (assoc result (keyword (decode-uri-component k)) (decode-uri-component v))
               :else result)))
         {}
@@ -61,15 +63,16 @@
 
 (defn query-string
   "Convert a map to an encoded string that is acceptable on a URL.
-  The param-map allows any data type acceptable to transit. The additional key-values must all be strings
-  (and will be coerced to string if not). "
+   The `param-map` is transit+base64 encoded into a single `_p` query param.
+   Additional `string-key-values` are appended as simple string key=value pairs."
   [param-map & {:as string-key-values}]
-  (str "?_rp_="
-    (encode-uri-component (base64-encode (transit-clj->str param-map)))
-    "&"
-    (str/join "&"
-      (map (fn [[k v]]
-             (str (encode-uri-component (name k)) "=" (encode-uri-component (str v)))) string-key-values))))
+  (let [base   (str "?_p=" (encode-uri-component (base64-encode (transit-clj->str param-map))))
+        extras (when (seq string-key-values)
+                 (str "&" (str/join "&"
+                            (map (fn [[k v]]
+                                   (str (encode-uri-component (name k)) "=" (encode-uri-component (str v))))
+                              string-key-values))))]
+    (str base extras)))
 
 (defn route->url
   "Construct URL from route and params"

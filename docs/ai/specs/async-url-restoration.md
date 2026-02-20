@@ -1,8 +1,9 @@
 # Spec: Async URL State Restoration
 
-**Status**: backlog
+**Status**: done
 **Priority**: P1
 **Created**: 2026-02-11
+**Completed**: 2026-02-18
 **Owner**: conductor
 
 ## Context
@@ -87,3 +88,4 @@ Ensure the statechart invocation processor's `start-invocation!` returns/propaga
 6. [ ] Failed restoration (rejected promise in on-entry) falls back gracefully
 7. [ ] Normal navigation (non-restoration) continues to push history entries as before
 8. [ ] Works with parallel route regions (multiple leaf routes active simultaneously)
+9. [ ] routing-demo2 demonstrates deep URL restoration (e.g. loading `/admin/users/42` from scratch)

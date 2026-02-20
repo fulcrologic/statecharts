@@ -1,5 +1,9 @@
-(ns com.fulcrologic.statecharts.integration.fulcro.ui-routes
-  "A composable statechart-driven UI routing system.
+(ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.ui-routes
+  "DEPRECATED. Use com.fulcrologic.statecharts.integration.fulcro.routing instead.
+
+   This namespace is maintained for backward compatibility. New projects should use
+   the routing.* package which adds URL synchronization, cross-chart routing via
+   :route/reachable, deep busy-checking, and route configuration validation.
 
    ALPHA. This namespace's API is subject to change."
   (:require
@@ -631,20 +635,33 @@
   [app-ish]
   (scf/send! app-ish session-id :event.routing-info/close {}))
 
+(defn- find-invocation-session-id
+  "Walks up the component parent chain to find the nearest ancestor whose registry key
+   has an invocation session ID in the routing session's local-data. Returns the child
+   session ID, or nil if none found."
+  [this state-map]
+  (loop [c this]
+    (when c
+      (let [key (rc/class->registry-key (rc/component-type c))
+            sid (get-in state-map [::sc/local-data session-id :invocation/id key])]
+        (if sid
+          sid
+          (recur (rc/isoget-in c [:props :fulcro$parent])))))))
+
 (defn send-to-self!
-  "Send an event to an invoked statechart that is co-locatied on `this`.
-   as specified on the component via ro/idlocation (defaults to [:child-session-id])."
+  "Send an event to the nearest invoked statechart co-located on `this` or an ancestor."
   ([this event-name] (send-to-self! this event-name {}))
   ([this event-name event-data]
-   (let [target-key (rc/class->registry-key (rc/component-type this))
-         state-map  (rapp/current-state this)
-         session-id (get-in state-map [::sc/local-data session-id :invocation/id target-key])]
-     (when session-id
-       (scf/send! this session-id event-name event-data)))))
+   (let [state-map        (rapp/current-state this)
+         child-session-id (find-invocation-session-id this state-map)]
+     (when child-session-id
+       (scf/send! this child-session-id event-name event-data)))))
 
-(defn current-invocation-configuration [this]
-  (let [target-key (rc/class->registry-key (rc/component-type this))
-        state-map  (rapp/current-state this)
-        session-id (get-in state-map [::sc/local-data session-id :invocation/id target-key])]
-    (when session-id
-      (scf/current-configuration this session-id))))
+(defn current-invocation-configuration
+  "Returns the current configuration of the nearest invoked statechart co-located on
+   `this` or an ancestor."
+  [this]
+  (let [state-map        (rapp/current-state this)
+        child-session-id (find-invocation-session-id this state-map)]
+    (when child-session-id
+      (scf/current-configuration this child-session-id))))

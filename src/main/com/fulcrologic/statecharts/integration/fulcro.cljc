@@ -225,6 +225,8 @@ Returns the new session-id of the statechart."
           session-id)))))
 
 ;; Might need to defonce this so things don't restart. One coreasync queue. Timers???
+(declare drain-events!)
+
 (>defn install-fulcro-statecharts!
   "Create a statecharts environment that is set up to work with the given Fulcro app.
 
@@ -235,9 +237,9 @@ Returns the new session-id of the statechart."
            has working memory saved to the Fulcro app database. Allows you to do things like make statechart
            data durable across sessions.
   * `:on-delete` - A `(fn [session-id])` that is called when a statechart reaches a final state and is removed.
-  * `:event-loop?` - If true (the default), start the async core.async event loop to process statechart events
-        automatically. If false, you must process events manually by calling `process-events!`. Set to false
-        for deterministic testing or when you want external control over event processing.
+  * `:event-loop?` - Controls event processing. `true` (default) starts an async core.async event loop.
+        `false` requires manual `process-events!` calls. `:immediate` processes events synchronously
+        during `send!`, eliminating the need for sleeps or manual processing in tests. CLJ-only.
   * `:async?` - If true, use the async-capable processor and execution model (promesa-based). This enables
         expressions to return promises that the algorithm awaits, allowing `afop/await-load` and
         `afop/await-mutation` to work. Requires promesa on the classpath. Defaults to false. When enabled,
@@ -263,14 +265,23 @@ Returns the new session-id of the statechart."
                   [:extra-env {:optional true} map?]
                   [:on-save {:optional true} fn?]
                   [:on-delete {:optional true} fn?]
-                  [:event-loop? {:optional true} :boolean]
+                  [:event-loop? {:optional true} [:or :boolean [:= :immediate]]]
                   [:async? {:optional true} :boolean]] => ::sc/env]
-   (let [runtime-atom (:com.fulcrologic.fulcro.application/runtime-atom app)]
+   (let [runtime-atom (:com.fulcrologic.fulcro.application/runtime-atom app)
+         immediate? (= event-loop? :immediate)
+         draining? (atom false)]
      (when-not (contains? @runtime-atom ::sc/env)
        (let [dm                 (impl/new-fulcro-data-model app)
              real-queue         (mpq/new-queue)
              instrumented-queue (reify sp/EventQueue
-                                  (send! [_ env send-request] (sp/send! real-queue env send-request))
+                                  (send! [_ env send-request]
+                                    (let [result (sp/send! real-queue env send-request)]
+                                      (when (and immediate? (compare-and-set! draining? false true))
+                                        (try
+                                          (drain-events! app real-queue)
+                                          (finally
+                                            (reset! draining? false))))
+                                      result))
                                   (cancel! [event-queue env session-id send-id] (sp/cancel! real-queue env session-id send-id))
                                   (receive-events! [this env handler] (sp/receive-events! this env handler {}))
                                   (receive-events! [_ env handler options]
@@ -299,7 +310,7 @@ Returns the new session-id of the statechart."
                                         ::sc/invocation-processors [(i.statechart/new-invocation-processor)]
                                         ::sc/execution-model       ex}
                                   extra-env)
-             env-with-loop      (if event-loop?
+             env-with-loop      (if (and event-loop? (not immediate?))
                                   (assoc env :events-running-atom (cael/run-event-loop! env 16))
                                   env)]
          (swap! runtime-atom assoc ::sc/env env-with-loop)))
@@ -361,6 +372,21 @@ Returns the new session-id of the statechart."
               (p/then result save-fn)
               (save-fn result)))))
       {})))
+
+(defn- has-pending-events?
+  "Returns true if the manually-polled-queue has any non-deferred events ready to process."
+  [mpq-queue]
+  (some seq (vals @(:session-queues mpq-queue))))
+
+(defn- drain-events!
+  "Repeatedly process events until the queue is empty. Used by :immediate event processing.
+   Note: after receive-events!, session keys remain in the map with empty vectors,
+   so we must check (some seq (vals ...)) not just (seq ...)."
+  [app mpq-queue]
+  (loop [safety 100]
+    (process-events! app)
+    (when (and (pos? safety) (has-pending-events? mpq-queue))
+      (recur (dec safety)))))
 
 (defn mutation-result
   "Extracts the mutation result from an event that was triggered by the completion of a mutation.

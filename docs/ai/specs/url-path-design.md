@@ -1,126 +1,160 @@
 # Spec: URL Path Design
 
-**Status**: active (Phase 1 complete, Phase 2 pending)
+**Status**: done
 **Priority**: P1
 **Created**: 2026-02-11
+**Completed**: 2026-02-18
 **Owner**: conductor
 
 ## Context
 
-The current routing system has two separate URL encoding mechanisms that overlap and conflict:
+The prior design had `:route/path` declarations on each route state, hierarchical path
+composition, parameterized path segments, and plans for named query params + unified URL
+encoding. This was overengineered.
 
-1. `route_url.cljc` uses a `_sc_` query parameter with base64-encoded transit for per-state params
-2. `route_history.cljc` uses a `_rp_` query parameter with base64-encoded transit for route params
+The simplified design: URL paths are derived automatically from the chart's route target
+hierarchy using simple component names. No `:route/path` option. Params are encoded as a
+single opaque transit+base64 query param (as the existing system already does).
 
-Additionally, route paths are flat — each `rstate` declares its complete path (e.g., `[:route/path ["users" "edit"]]`). There is no automatic composition where a child route inherits its parent's path prefix, and no support for parameterized path segments (e.g., `/users/:id/edit`).
+URL/history integration is an **external system** — decoupled from the core routing
+statechart (which is what `ui_routing2` provides). The URL layer observes state changes
+and translates between URLs and route-to events.
 
-This spec designs a unified URL format and hierarchical path composition for the routing system.
-
-### Current URL Formats
-
-From `route_url.cljc`:
-```
-https://app.com/users/edit?_sc_=<base64-transit of {state-id {param-key param-val}}>
-```
-
-From `route_history.cljc`:
-```
-https://app.com/users/edit?_rp_=<base64-transit of {param-key param-val}>
-```
-
-Both are opaque blobs. Neither supports human-readable query parameters or parameterized path segments.
-
-## Requirements
-
-### Path Composition
-
-1. Route paths must compose hierarchically. A child `rstate` with `:route/path ["edit"]` under a parent with `:route/path ["users"]` produces URL path `/users/edit`
-2. Parameterized path segments must be supported: `:route/path ["users" :id "edit"]` where `:id` is resolved from the route's data model or event data
-3. Path matching for URL restoration must handle parameterized segments — `/users/42/edit` matches `["users" :id "edit"]` and extracts `{:id "42"}`
-4. A route state with no `:route/path` inherits its parent's path (useful for `istate` wrappers)
-5. Parallel regions do NOT compose paths — only one "active path" determines the URL path. The other regions contribute via query parameters only.
-
-### URL Format Unification
-
-6. Unify `_sc_` and `_rp_` into a single encoding scheme. Opaque per-state params (`_sc_` style, keyed by state ID) are the right model since multiple states contribute params simultaneously.
-7. Named query parameters (human-readable) should also be supported for SEO and shareability: `:route/query-params {:q :search-term}` maps data model key `:search-term` to URL param `?q=value`
-8. The unified URL format should be: `/<path-segments>?<named-params>&_s=<opaque-state-params>#<optional-hash>`
-9. The opaque state param blob (`_s`) should be optional — only present when states declare `:route/params`
-
-### Backward Compatibility
-
-10. Existing charts using flat `:route/path` with full paths must continue to work
-11. The `route->url` and `url->route` callbacks on `new-html5-history` remain the extension point for custom URL schemes
-
-## Affected Modules
-
-- `integration/fulcro/ui_routes.cljc` — `rstate`, `istate`, `routes`, `establish-route-params-node`, `apply-external-route`, `state-for-path`
-- `integration/fulcro/route_url.cljc` — Unify with route_history URL functions, add path matching
-- `integration/fulcro/route_history.cljc` — Unify URL encoding, update `route->url`/`url->route` defaults
-
-## Approach
-
-### Hierarchical Path Resolution
-
-Add a `resolve-full-path` function that walks the statechart element tree from a state up to the routing root, collecting path segments:
-
-```clojure
-;; Given:
-(routes {:routing/root :app/Root :id :routes}
-  (rstate {:route/target :user/List :route/path ["users"]}
-    (rstate {:route/target :user/Detail :route/path [:id]}
-      (rstate {:route/target :user/Settings :route/path ["settings"]}))))
-
-;; resolve-full-path for :user/Settings => ["users" :id "settings"]
-```
-
-During `apply-external-route`, path matching resolves parameterized segments:
-```clojure
-;; URL: /users/42/settings
-;; Pattern: ["users" :id "settings"]
-;; Extracted: {:id "42"}
-```
-
-### Parameterized Segment Resolution
-
-When entering a state (on-entry), parameterized segments are resolved from:
-1. Event data (highest priority — the routing event carries the params)
-2. Data model (for states already populated)
-3. URL extraction (during restoration — params come from URL matching)
+## Design
 
 ### URL Format
 
 ```
-/users/42/settings?q=dark&_s=eyAuLi4gfQ==
- ├── path segments (including resolved params)
- ├── named query params (declared via :route/query-params)
- └── opaque state params blob (base64 transit, keyed by state ID)
+/AdminPanel/AdminUserDetail?_p=<base64-transit of {:user-id 7}>
 ```
 
-### Migration Path
+- **Path segments**: Simple name of each route target's registry key in the active hierarchy,
+  from root to leaf. `::ui/AdminUserDetail` → `AdminUserDetail`.
+- **Params**: Single query param `_p` containing transit+base64 encoded map of **all** active
+  route state params, keyed by state ID:
+  `_p = base64(transit({:AdminPanel {:tab "users"}, :AdminUserDetail {:user-id 7}}))`
+  Only present when at least one active route state has params. Not human-readable.
+- **Leaf-only routing**: Only the deepest leaf is the actual routing target. One `route-to!`
+  event is sent for the leaf; intermediate states enter automatically as ancestors in the
+  statechart hierarchy. Each intermediate state's on-entry picks up its own params slice
+  from the event data.
+- **Param storage**: Each state stores its params at `[:routing/parameters <state-id>]` in
+  the data model (via `establish-route-params-node`). States can use `assign` to mutate
+  their params over time. The URL layer observes these changes and updates the URL
+  (replace, not push) to stay in sync.
 
-Phase 1: Add `resolve-full-path` and parameterized matching. Existing flat paths work unchanged.
-Phase 2: Unify URL encoding. Deprecate `_sc_` and `_rp_` in favor of `_s` + named params.
-Phase 3: Remove old encoding support in a future version.
+### Path Generation (state → URL)
 
-## Design Decisions to Resolve During Implementation
+When the statechart configuration changes, the URL layer:
 
-- Should parameterized segments be keywords (`:id`) or tagged vectors (`[:param :id]`)? Keywords are concise but could conflict with literal path segments that happen to be keywords.
-- Should path composition be opt-in (require a flag) or default behavior? Flat paths are currently the norm.
-- How should path conflicts be reported? (Two states resolving to the same URL path)
-- Should there be a route table (precomputed path→state mapping) for O(1) lookup, or is linear scan of elements acceptable?
+1. Finds the active leaf route state(s) in the configuration
+2. Walks the element tree from leaf up to the routing root, collecting each ancestor that
+   has a `:route/target`
+3. Maps each target's registry key to its simple name (the `name` part of the keyword)
+4. Joins them with `/` to form the path
+5. For each active route state with params at `[:routing/parameters <id>]`, collects them
+   into a map keyed by state ID
+6. Encodes the full params map as transit+base64 in `_p` (omitted if no state has params)
+
+### URL Restoration (URL → state)
+
+On page load or URL change from external source:
+
+1. Parse path segments from URL
+2. The **last segment** is the leaf route target — match it against known route targets
+   by simple name
+3. Decode `_p` query param (if present) to get the state-id→params map
+4. Send a single `route-to!` for the leaf with the full decoded params map as event data
+5. The statechart transitions to the leaf; intermediate states enter as ancestors, each
+   state's `establish-route-params-node` picks up its own slice from the params map
+
+### Intermediate Segments
+
+Intermediate path segments (e.g. `AdminPanel` in `/AdminPanel/AdminUserDetail`) serve as:
+- Human-readable context in the URL
+- Disambiguation when multiple routes share the same leaf name under different parents
+
+For restoration, the intermediate segments can be used to disambiguate but are not strictly
+required if leaf names are unique.
+
+### Bidirectional Sync via `:on-save` Hook
+
+The URL layer hooks into the statechart system via the `:on-save` callback on
+`install-fulcro-statecharts!` (`fulcro.cljc:234`). This fires on
+`save-working-memory!` (`fulcro_impl.cljc:254`) every time a statechart reaches a
+stable configuration after processing an event. It receives `(session-id wmem)`.
+
+**Internal → URL** (event causes screen/param change):
+1. Event processed → configuration stabilizes → `save-working-memory!` → `:on-save` fires
+2. URL layer reads active routes + params from app state
+3. Computes new URL path + `_p` param
+4. **Push** new history entry (navigation changed the screen)
+
+**Browser back/forward → Chart** (popstate):
+1. popstate event fires → URL layer decodes path + params
+2. URL layer sets a flag indicating this is an external URL change
+3. Sends `route-to!` for the decoded leaf target
+4. Chart processes → stabilizes → `:on-save` fires
+5. URL layer checks: was the route allowed or denied?
+   - **Allowed**: **replace** current URL (history already has the right entry from popstate)
+   - **Denied**: **push forward** to restore the pre-back URL (undo the browser back)
+
+**Param mutation** (assign changes params without route change):
+1. State uses `assign` on `[:routing/parameters <id>]`
+2. `save-working-memory!` → `:on-save` fires
+3. URL layer detects same route, different params
+4. **Replace** current URL (no new history entry for param-only changes)
+
+### What Already Exists
+
+- `:route/params` on `rstate`/`istate` — declares accepted param keywords. Already in
+  `ui_routing2.cljc`.
+- `establish-route-params-node` — stores params from event data into data model. Already works.
+- Transit+base64 encoding — exists in `route_url.cljc` (`encode-params`, `decode-params`).
+- `route_history.cljc` — HTML5 history integration, `route->url`/`url->route` callbacks.
+- `:on-save` callback — `install-fulcro-statecharts!` option, fires on every stable
+  configuration save. `fulcro_impl.cljc:256`.
+
+### What Changes
+
+- Drop `:route/path` — path segments are auto-derived from target names
+- Simplify URL encoding to single `_p` param (drop `_sc_` and `_rp_` dual encoding)
+- Add path generation from active configuration (walk ancestors)
+- Add URL restoration that matches leaf by simple name
+- URL sync driven by `:on-save` hook — push/replace logic depends on whether the change
+  was internal navigation, browser back/forward, or param-only mutation
+
+## Requirements
+
+1. URL paths are auto-derived from the route target hierarchy — no configuration needed
+2. Path segments use the simple name of the registry key (no namespace)
+3. Route params encoded as single opaque transit+base64 query param `_p`, keyed by state ID
+3a. States can mutate their params via `assign`; URL layer syncs changes (replace, not push)
+4. URL restoration sends a single route-to event for the leaf target
+5. Intermediate path segments present for readability and disambiguation
+6. URL/history layer is external to the core routing statechart
+7. `route->url` / `url->route` callbacks remain the extension point for custom URL schemes
+
+## Key Files
+
+| File | Role |
+|------|------|
+| `integration/fulcro/route_url.cljc` | URL encoding/decoding — simplify to single `_p` param |
+| `integration/fulcro/route_history.cljc` | History integration — update path generation/restoration |
+| `integration/fulcro/ui_routing2.cljc` | Core routing — no changes needed (`:route/params` already exists) |
 
 ## Verification
 
-### Phase 1 (hierarchical paths + parameterized matching)
-1. [x] Child routes compose paths with parent: parent `["users"]` + child `["edit"]` = `/users/edit`
-2. [x] Parameterized segments resolve: `["users" :id]` with `{:id 42}` produces `/users/42`
-3. [x] URL restoration extracts params: `/users/42` matched against `["users" :id]` yields `{:id "42"}`
-4. [x] States with no `:route/path` inherit parent path
-5. [x] Flat `:route/path` (existing behavior) still works unchanged
-9. [x] `route->url` / `url->route` callbacks still work for custom schemes
-
-### Phase 2 (URL encoding unification — not yet started)
-6. [ ] `_sc_` and `_rp_` unified into single `_s` parameter
-7. [ ] Named query parameters appear as human-readable URL params
-8. [ ] Parallel regions: only one region contributes to path, others contribute query params
+1. [ ] Path auto-derived: `AdminPanel` istate containing `AdminUserDetail` rstate → `/AdminPanel/AdminUserDetail`
+2. [ ] Params encoded per state: `{:AdminPanel {:tab "users"} :AdminUserDetail {:user-id 7}}` → `?_p=<base64 transit>`
+3. [ ] Params decoded: `?_p=<base64 transit>` → state-id-keyed map passed as event data, each state picks up its slice
+4. [ ] Leaf-only restoration: URL `/AdminPanel/AdminUserDetail?_p=...` sends single route-to for `AdminUserDetail`
+5. [ ] Intermediate states enter automatically (AdminPanel entered as ancestor of AdminUserDetail)
+6. [ ] Routes with no params produce clean URLs with no `_p` param
+6a. [ ] State using `assign` to change its params triggers URL update (replace, not push)
+7. [ ] `route->url` / `url->route` callbacks still work for custom schemes
+8. [ ] Internal navigation pushes new history entry
+9. [ ] Browser back/forward with allowed route replaces URL (no duplicate entry)
+10. [ ] Browser back/forward with denied route pushes forward to undo the back
+11. [ ] URL sync driven by `:on-save` hook on `install-fulcro-statecharts!`
+12. [ ] routing-demo2 updated to demonstrate URL integration as an external system

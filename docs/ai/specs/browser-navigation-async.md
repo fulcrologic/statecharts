@@ -1,8 +1,9 @@
 # Spec: Browser Navigation with Async State Entry
 
-**Status**: backlog
+**Status**: done
 **Priority**: P2
 **Created**: 2026-02-11
+**Completed**: 2026-02-18
 **Owner**: conductor
 
 ## Context
@@ -113,3 +114,4 @@ When a new `popstate` arrives while a transition is in progress:
 8. [ ] `istate` child chart teardown completes before new state entry begins
 9. [ ] Works correctly when some intermediate states have sync entry and others have async
 10. [ ] popstate events during restoration mode are handled correctly (queued or ignored)
+11. [ ] routing-demo2 demonstrates browser back/forward with async state entry and busy guard denial

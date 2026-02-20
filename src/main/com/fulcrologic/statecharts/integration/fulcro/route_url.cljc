@@ -1,5 +1,5 @@
-(ns com.fulcrologic.statecharts.integration.fulcro.route-url
-  "ALPHA. This namespace's API is subject to change."
+(ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.route-url
+  "DEPRECATED."
   (:require
     [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.transit :as ft]

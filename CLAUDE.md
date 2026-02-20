@@ -74,7 +74,7 @@ The library uses **protocol-based extensibility** around 7 core components. Each
 6. **StatechartRegistry** — Chart definitions (`registry/`)
 7. **InvocationProcessors** — External service invocation (see `invocation/CLAUDE.md`)
 
-For **Fulcro integration**, see `integration/CLAUDE.md`
+For **Fulcro integration**, see `integration/CLAUDE.md`. The `routing/` sub-package under `integration/fulcro/` provides the new routing system with URL sync, cross-chart routing, and configuration validation (replaces the deprecated `ui-routes` namespace).
 
 Internally uses **imperative style with volatiles** (matching W3C pseudocode); externally exposes a **functional interface**.
 

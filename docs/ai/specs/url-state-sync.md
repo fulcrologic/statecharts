@@ -1,8 +1,9 @@
 # Spec: URL-State Bidirectional Synchronization
 
-**Status**: backlog
+**Status**: done
 **Priority**: P2
 **Created**: 2026-02-11
+**Completed**: 2026-02-18
 **Owner**: conductor
 
 ## Context
@@ -104,3 +105,4 @@ Track the previous leaf route state(s) to make this determination.
 8. [ ] URL bar editing triggers correct state restoration
 9. [ ] Internal transitions (same leaf) use replace, not push
 10. [ ] Restoration mode suppresses all URL updates until complete
+11. [ ] routing-demo2 demonstrates bidirectional URL sync (URL updates on navigation, state updates on URL edit)

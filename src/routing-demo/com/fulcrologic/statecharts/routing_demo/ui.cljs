@@ -129,8 +129,8 @@
 ;; --- Root Component ---
 
 (defsc Root [this props]
-  {:query         [:root/trigger]
-   :initial-state {:root/trigger 0}}
+  {:query         []
+   :initial-state {}}
   (let [state-map     (rapp/current-state this)
         cfg           (scf/current-configuration this session-id)
         local-data    (get-in state-map [::sc/local-data session-id])

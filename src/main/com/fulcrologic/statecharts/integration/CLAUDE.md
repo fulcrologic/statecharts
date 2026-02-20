@@ -14,10 +14,16 @@ Connects statecharts to Fulcro UI framework. This is the most complex subsystem 
 - `fulcro/hooks.cljc` — React hooks integration
 - `fulcro/operations.cljc` — Fulcro-specific operations (load, remote)
 - `fulcro/rad_integration.cljc` — RAD form integration
-- `fulcro/route_history.cljc` — Browser history management
-- `fulcro/route_url.cljc` — URL routing
-- `fulcro/ui_routes.cljc` — Route state synchronization
-- `fulcro/ui_routes_options.cljc` — Route configuration
+- `fulcro/route_history.cljc` — Browser history management (legacy RAD)
+- `fulcro/ui_routes.cljc` — Route state synchronization (deprecated — use `routing.core`)
+- `fulcro/ui_routes_options.cljc` — Route configuration options (shared by old and new)
+- `fulcro/routing.cljc` — Full routing API (DSL, URL sync, validation, busy checking)
+- `fulcro/routing_options.cljc` — Component options for routing (RAD pattern)
+- `fulcro/routing/url_codec.cljc` — URLCodec protocol
+- `fulcro/routing/url_codec_transit.cljc` — Default transit+base64 codec
+- `fulcro/routing/url_history.cljc` — URLHistoryProvider protocol + helpers
+- `fulcro/routing/browser_history.cljc` — Browser history (CLJS)
+- `fulcro/routing/simulated_history.cljc` — Simulated history (testing)
 
 ## Data Model Integration
 Uses Fulcro app state as the data model. Special paths:

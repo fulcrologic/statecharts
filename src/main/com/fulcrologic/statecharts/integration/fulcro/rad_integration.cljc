@@ -1,4 +1,5 @@
-(ns com.fulcrologic.statecharts.integration.fulcro.rad-integration
+(ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.rad-integration
+  "DEPRECATED. Better RAD integration coming soon."
   (:require
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]

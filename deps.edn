@@ -23,7 +23,7 @@
                               :main-opts   ["-m" "kaocha.runner"]
                               :extra-deps  {lambdaisland/kaocha {:mvn/version "1.91.1392"}}}
 
-           :dev              {:extra-paths ["src/dev" "src/examples" "src/routing-demo"]
+           :dev              {:extra-paths ["src/dev" "src/examples" "src/routing-demo" "src/routing-demo2"]
                               :extra-deps  {thheller/shadow-cljs                   {:mvn/version "3.3.4"}
                                             com.fulcrologic/fulcro-devtools-remote {:mvn/version "0.2.8"}
                                             com.fulcrologic/fulcro-inspect         {:mvn/version "1.0.5"}
@@ -35,6 +35,7 @@
                                             vvvvalvalval/scope-capture             {:mvn/version "0.3.3-s1"}
                                             djblue/portal                          {:mvn/version "0.62.0"}
                                             org.clojure/clojure                    {:mvn/version "1.12.3"}
+                                            funcool/promesa                        {:mvn/version "11.0.678"}
                                             org.clojure/clojurescript              {:mvn/version "1.12.116"}
                                             binaryage/devtools                     {:mvn/version "1.0.7"}
                                             org.clojure/tools.namespace            {:mvn/version "1.5.0"}

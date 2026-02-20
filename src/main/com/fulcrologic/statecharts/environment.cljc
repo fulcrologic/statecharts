@@ -74,7 +74,7 @@
   "Place an event on the internal event queue for immediate processing. Only callable from within active runnable content"
   ([env event-name data]
    [::sc/processing-env ::sc/event-name map? => nil?]
-   (raise env {:name event-name :data data}))
+   (raise env (evts/new-event {:name event-name :data data})))
   ([{::sc/keys [vwmem] :as env} event]
    [::sc/processing-env ::sc/event-or-name => nil?]
    (vswap! vwmem update ::sc/internal-queue conj (evts/new-event event))
