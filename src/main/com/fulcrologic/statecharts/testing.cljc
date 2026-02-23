@@ -174,7 +174,8 @@
 
    The `mocks` parameter is a map from expression *value* (e.g. fn ref) to either a literal value or a `(fn [env])`, where
     the `env` in the mocks will be the *testing env* with :ncalls set to the ordinal (from 1) number of times that expression
-   has been run.
+   has been run. For example, `{my-guard? true}` will make `my-guard?` always return `true` during testing.
+   Use `{}` with `:run-unmocked? true` in `mocking-options` to let expressions execute normally.
 
    `validator` is a `(fn [machine working-memory] vector?)` that returns a list of problems with the
    state machine's configuration (if any). These problems indicate either a bug in the underlying

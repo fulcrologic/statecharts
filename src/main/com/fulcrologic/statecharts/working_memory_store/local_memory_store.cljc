@@ -3,7 +3,11 @@
   (:require
     [com.fulcrologic.statecharts.protocols :as sp]))
 
-(defrecord LocalMemoryStore [storage]
+(defrecord LocalMemoryStore
+  ;; NOTE: Individual operations are atomic via `swap!`, but read-then-process-then-save
+  ;; cycles at the event loop level are NOT atomic. Event loops must serialize per-session
+  ;; event processing to prevent stale overwrites.
+  [storage]
   sp/WorkingMemoryStore
   (get-working-memory [_ _ session-id]
     (get @storage session-id))

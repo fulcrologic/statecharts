@@ -215,6 +215,13 @@
      and values are the statechart definitions."))
 
 (defprotocol WorkingMemoryStore
+  "Persistence layer for statechart session state. Working memory is saved after each
+   event processing step and retrieved at the start of the next. Implementations range
+   from in-memory atoms (for development) to durable stores (for production).
+
+   Lifecycle: `save-working-memory!` is called after `start!` and each `process-event!`.
+   `get-working-memory` is called before each `process-event!`. `delete-working-memory!`
+   is called when a session reaches a final state."
   (get-working-memory [this env session-id] "Get the working memory for a state machine with session-id")
   (save-working-memory! [this env session-id wmem]
     "Save working memory for session-id")

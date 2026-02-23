@@ -30,7 +30,7 @@
     [com.fulcrologic.statecharts.execution-model.lambda-async :as lambda-async]
     [com.fulcrologic.statecharts.integration.fulcro-impl :as impl]
     [com.fulcrologic.fulcro.raw.application :as rapp]
-    [com.fulcrologic.statecharts.util :refer [new-uuid]]
+    [com.fulcrologic.statecharts.util :refer [new-uuid now-ms]]
     [edn-query-language.core :as eql]
     [promesa.core :as p]
     [taoensso.timbre :as log])
@@ -39,18 +39,35 @@
 (defn- async-engine?
   "Returns true if `env` is using the async execution model."
   [env]
-  (instance? #?(:clj AsyncCLJCExecutionModel
+  (instance? #?(:clj  AsyncCLJCExecutionModel
                 :cljs lambda-async/AsyncCLJCExecutionModel)
     (::sc/execution-model env)))
 
 (defonce ^:private pending-mutation-callbacks (atom {}))
 
+(defn- take-callback!
+  "Atomically retrieves and removes a callback by `callback-id`."
+  [callback-id]
+  (let [result (volatile! nil)]
+    (swap! pending-mutation-callbacks
+      (fn [m]
+        (vreset! result (get m callback-id))
+        (dissoc m callback-id)))
+    @result))
+
+(defn cleanup-stale-callbacks!
+  "Removes callbacks older than `max-age-ms` (default 5 minutes). Call periodically or on
+   chart teardown to prevent memory leaks from mutations that never complete."
+  ([] (cleanup-stale-callbacks! 300000))
+  ([max-age-ms]
+   (let [cutoff (- (now-ms) max-age-ms)]
+     (swap! pending-mutation-callbacks
+       (fn [m] (into {} (remove (fn [[_ v]] (when-let [t (:created-at v)] (< t cutoff)))) m))))))
+
 (def ^:private await-mutation-delegate (m/->Mutation `await-mutation-delegate))
 
 (let [mtrigger! (fn await-mutation-trigger* [{:keys [result]} callback-id]
-                  (when-let [{:keys [env ok-event ok-data resolve]}
-                             (get @pending-mutation-callbacks callback-id)]
-                    (swap! pending-mutation-callbacks dissoc callback-id)
+                  (when-let [{:keys [env ok-event ok-data resolve]} (take-callback! callback-id)]
                     (let [event-data {:fulcro/mutation-result result}]
                       (when ok-event
                         (senv/raise env ok-event (merge (or ok-data {}) event-data)))
@@ -77,9 +94,7 @@
        :ok-action                   (fn [env]
                                       (mtrigger! env callback-id))
        :error-action                (fn [mut-env]
-                                      (when-let [{:keys [env error-event error-data resolve]}
-                                                 (get @pending-mutation-callbacks callback-id)]
-                                        (swap! pending-mutation-callbacks dissoc callback-id)
+                                      (when-let [{:keys [env error-event error-data resolve]} (take-callback! callback-id)]
                                         (let [event-data {:fulcro/mutation-result (:result mut-env)}]
                                           (when error-event
                                             (senv/raise env error-event (merge (or error-data {}) event-data)))
@@ -171,17 +186,17 @@
   [env query-root component-or-actor {:keys [] :as options}]
   (when-not (async-engine? env)
     (throw (ex-info "await-load requires the async execution engine. Install with :async? true." {})))
-  (let [app          (:fulcro/app env)
-        session-id   (senv/session-id env)
-        state-map    (rapp/current-state app)
-        local-data   (get-in state-map (impl/local-data-path session-id))
+  (let [app        (:fulcro/app env)
+        session-id (senv/session-id env)
+        state-map  (rapp/current-state app)
+        local-data (get-in state-map (impl/local-data-path session-id))
         {::sc/keys [ok-event ok-data error-event error-data target-alias]} options
-        component    (if-let [component-name (and
-                                               (keyword? component-or-actor)
-                                               (get-in local-data [:fulcro/actors component-or-actor :component]))]
-                       (rc/registry-key->class component-name)
-                       (rc/registry-key->class component-or-actor))
-        target       (when target-alias (impl/resolve-alias-path local-data target-alias))]
+        component  (if-let [component-name (and
+                                             (keyword? component-or-actor)
+                                             (get-in local-data [:fulcro/actors component-or-actor :component]))]
+                     (rc/registry-key->class component-name)
+                     (rc/registry-key->class component-or-actor))
+        target     (when target-alias (impl/resolve-alias-path local-data target-alias))]
     (p/create
       (fn [resolve _reject]
         (let [ok-action    (fn [{:keys [load-params] :as load-env}]
@@ -221,7 +236,7 @@
 
    Requires the async execution engine (install with `:async? true`)."
   [env txn {:keys [target returning ok-event error-event ok-data error-data mutation-remote
-                    tx-options]
+                   tx-options]
             :as   options}]
   (when-not (async-engine? env)
     (throw (ex-info "await-mutation requires the async execution engine. Install with :async? true." {})))
@@ -236,7 +251,8 @@
            :error-event error-event
            :ok-data     ok-data
            :error-data  error-data
-           :resolve     resolve})
+           :resolve     resolve
+           :created-at  (now-ms)})
         (rc/transact! app [(await-mutation-delegate
                              (merge (dissoc options :tx-options)
                                {:txn         txn

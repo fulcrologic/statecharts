@@ -1,4 +1,9 @@
 (ns com.fulcrologic.statecharts.integration.fulcro.hooks
+  "React hooks integration for component-local statecharts.
+
+   Use `use-statechart` when a statechart's lifecycle should match a specific
+   React component instance. For app-wide statecharts (routing, auth, etc.),
+   use `register-statechart!` + `start!` from the `fulcro` namespace instead."
   (:require
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.raw.application :as rapp]

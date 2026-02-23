@@ -6,7 +6,9 @@
 
    Another purpose that is built into some of the macros is to make it more convenient to get clear diagram output
    when rendering the chart (TODO). The `choice` macro, for example, includes the conditional expressions as
-   strigified notes on the nodes."
+   strigified notes on the nodes.
+
+   For stable alternatives, use the element functions directly from `com.fulcrologic.statecharts.elements`."
   (:require
     [com.fulcrologic.statecharts.elements :refer [Send assign cancel on-entry on-exit script state transition]]))
 
@@ -65,6 +67,9 @@
   ```
   "
   [props & args]
+  (when (odd? (count args))
+    (throw (ex-info "choice requires an even number of arguments (pred/target pairs, with optional :else target)"
+                    {:arg-count (count args)})))
   (let [clauses                 (partition 2 args)
         else-clause?            #(= :else (first %))
         conditional-clauses     (remove else-clause? clauses)

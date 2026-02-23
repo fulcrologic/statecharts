@@ -5,6 +5,10 @@
    the routing.* package which adds URL synchronization, cross-chart routing via
    :route/reachable, deep busy-checking, and route configuration validation.
 
+   NOTE: This namespace uses module-level global state (route-table-atom, history volatile)
+   which makes it unsuitable for multiple concurrent Fulcro apps or parallel test suites.
+   The replacement routing.* package avoids this limitation.
+
    ALPHA. This namespace's API is subject to change."
   (:require
     [clojure.set :as set]

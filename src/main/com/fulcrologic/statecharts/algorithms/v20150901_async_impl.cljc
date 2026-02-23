@@ -7,7 +7,18 @@
 
    The algorithm logic is identical to the sync variant — same transition selection, entry/exit
    order, conflict resolution, and history handling. Only the control flow is adapted for
-   async support using promesa."
+   async support using promesa.
+
+   ## Threading Model
+
+   The volatile `vwmem` in env is mutated across async promise chains but is safe because
+   `maybe-then` ensures sequential (not parallel) execution within a single `process-event!`
+   call. Each step completes before the next begins, even when promises are involved.
+
+   IMPORTANT: This implementation assumes that only ONE event is being processed at a time
+   for a given session. Event loops MUST serialize event processing per session to maintain
+   this invariant. See `async-event-loop/run-serialized-event-loop!` for a correct
+   implementation."
   #?(:cljs (:require-macros [com.fulcrologic.statecharts.algorithms.v20150901-async-impl
                              :refer [in-state-context maybe-let]]))
   (:require

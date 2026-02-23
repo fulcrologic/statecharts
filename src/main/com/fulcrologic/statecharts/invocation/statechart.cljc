@@ -21,6 +21,7 @@
       (and (string? typ) (str/starts-with? (str/lower-case typ) "http://www.w3.org/tr/scxml"))
       (= typ :statechart)
       (= typ ::sc/chart)))
+  ;; Returns: false if chart not found, true (sync) or Promise<true> (async) on success
   (start-invocation! [this {::sc/keys [event-queue processor statechart-registry working-memory-store]
                             :as       env} {:keys [invokeid src params]}]
     (log/debug "Start invocation" invokeid src params)

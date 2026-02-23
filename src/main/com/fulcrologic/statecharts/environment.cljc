@@ -49,7 +49,14 @@
 (def In
   "[env state-id]
 
-   Alias for `is-in-state?`"
+   Returns true if `state-id` is in the current configuration (active states).
+   This is the SCXML `In()` predicate (Section 5.10.1).
+
+   NOTE: Requires `::sc/vwmem` in `env`, which is only available during algorithm
+   execution (on-entry, on-exit, transition conditions, scripts). Not available
+   in data model methods.
+
+   See also `com.fulcrologic.statecharts.elements/In`, which is more ergonomic in charts."
   is-in-state?)
 
 (>defn context-element-id

@@ -52,8 +52,10 @@
                               (log/error t "Future invocation threw exception"))
                             (finally
                               (swap! active-futures dissoc child-session-id))))]
-            (swap! active-futures assoc child-session-id f)
-            (deliver started true))
+            (try
+              (swap! active-futures assoc child-session-id f)
+              (finally
+                (deliver started true))))
           true))))
   (stop-invocation! [_ env {:keys [invokeid]}]
     (log/debug "Stop future" invokeid)

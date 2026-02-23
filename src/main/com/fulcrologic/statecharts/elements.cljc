@@ -405,7 +405,13 @@
   [{:keys [id sendid sendidexpr] :as attrs}]
   (new-element :cancel attrs nil))
 
-(defn finalize [attrs & children]
+(defn finalize
+  "Executable content that runs when an event from an invoked child service is received,
+   BEFORE the event is processed by the parent state machine. Used inside `invoke` elements
+   to update the data model with data from the child.
+
+   https://www.w3.org/TR/scxml/#finalize"
+  [attrs & children]
   (new-element :finalize attrs children))
 
 (defn invoke

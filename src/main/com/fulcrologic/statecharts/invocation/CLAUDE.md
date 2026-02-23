@@ -15,7 +15,7 @@ Handles `invoke` elements — starting external services/nested charts from with
 
 ## Known Issues
 - **Zero test coverage** — Most critical testing gap in the library
-- `statechart.cljc:29-37` — Returns `true` even on failure (sends error.platform but return value misleads)
+- `statechart.cljc` — Returns `false` when chart not found (sends error.platform event). Returns `true` (sync) or `Promise<true>` (async) on success.
 - `future.clj:44` — Potential race condition between `future-cancel` and `finally` cleanup
 - No HTTP Event I/O Processor (SCXML spec section 6.2)
 

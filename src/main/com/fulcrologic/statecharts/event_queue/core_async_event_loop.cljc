@@ -19,6 +19,11 @@
   "Initializes a new session using `sp/start!` on the processor and assigns it `session-id`.
    Then runs a continuous loop polling the event-queue for new events and processing them.
 
+   WARNING: This event loop processes all ready events in a single `receive-events!` call
+   without per-session serialization. When using an async processor that returns promises,
+   events for the same session may process concurrently. For async processors, use
+   `async-event-loop/run-serialized-event-loop!` instead.
+
    `wmem-atom` is an atom that will be updated with the latest working memory of the state
    machine, and allows you to look at the state of it from outside.  It is safe to read the active states
    from ::sc/configuration of the working memory, but you should leverage the data-model protocol for

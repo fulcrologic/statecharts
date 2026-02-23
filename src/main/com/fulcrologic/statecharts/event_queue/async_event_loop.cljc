@@ -20,6 +20,7 @@
     (let [ch (async/chan 1)]
       (-> v
         (p/then (fn [result]
+                  ;; async/put! is safe from any thread — it uses callbacks, not blocking
                   (async/put! ch (or result :done))
                   (async/close! ch)))
         (p/catch (fn [e]
@@ -31,6 +32,10 @@
 (defn run-event-loop!
   "Runs an event loop that processes events, awaiting async completion before processing
    the next event. Uses core.async go-loop with promise bridging.
+
+   WARNING: This event loop does NOT properly serialize async event processing. When
+   `process-event!` returns a promise, the next event may begin processing before the
+   promise resolves. For async processors, use `run-serialized-event-loop!` instead.
 
    Returns an atom containing a boolean. Set to `false` to stop the event loop."
   [{::sc/keys [processor working-memory-store event-queue] :as env} resolution-ms]

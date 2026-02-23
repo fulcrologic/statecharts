@@ -9,7 +9,9 @@
     [taoensso.timbre :as log]))
 
 (defn apply-action
-  "An operation that runs the given `(apply f state-map params)` on the Fulcro state map as if doing an optimistic mutation."
+  "Returns an operation that will `(apply f state-map args)` against the Fulcro app state map,
+   as if performing an optimistic mutation action. The function `f` receives the current
+   state-map as its first argument, followed by any additional `args`."
   [f & args]
   {:op :fulcro/apply-action :f f :args args})
 

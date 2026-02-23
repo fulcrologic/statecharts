@@ -82,6 +82,7 @@
         (doseq [event to-send]
           (try
             (handler env event)
+            ;; W3C SCXML: event handler errors must not crash the event loop.
             (catch #?(:clj Throwable :cljs :default) e
               (log/error e "Event handler threw an exception"))))))))
 

@@ -2,7 +2,8 @@
   "An implementation of DataModel that stores the data in working memory itself.
 
    Supports using `src` in data model for CLJ ONLY, which must be a URI that clojure.java.io/reader
-   would accept.
+   would accept. NOTE: `src` is read via `slurp` with no path restriction — callers are responsible
+   for ensuring `src` refers to a trusted, local resource.
 
    There are two implementations: One where data is scoped to the state, and another where it is global.
    "

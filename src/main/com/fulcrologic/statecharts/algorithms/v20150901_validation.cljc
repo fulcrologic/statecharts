@@ -51,6 +51,12 @@
       (seq children) (into (mapcat #(problems chart %) children)))))
 
 
+(defmethod element-problems :history [chart {:keys [id] :as ele}]
+  (let [invalid (chart/invalid-history-elements chart)
+        msgs    (into [] (comp (filter #(= id (:id %))) (mapcat :msgs)) invalid)]
+    (cond-> []
+      (seq msgs) (into (mapv #(error ele %) msgs)))))
+
 (defn problems
   "Returns a sequence of problems with the given statechart. Each problem is a map with:
 

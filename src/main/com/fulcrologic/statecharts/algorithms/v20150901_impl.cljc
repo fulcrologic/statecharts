@@ -21,6 +21,12 @@
     [com.fulcrologic.statecharts.util :refer [genid new-uuid]]
     [taoensso.timbre :as log]))
 
+;; NOTE: DEBUG-level logging may include chart data/events. Disable in production with sensitive data.
+
+(def ^:private max-eventless-iterations
+  "Safety limit for eventless transition loops to prevent infinite cycling in misconfigured charts."
+  1000)
+
 #?(:clj
    (defmacro with-processing-context [env & body]
      `(let [vwmem# (get ~env ::sc/vwmem)]
@@ -82,6 +88,8 @@
     (log/debug "Running expression" expr)
     (log/spy :debug
       (sp/run-expression! execution-model env expr))
+    ;; W3C SCXML Section 4.4: errors in executable content MUST generate error.execution
+    ;; events rather than crashing the state machine. Broad catch is intentional.
     (catch #?(:clj Throwable :cljs :default) e
       (log/error e "Expression failure")
       (let [session-id (env/session-id env)]
@@ -408,8 +416,9 @@
       (try
         (let [ele (chart/element statechart n)]
           (execute-element-content! env ele))
+        ;; W3C SCXML Section 4.4: executable content errors must not crash the machine.
+        ;; Broad catch is intentional to match spec behavior.
         (catch #?(:clj Throwable :cljs :default) t
-          ;; TODO: Proper error event for execution problem
           (log/error t "Unexpected exception in content")))))
   nil)
 
@@ -695,21 +704,28 @@
   "Work through eventless transitions, returning the updated working memory"
   [{::sc/keys [vwmem] :as env}]
   [::sc/processing-env => nil?]
-  (let [macrostep-done? (volatile! false)]
+  (let [macrostep-done? (volatile! false)
+        iterations      (volatile! 0)]
     (while (and (::sc/running? @vwmem) (not @macrostep-done?))
-      (select-eventless-transitions! env)
-      (let [{::sc/keys [enabled-transitions
-                        internal-queue]} @vwmem]
-        (when (empty? enabled-transitions)
-          (if (empty? internal-queue)
-            (vreset! macrostep-done? true)
-            (let [internal-event (first internal-queue)]
-              (log/spy :debug internal-event)
-              (vswap! vwmem update ::sc/internal-queue pop)
-              (env/assign! env [:ROOT :_event] internal-event)
-              (select-transitions! env internal-event))))
-        (when (seq (::sc/enabled-transitions @vwmem))
-          (microstep! env)))))
+      (vswap! iterations inc)
+      (when (> @iterations max-eventless-iterations)
+        (log/error "Eventless transition loop exceeded" max-eventless-iterations
+          "iterations. Possible infinite loop in chart. Breaking.")
+        (vreset! macrostep-done? true))
+      (when-not @macrostep-done?
+        (select-eventless-transitions! env)
+        (let [{::sc/keys [enabled-transitions
+                          internal-queue]} @vwmem]
+          (when (empty? enabled-transitions)
+            (if (empty? internal-queue)
+              (vreset! macrostep-done? true)
+              (let [internal-event (first internal-queue)]
+                (log/spy :debug internal-event)
+                (vswap! vwmem update ::sc/internal-queue pop)
+                (env/assign! env [:ROOT :_event] internal-event)
+                (select-transitions! env internal-event))))
+          (when (seq (::sc/enabled-transitions @vwmem))
+            (microstep! env))))))
   nil)
 
 (>defn run-exit-handlers!
@@ -759,15 +775,19 @@
   [::sc/processing-env => nil?]
   (let [{::sc/keys [running?]} @vwmem]
     (if running?
-      (loop []
-        (vswap! vwmem assoc ::sc/enabled-transitions (chart/document-ordered-set statechart) ::sc/macrostep-done? false)
-        (handle-eventless-transitions! env)
-        (if (-> vwmem deref ::sc/running?)
-          (do
-            (run-invocations! env)
-            (when (seq (::sc/internal-queue @vwmem))
-              (recur)))
-          (exit-interpreter! env)))
+      (loop [iteration 0]
+        (when (> iteration max-eventless-iterations)
+          (log/error "before-event! loop exceeded" max-eventless-iterations
+            "iterations. Possible infinite loop in chart. Breaking."))
+        (when (<= iteration max-eventless-iterations)
+          (vswap! vwmem assoc ::sc/enabled-transitions (chart/document-ordered-set statechart) ::sc/macrostep-done? false)
+          (handle-eventless-transitions! env)
+          (if (-> vwmem deref ::sc/running?)
+            (do
+              (run-invocations! env)
+              (when (seq (::sc/internal-queue @vwmem))
+                (recur (inc iteration))))
+            (exit-interpreter! env))))
       (exit-interpreter! env))))
 
 (defn cancel? [event] (= :com.fulcrologic.statecharts.events/cancel (:name event)))
