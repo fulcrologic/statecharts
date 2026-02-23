@@ -457,33 +457,31 @@
         (ele/script {:expr (or on-done (constantly nil))}))
       children)))
 
-(defn busy-form-handler
-  [FormClass]
-  (fn [{:fulcro/keys [app]} {:route/keys [idents]}]
-    (let [form-ident (get idents (rc/class->registry-key FormClass))
-          form-props (when form-ident (fns/ui->props (rapp/current-state app) FormClass form-ident))]
-      (and form-props (fs/dirty? form-props)))))
-
 (defn- check-component-busy?
   "Check a single route target component for busy conditions (dirty form, custom sfro/busy? fn).
-   Returns true if the component is busy, false otherwise."
-  [env data target-key]
+   Returns true if the component is busy, false otherwise.
+   Pre-resolves props for the target component and passes (app, props) to the busy-fn."
+  [app state-map local-data target-key]
   (when-let [Target (rc/registry-key->class target-key)]
-    (let [is-form? (form? Target)
-          opts     (some-> Target rc/component-options)
-          busy-fn  (sfro/busy? opts)
-          busy-fn  (if (and is-form? (not busy-fn))
-                     (busy-form-handler Target)
-                     busy-fn)]
+    (let [target-ident (get-in local-data [:route/idents target-key]
+                         (when (rc/has-ident? Target) (rc/get-ident Target {})))
+          props        (when target-ident (fns/ui->props state-map Target target-ident))
+          is-form?     (form? Target)
+          opts         (some-> Target rc/component-options)
+          busy-fn      (sfro/busy? opts)
+          ;; Default: dirty forms are busy
+          busy-fn      (if (and is-form? (not busy-fn))
+                         (fn [_app form-props] (and form-props (fs/dirty? form-props)))
+                         busy-fn)]
       (if busy-fn
-        (boolean (busy-fn env data))
+        (boolean (busy-fn app props))
         false))))
 
 (defn- deep-busy?
   "Recursively checks busy conditions through invoked child charts.
    Walks the invocation tree via Fulcro state and the statechart registry.
    `seen` is a set of already-visited session IDs to prevent infinite recursion."
-  [env data registry state-map session-id seen]
+  [app registry state-map session-id seen]
   (when-not (contains? seen session-id)
     (let [wmem           (get-in state-map [::sc/session-id session-id])
           configuration  (::sc/configuration wmem)
@@ -496,13 +494,11 @@
           (some (fn [state-id]
                   (let [target-key (get-in elements-by-id [state-id :route/target])]
                     (or
-                      ;; Check this component using the current session's local data
                       (when target-key
-                        (check-component-busy? env local-data target-key))
-                      ;; Check child invocation recursively
+                        (check-component-busy? app state-map local-data target-key))
                       (when-let [child-session-id (and target-key
                                                     (get-in local-data [:invocation/id target-key]))]
-                        (deep-busy? env local-data registry state-map child-session-id seen)))))
+                        (deep-busy? app registry state-map child-session-id seen)))))
             configuration))))))
 
 (defn busy?
@@ -516,7 +512,7 @@
       (let [registry  (::sc/statechart-registry env)
             state-map (rapp/current-state app)
             session   (senv/session-id env)]
-        (boolean (deep-busy? env data registry state-map session #{}))))))
+        (boolean (deep-busy? app registry state-map session #{}))))))
 
 (defn record-failed-route!
   "Stores the failed route event so it can be retried via force-continue-routing!."

@@ -1686,10 +1686,8 @@ Add `sfro/busy?` to any route target component:
   {:query         [:ui/notes]
    :ident         (fn [] [:component/id ::BusyForm])
    :initial-state {:ui/notes ""}
-   sfro/busy?     (fn [{:fulcro/keys [app]} _data]
-                    (let [state-map (rapp/current-state app)
-                          notes     (get-in state-map [:component/id ::BusyForm :ui/notes])]
-                      (and (string? notes) (pos? (count notes)))))})
+   sfro/busy?     (fn [_app {:ui/keys [notes]}]
+                    (and (string? notes) (pos? (count notes))))})
 -----
 
 ==== Denial Lifecycle
@@ -1879,7 +1877,7 @@ See `url_sync_headless_spec.cljc` in the test suite for comprehensive examples c
 |===
 | Function | Description
 
-| `sroute/busy? [env data]` | Deep recursive busy check (guard condition).
+| `sroute/busy? [env data]` | Deep recursive busy check (guard condition). Component-level `sfro/busy?` receives `(app props)`.
 | `sroute/route-denied? [app-ish]` | True if routing info is in open/denied state.
 | `sroute/force-continue-routing! [app-ish]` | Override guard and retry denied route.
 | `sroute/abandon-route-change! [app-ish]` | Cancel denied route, close routing info.
@@ -1951,7 +1949,7 @@ Route target components can declare these options via `rc/component-options` (na
 
 `sfro/initial-props`:: A `(fn [env data] props-map)` that returns initial state for the route target. Defaults to `rc/get-initial-state`. Required when the target has a dynamic ident that depends on event data.
 
-`sfro/busy?`:: A `(fn [env data] boolean?)` predicate. When true, routing away from this target is denied. Forms with `form-state` are auto-guarded (dirty form = busy).
+`sfro/busy?`:: A `(fn [app props] boolean?)` predicate where `app` is the Fulcro app and `props` are the pre-resolved UI props of the component. When true, routing away from this target is denied. Forms with `form-state` are auto-guarded (dirty form = busy).
 
 `sfro/statechart`:: A co-located statechart definition. Auto-registered using the component's registry key when the `istate` is entered. Also enables auto-derivation of `:route/reachable` targets — `istate` walks this chart to discover all route targets transitively.
 

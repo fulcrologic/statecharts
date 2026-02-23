@@ -424,24 +424,24 @@
   {:query [:comp/id]
    :ident :comp/id
    sfro/busy?
-   (fn [_env _data] true)})
+   (fn [_app _props] true)})
 
 (defsc NotBusyComp [_ _]
   {:query [:comp/id]
    :ident :comp/id
    sfro/busy?
-   (fn [_env _data] false)})
+   (fn [_app _props] false)})
 
 (def ^:private check-component-busy? @#'sroute/check-component-busy?)
 
 (specification "check-component-busy?"
   (assertions
     "returns true when component has custom busy? fn that returns true"
-    (check-component-busy? {} {} (rc/class->registry-key BusyComp)) => true
+    (check-component-busy? nil {} {} (rc/class->registry-key BusyComp)) => true
     "returns false when component has custom busy? fn that returns false"
-    (check-component-busy? {} {} (rc/class->registry-key NotBusyComp)) => false
+    (check-component-busy? nil {} {} (rc/class->registry-key NotBusyComp)) => false
     "returns false when component has no busy? fn and is not a form"
-    (check-component-busy? {} {} (rc/class->registry-key PlainComp)) => false))
+    (check-component-busy? nil {} {} (rc/class->registry-key PlainComp)) => false))
 
 ;; deep-busy? tests using the same state-map/registry pattern as deep-leaf-routes
 (def ^:private deep-busy-fn @#'sroute/deep-busy?)
@@ -467,14 +467,14 @@
                         #{busy-key} {})]
         (assertions
           "returns truthy"
-          (boolean (deep-busy-fn {} {} registry state-map ::root-sid #{})) => true)))
+          (boolean (deep-busy-fn nil registry state-map ::root-sid #{})) => true)))
 
     (component "single session with not-busy component"
       (let [state-map (make-session ::root-sid ::not-busy-chart
                         #{not-busy-key} {})]
         (assertions
           "returns falsy"
-          (boolean (deep-busy-fn {} {} registry state-map ::root-sid #{})) => false)))
+          (boolean (deep-busy-fn nil registry state-map ::root-sid #{})) => false)))
 
     (component "nested sessions — child is busy"
       (let [state-map (merge-state-maps
@@ -484,19 +484,19 @@
                           #{busy-key} {}))]
         (assertions
           "returns truthy when child has busy component"
-          (boolean (deep-busy-fn {} {} registry state-map ::root-sid #{})) => true)))
+          (boolean (deep-busy-fn nil registry state-map ::root-sid #{})) => true)))
 
     (component "prevents infinite recursion via seen set"
       (let [state-map (make-session ::root-sid ::busy-chart
                         #{busy-key} {})]
         (assertions
           "returns nil when session already in seen set"
-          (deep-busy-fn {} {} registry state-map ::root-sid #{::root-sid}) => nil)))
+          (deep-busy-fn nil registry state-map ::root-sid #{::root-sid}) => nil)))
 
     (component "nonexistent session"
       (assertions
         "returns nil"
-        (deep-busy-fn {} {} registry {} ::missing #{}) => nil))))
+        (deep-busy-fn nil registry {} ::missing #{}) => nil))))
 
 ;; ---------------------------------------------------------------------------
 ;; Slice 4: Route denial

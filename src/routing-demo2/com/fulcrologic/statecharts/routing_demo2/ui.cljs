@@ -6,7 +6,6 @@
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.dom :as dom]
     [com.fulcrologic.fulcro.mutations :as m]
-    [com.fulcrologic.fulcro.raw.application :as rapp]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
     [com.fulcrologic.statecharts.integration.fulcro.routing :as sroute]
     [com.fulcrologic.statecharts.integration.fulcro.routing-options :as sfro]
@@ -149,10 +148,8 @@
   {:query         [:ui/notes]
    :ident         (fn [] [:component/id ::BusyForm])
    :initial-state {:ui/notes ""}
-   sfro/busy?       (fn [{:fulcro/keys [app]} _data]
-                    (let [state-map (rapp/current-state app)
-                          notes     (get-in state-map [:component/id ::BusyForm :ui/notes])]
-                      (and (string? notes) (pos? (count notes)))))}
+   sfro/busy?       (fn [_app {:ui/keys [notes]}]
+                      (and (string? notes) (pos? (count notes))))}
   (dom/div {}
     (dom/h2 {} "Busy Form (Route Guard Demo)")
     (dom/p {} "Type something below. While the field is non-empty, navigation will be blocked by the route guard.")
