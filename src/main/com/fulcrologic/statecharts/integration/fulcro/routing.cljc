@@ -377,7 +377,7 @@
    An `istate` is just like an `rstate` in terms of actual routing. See the docstring of `rstate` for details.
    The state `:id` is always derived from `:route/target` — passing an explicit `:id` is an error.
 
-   The `:fulcuro/actors` in the statechart's data model will have :actor/component set to the target itself.
+   The `:fulcro/actors` in the statechart's data model will have :actor/component set to the target itself.
 
    Options:
 
@@ -426,7 +426,7 @@
                            [(ops/assign [:route/idents target-key] ident)]))})
         (script {:expr (fn [env data & _] (update-parent-query! env data id))}))
       (ele/invoke (cond-> {:params      (merge
-                                          {:fulcuro/actors        (fn [env data & _]
+                                          {:fulcro/actors         (fn [env data & _]
                                                                    (let [Target (rc/registry-key->class target-key)
                                                                          ident  (get-in data [:route/idents target-key] (when (rc/has-ident? Target) (rc/get-ident Target {})))
                                                                          actors (merge {:actor/component (scf/actor Target ident)} (?! (rc/component-options Target sfro/actors) env data))]

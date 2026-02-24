@@ -327,4 +327,3 @@
     (testing/run-events! env :t)
     (assertions (testing/in? env :a22) => true (testing/in? env :b22) => true)))
 
-(log/set-level! :info)
