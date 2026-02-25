@@ -62,7 +62,9 @@
         "script has the expression"
         (-> result :children first :expr) => script-fn
         "includes diagram expression hint"
-        (-> result :children first :diagram/expression) => "script-fn"))))
+        (-> result :children first :diagram/expression) => "script-fn"
+        "includes diagram label (same value as expression)"
+        (-> result :children first :diagram/label) => "script-fn"))))
 
 (specification "assign-on function"
   (behavior "creates a targetless transition with assign"
@@ -96,7 +98,9 @@
         "assign has the expression"
         (-> result :children first :expr) => script-fn
         "includes diagram expression hint"
-        (-> result :children first :diagram/expression) => "script-fn"))))
+        (-> result :children first :diagram/expression) => "script-fn"
+        "includes diagram label (same value as expression)"
+        (-> result :children first :diagram/label) => "script-fn"))))
 
 (specification "choice function"
   (component "structural output"

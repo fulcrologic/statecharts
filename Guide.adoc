@@ -2107,6 +2107,245 @@ Thus, a common test setup will look like this:
     ))
 -----
 
+= Visualization and Simulation
+
+The `com.fulcrologic.statecharts.visualization` namespace provides tools for visualizing and
+interactively simulating statecharts. The visualizer renders your chart as a UML-style state
+diagram and, when connected to a running application, lets you observe live session state in
+real time.
+
+There are two main components:
+
+- **Simulator** — A pure CLJ/CLJS API for stepping through a statechart interactively at the
+  REPL or in a browser UI, using the real processor but with a mock execution model.
+- **Visualization Server** — A standalone Ring server (or embeddable Pathom resolvers) that
+  exposes chart definitions and live session state to the browser visualizer.
+
+== The Simulator API
+
+The simulator (`com.fulcrologic.statecharts.visualization.simulator`) runs your chart using the
+real processor but with a custom execution model: guard predicates become user-toggleable
+booleans, and all other executable content (scripts, assigns, sends) is a noop. This lets you
+step through the chart's control flow without any real side-effects.
+
+Key functions:
+
+- `start-simulation!` — Registers the chart, starts a session, and returns a _simulator state map_.
+- `send-event!` — Sends a named event through the processor and returns the new active configuration.
+- `toggle-guard!` — Flips a guard predicate's boolean value in the simulator's guard atom.
+- `reset-simulation!` — Restarts from the initial configuration.
+- `extract-guards` — Returns all guard fns found in the chart, keyed by function reference.
+- `available-events` — Returns the set of event keywords reachable from the current configuration.
+
+[source,clojure]
+----
+(require '[com.fulcrologic.statecharts.visualization.simulator :as sim])
+
+;; Start a simulation — returns a simulator state map
+(def s (sim/start-simulation! my-chart))
+
+;; Check which states are active
+(sim/current-configuration s)
+;; => #{:idle}
+
+;; Send an event
+(sim/send-event! s :submit)
+;; => #{:validating}
+
+;; Toggle a guard off (guards default to true)
+(sim/toggle-guard! s valid-form? false)
+
+;; Send the event again — a different path is taken
+(sim/send-event! s :submit)
+;; => #{:error}
+
+;; Reset to the beginning
+(sim/reset-simulation! s)
+;; => #{:idle}
+----
+
+The simulator state map returned by `start-simulation!` contains:
+
+- `:env` — the full statechart environment (registry, data model, event queue, etc.)
+- `:session-id` — the unique session identifier
+- `:chart` — the statechart definition
+- `:chart-key` — the registry key used to register the chart
+- `:guard-values` — an atom mapping guard fn references to their current boolean values
+
+== Diagram Labels
+
+By default the visualizer uses element IDs and transition event names as labels. You can
+override these with two metadata keys on your chart elements:
+
+- `:diagram/label` on a `script` element — displayed in the state's entry/exit activity compartment
+- `:diagram/condition` on a `transition` — used as the guard label on the transition arrow
+
+[source,clojure]
+----
+(require '[com.fulcrologic.statecharts.elements :refer [state script on-entry on-exit transition final]]
+         '[com.fulcrologic.statecharts.chart :refer [statechart]]
+         '[com.fulcrologic.statecharts.convenience :refer [on]])
+
+(defn valid-form? [_ _] true)
+(defn has-errors? [_ _] false)
+
+(def my-chart
+  (statechart {:initial :idle}
+    (state {:id :idle}
+      (on-entry {}
+        (script {:expr (fn [_ _] nil) :diagram/label "reset-form"}))
+      (on :submit :validating))
+
+    (state {:id :processing}
+      (on-entry {}
+        (script {:expr (fn [_ _] nil) :diagram/label "load-data"})
+        (script {:expr (fn [_ _] nil) :diagram/label "start-spinner"}))
+      (on-exit {}
+        (script {:expr (fn [_ _] nil) :diagram/label "stop-spinner"}))
+      (transition {:event :success :target :done
+                   :diagram/condition "all-ok?"}))
+
+    (final {:id :done})))
+----
+
+When this chart is rendered, the `:processing` state shows `load-data` and `start-spinner`
+as entry activities, `stop-spinner` as an exit activity, and the transition to `:done` displays
+`[all-ok?]` as its guard label.
+
+== Standalone Visualization Server
+
+The easiest way to visualize a chart is to run the standalone server. It serves the browser UI
+and exposes the Pathom API in one step.
+
+The server supports three modes:
+
+1. **Static mode** — renders a chart definition passed on the command line; no live session data.
+2. **Connected/REPL mode** — connects to a running nREPL server and pulls chart definitions and
+   session state from your live application.
+3. **Proxy mode** — forwards Pathom queries to a remote server that already has the resolvers
+   installed.
+
+A typical `deps.edn` alias for the standalone server:
+
+[source,clojure]
+----
+:viz {:extra-deps {com.fulcrologic/statecharts-visualizer {:mvn/version "LATEST"}}
+      :main-opts  ["-m" "com.fulcrologic.statecharts.visualization.standalone"]}
+----
+
+Then run it:
+
+[source,shell]
+----
+# Static mode — point at a namespace-qualified var that holds your chart
+clojure -M:viz --chart my.app/my-chart
+
+# Connected mode — connect to a running nREPL on port 7000
+clojure -M:viz --nrepl-port 7000
+
+# Proxy mode — forward Pathom queries to an existing server
+clojure -M:viz --proxy-url http://localhost:3000/api
+----
+
+The browser UI will open (or print its URL) once the server is ready.
+
+== Embedding in Your Own Server
+
+If you already have a Ring + Pathom server you can add the visualization resolvers directly,
+giving the browser UI access to your live chart registry and working memory store.
+
+[source,clojure]
+----
+(require '[com.fulcrologic.statecharts.visualization.server.resolvers :as viz-resolvers]
+         '[com.wsscode.pathom.connect :as pc]
+         '[com.wsscode.pathom.core :as p])
+
+(def pathom-parser
+  (p/parser
+    {::p/env     {::p/reader               [p/map-reader
+                                            pc/reader2
+                                            pc/open-ident-reader]
+                  ;; Inject your registry and working memory store
+                  ::sc/statechart-registry  my-registry
+                  ::sc/working-memory-store my-wmem-store
+                  ::sc/processor            my-processor}
+     ::p/mutate  pc/mutate
+     ::p/plugins [(pc/connect-plugin
+                    {::pc/register viz-resolvers/resolvers})
+                  p/error-handler-plugin]}))
+----
+
+The four resolvers in `viz-resolvers/resolvers` cover:
+
+- `registered-charts-resolver` — lists all charts in the registry (`::sc/all-charts`)
+- `chart-definition-resolver` — returns a chart's full element map (functions replaced with `:fn`)
+- `session-state-resolver` — returns `::sc/configuration` and `::sc/working-memory` for a session
+- `search-for-sessions-resolver` — delegates to the `search-for-sessions` multimethod
+
+== Live Session Monitoring
+
+When the server has a working memory store available, the browser UI can display which states
+are currently active in any running session. The `search-for-sessions` multimethod lets you
+plug in your own session-discovery logic.
+
+[source,clojure]
+----
+(require '[com.fulcrologic.statecharts.visualization.server.resolvers :as viz-resolvers])
+
+;; Implement the multimethod for each chart you want to make discoverable.
+;; The dispatch value is the chart's registry key.
+(defmethod viz-resolvers/search-for-sessions :my.app/auth-chart
+  [env chart-registry-key search-string]
+  ;; Return a vector of session descriptor maps.
+  ;; Filter by `search-string` however makes sense for your application.
+  [{::sc/session-id "session-abc-123"
+    :session/label  "user@example.com"}
+   {::sc/session-id "session-def-456"
+    :session/label  "admin@example.com"}])
+----
+
+The `search-string` argument comes from the browser's session search box. You can filter by
+user name, session ID prefix, or any application-specific criterion. The default implementation
+logs a warning and returns an empty vector.
+
+== POST API for External Tools
+
+The resolvers expose a `send-event` Pathom mutation that lets external tools trigger state
+transitions without a UI. This is useful for scripted testing or integration from non-Clojure
+environments.
+
+[source,shell]
+----
+# Send an event to a running session via curl (Transit+JSON)
+curl -X POST http://localhost:8080/api \
+  -H 'Content-Type: application/transit+json' \
+  -d '[(com.fulcrologic.statecharts/session-id "my-session-uuid") \
+       {:com.fulcrologic.statecharts/session-id "my-session-uuid" \
+        :event {:name :submit}}]'
+----
+
+From a Babashka script you can use `babashka.http-client`:
+
+[source,clojure]
+----
+#!/usr/bin/env bb
+(require '[babashka.http-client :as http])
+
+(defn send-sc-event! [url session-id event-name]
+  (http/post url
+    {:headers {"Content-Type" "application/json"}
+     :body    (str "[{\"com.fulcrologic.statecharts/session-id\" \""
+                   session-id
+                   "\", \"event\" {\"name\" \""
+                   (name event-name)
+                   "\"}}]")}))
+
+(send-sc-event! "http://localhost:8080/api" "my-session-uuid" :submit)
+----
+
+NOTE: The `send-event` mutation requires the Pathom environment to have `::sc/working-memory-store`
+and `::sc/processor` available. Static-mode standalone servers do not support this mutation.
+
 = Relationship to SCXML
 
 This library's internal implementation follows (as closely as possible) the official

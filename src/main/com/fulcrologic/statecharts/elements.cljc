@@ -113,6 +113,8 @@
    `:cond` - Expression that must be true for this transition to be enabled. See execution model.
    `:target` - Target state or parallel region(s) as a single keyword or list of them.
    `:type` - :internal or :external (default)
+   `:diagram/label` - (optional) A human-readable label for this transition, displayed on diagram edges.
+   `:diagram/condition` - (optional) A string representation of the condition, displayed on diagram edges.
 
    https://www.w3.org/TR/scxml/#transition"
   [{:keys [event cond target type] :as attrs} & children]
@@ -315,6 +317,9 @@
 (defn script
   "A script to execute. MAY support loading the code via `src`, or supply the code via `expr` (in the format required
    by your ExecutionModel).
+
+  `:diagram/expression` - (soft deprecated) A string hint for diagram rendering. Prefer `:diagram/label` instead.
+  `:diagram/label` - A human-readable label for diagram rendering.
 
   See the documentation for you data model to understand the semantics and operation of this element.
 

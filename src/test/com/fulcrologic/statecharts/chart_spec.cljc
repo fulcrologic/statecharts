@@ -2,7 +2,7 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.elements :refer [final initial parallel state transition]]
+    [com.fulcrologic.statecharts.elements :refer [final initial on-entry on-exit parallel script state transition]]
     [fulcro-spec.core :refer [=> assertions specification]]))
 
 
@@ -208,3 +208,65 @@
       (chart/find-least-common-compound-ancestor machine #{:C1}) => (chart/element machine :C)
       (chart/find-least-common-compound-ancestor machine #{:D}) => (chart/element machine :B)
       (chart/find-least-common-compound-ancestor machine #{:D :C}) => (chart/element machine :B))))
+
+;; ============================================================================
+;; Diagram Label Tests
+;; ============================================================================
+
+(specification "diagram-label"
+  (assertions
+    "prefers :diagram/label when present"
+    (chart/diagram-label {:id :foo :diagram/label "Custom"}) => "Custom"
+    "falls back to (name id) when no :diagram/label"
+    (chart/diagram-label {:id :my-state}) => "my-state"
+    "returns nil when neither :diagram/label nor :id"
+    (chart/diagram-label {}) => nil))
+
+(let [label-chart (chart/statechart {}
+                    (state {:id :A}
+                      (transition {:id :t-event-only :event :go :target :B})
+                      (transition {:id :t-with-cond :event :go :cond (fn [_ _] true) :target :B})
+                      (transition {:id :t-with-diagram-cond :event :go
+                                   :cond (fn [_ _] true)
+                                   :diagram/condition "valid?"
+                                   :target :B})
+                      (transition {:id :t-with-actions :event :go
+                                   :cond (fn [_ _] true)
+                                   :diagram/condition "valid?"
+                                   :target :B}
+                        (script {:id :s1 :diagram/label "load-data" :expr (fn [_ _] nil)})
+                        (script {:id :s2 :diagram/label "notify" :expr (fn [_ _] nil)}))
+                      (transition {:id :t-override :event :go :target :B
+                                   :diagram/label "custom label"})
+                      (on-entry {:id :entry1}
+                        (script {:id :entry-script :diagram/label "load-data" :expr (fn [_ _] nil)}))
+                      (on-exit {:id :exit1}
+                        (script {:id :exit-script :diagram/label "cleanup" :expr (fn [_ _] nil)})))
+                    (state {:id :B}
+                      (on-entry {:id :entry-no-label}
+                        (script {:id :plain-script :expr (fn [_ _] nil)}))))
+      ebi       (::sc/elements-by-id label-chart)]
+  (specification "transition-label"
+    (assertions
+      "event only"
+      (chart/transition-label ebi (get ebi :t-event-only)) => ":go"
+      "event + cond (no diagram/condition) shows [cond]"
+      (chart/transition-label ebi (get ebi :t-with-cond)) => ":go [cond]"
+      "event + diagram/condition shows guard name"
+      (chart/transition-label ebi (get ebi :t-with-diagram-cond)) => ":go [valid?]"
+      "event + condition + action labels"
+      (chart/transition-label ebi (get ebi :t-with-actions)) => ":go [valid?] / load-data, notify"
+      "diagram/label overrides everything"
+      (chart/transition-label ebi (get ebi :t-override)) => "custom label"))
+
+  (specification "state-entry-labels"
+    (assertions
+      "returns vec of :diagram/label from on-entry children"
+      (chart/state-entry-labels ebi (get ebi :A)) => ["load-data"]
+      "returns empty vec when children have no :diagram/label"
+      (chart/state-entry-labels ebi (get ebi :B)) => []))
+
+  (specification "state-exit-labels"
+    (assertions
+      "returns vec of :diagram/label from on-exit children"
+      (chart/state-exit-labels ebi (get ebi :A)) => ["cleanup"])))

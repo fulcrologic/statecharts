@@ -62,6 +62,14 @@
       (catch Exception e
         (.println System/err (str "Could not load viz-simple examples: " (.getMessage e)))))
 
+    ;; Load label demo example
+    (try
+      (require 'viz-labels)
+      (when-let [chart (resolve 'viz-labels/label-demo)]
+        (scp/register-statechart! registry :label-demo @chart))
+      (catch Exception e
+        (.println System/err (str "Could not load viz-labels example: " (.getMessage e)))))
+
     ;; Load parallel state examples
     (try
       (require 'viz-parallel)
