@@ -1,6 +1,6 @@
 # nav-state-safety-timeout
 
-**Status**: backlog
+**Status**: done
 **Priority**: P3
 **Created**: 2026-02-19
 

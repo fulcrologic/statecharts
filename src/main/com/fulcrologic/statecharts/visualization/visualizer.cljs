@@ -8,14 +8,15 @@
     [com.fulcrologic.fulcro.dom :as dom]
     [com.fulcrologic.fulcro.react.hooks :as hooks]
     [com.fulcrologic.statecharts :as sc]
+    [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
     [com.fulcrologic.statecharts.visualization.elk :as elk]
     [taoensso.timbre :as log]))
 
-(defn element-label [{:keys [id diagram/label]}]
-  (or
-    label
-    (str (name id))))
+(defn element-label
+  "Returns a display label for a statechart element using chart/diagram-label."
+  [element]
+  (chart/diagram-label element))
 
 (defn chart->elk-tree [{::sc/keys [elements-by-id] :as chart} node-id->size label-id->size]
   (let [node->tree (fn node->tree* [id->element {:keys [id node-type children] :as node}]
@@ -35,15 +36,9 @@
                                                    children))))))
         all-edges  (vec
                      (keep
-                       (fn [{:keys [id node-type parent target event cond diagram/label] :as node}]
+                       (fn [{:keys [id node-type parent target] :as node}]
                          (when (= node-type :transition)
-                           (let [;; Use custom label if provided, otherwise build from event and cond
-                                 edge-label (or label
-                                              (let [label-parts (cond-> []
-                                                                  event (conj (str event))
-                                                                  cond (conj "[cond]"))]
-                                                (when (seq label-parts)
-                                                  (clojure.string/join " " label-parts))))]
+                           (let [edge-label (chart/transition-label elements-by-id node)]
                              {:id      (pr-str id)
                               :sources [(pr-str parent)]
                               :targets (if target
@@ -53,7 +48,6 @@
                                          [(merge
                                             {:text edge-label
                                              :id   (str (pr-str id) "-label")}
-                                            ;; Include measured dimensions if available
                                             (get label-id->size id))])})))
                        (vals elements-by-id)))]
     (assoc (node->tree elements-by-id chart)
@@ -108,15 +102,9 @@
                               (vals elements-by-id)))
               transitions (vec
                             (keep
-                              (fn [{:keys [node-type event cond diagram/label id] :as node}]
+                              (fn [{:keys [node-type] :as node}]
                                 (when (= :transition node-type)
-                                  (let [;; Calculate label text (same logic as chart->elk-tree)
-                                        edge-label (or label
-                                                     (let [label-parts (cond-> []
-                                                                         event (conj (str event))
-                                                                         cond (conj "[cond]"))]
-                                                       (when (seq label-parts)
-                                                         (clojure.string/join " " label-parts))))]
+                                  (let [edge-label (chart/transition-label elements-by-id node)]
                                     (cond-> node
                                       edge-label (assoc :label-text edge-label)
                                       edge-label (vary-meta assoc :ref (react/createRef))))))
@@ -269,7 +257,9 @@
    :initial-state {}
    :ident         (fn [] [:component/id ::Visualizer])
    :use-hooks?    true}
-  (let [[states transitions] (use-chart-elements this chart)
+  (let [resolved-chart (if (map? chart) chart (scf/lookup-statechart this chart))
+        elements-by-id (::sc/elements-by-id resolved-chart)
+        [states transitions] (use-chart-elements this chart)
         node-id->size (use-state-sizes states)
         {:keys [label-id->size transition-refs]} (use-edge-label-sizes transitions)
         {:keys [layout node-id->layout]} (use-elk-layout this chart node-id->size label-id->size)
@@ -384,59 +374,81 @@
 
                 ;; Regular states (compound or simple) and parallel states
                 :else
-                (dom/div {:key   (pr-str id)
-                          :style (cond-> {:position        "absolute"
-                                          :zIndex          z-index
-                                          :border          (str (if (= node-type :parallel) "3px "
+                (let [state-element (get elements-by-id id)
+                      entry-labels  (when state-element (chart/state-entry-labels elements-by-id state-element))
+                      exit-labels   (when state-element (chart/state-exit-labels elements-by-id state-element))
+                      has-activities? (or (seq entry-labels) (seq exit-labels))]
+                  (dom/div {:key   (pr-str id)
+                            :style (cond-> {:position        "absolute"
+                                            :zIndex          z-index
+                                            :border          (str (if (= node-type :parallel) "3px "
                                                                                             (if compound? "3px " "2px "))
-                                                             (if (= node-type :parallel) "dashed " "solid ")
-                                                             (if (active? id) "#e53935"
-                                                                              (if (= node-type :parallel) "#5c6bc0"
-                                                                                                          (if compound? "#1976d2" "#424242"))))
-                                          :borderRadius    "12px"
-                                          :padding         "20px"
-                                          :backgroundColor (cond
-                                                             (active? id) "#ffebee"
-                                                             (= node-type :parallel) "#f0f4ff"
-                                                             compound? "#e3f2fd"
-                                                             :else "white")
-                                          :boxShadow       (cond
-                                                             (= node-type :parallel) "0 4px 12px rgba(92,107,192,0.2)"
-                                                             compound? "0 3px 10px rgba(25,118,210,0.15)"
-                                                             :else "0 2px 4px rgba(0,0,0,0.12)")
-                                          ;; Use exact ELK size with box-sizing: border-box
-                                          :boxSizing       "border-box"
-                                          :minWidth        "160px"
-                                          :width           (str elk-width "px")
-                                          :height          (str elk-height "px")
-                                          :top             elk-y
-                                          :left            elk-x
-                                          :display         "flex"
-                                          :flexDirection   "column"})
-                          :ref   (:ref (meta node))}
-                  ;; Label
-                  (dom/div {:style (if compound?
-                                     {:position        "absolute"
-                                      :top             "-12px"
-                                      :left            "12px"
-                                      :backgroundColor (cond
-                                                         (active? id) "#e53935"
-                                                         (= node-type :parallel) "#5c6bc0"
-                                                         :else "#1976d2")
-                                      :color           "white"
-                                      :padding         "4px 12px"
-                                      :borderRadius    "12px"
-                                      :fontSize        "13px"
-                                      :fontWeight      "600"
-                                      :boxShadow       "0 2px 4px rgba(0,0,0,0.2)"
-                                      :whiteSpace      "nowrap"}
-                                     {:fontSize     "14px"
-                                      :fontWeight   "500"
-                                      :color        (if (active? id) "#c62828"
+                                                               (if (= node-type :parallel) "dashed " "solid ")
+                                                               (if (active? id) "#e53935"
+                                                                                (if (= node-type :parallel) "#5c6bc0"
+                                                                                                            (if compound? "#1976d2" "#424242"))))
+                                            :borderRadius    "12px"
+                                            :padding         "20px"
+                                            :backgroundColor (cond
+                                                               (active? id) "#ffebee"
+                                                               (= node-type :parallel) "#f0f4ff"
+                                                               compound? "#e3f2fd"
+                                                               :else "white")
+                                            :boxShadow       (cond
+                                                               (= node-type :parallel) "0 4px 12px rgba(92,107,192,0.2)"
+                                                               compound? "0 3px 10px rgba(25,118,210,0.15)"
+                                                               :else "0 2px 4px rgba(0,0,0,0.12)")
+                                            :boxSizing       "border-box"
+                                            :minWidth        "160px"
+                                            :width           (str elk-width "px")
+                                            :height          (str elk-height "px")
+                                            :top             elk-y
+                                            :left            elk-x
+                                            :display         "flex"
+                                            :flexDirection   "column"})
+                            :ref   (:ref (meta node))}
+                    ;; Label
+                    (dom/div {:style (if compound?
+                                       {:position        "absolute"
+                                        :top             "-12px"
+                                        :left            "12px"
+                                        :backgroundColor (cond
+                                                           (active? id) "#e53935"
+                                                           (= node-type :parallel) "#5c6bc0"
+                                                           :else "#1976d2")
+                                        :color           "white"
+                                        :padding         "4px 12px"
+                                        :borderRadius    "12px"
+                                        :fontSize        "13px"
+                                        :fontWeight      "600"
+                                        :boxShadow       "0 2px 4px rgba(0,0,0,0.2)"
+                                        :whiteSpace      "nowrap"}
+                                       {:fontSize     "14px"
+                                        :fontWeight   "500"
+                                        :color        (if (active? id) "#c62828"
                                                                      (if (= node-type :parallel) "#5c6bc0" "#424242"))
-                                      :marginBottom "4px"
-                                      :whiteSpace   "nowrap"})}
-                    (element-label node))))))
+                                        :marginBottom "4px"
+                                        :whiteSpace   "nowrap"})}
+                      (element-label node))
+                    ;; Activity compartment (entry/exit labels)
+                    (when has-activities?
+                      (comp/fragment
+                        ;; Divider line
+                        (dom/hr {:style {:margin      "4px 0"
+                                         :border      "none"
+                                         :borderTop   "1px solid #ccc"
+                                         :width       "100%"}})
+                        ;; Activity lines
+                        (dom/div {:style {:fontSize   "11px"
+                                          :fontFamily "system-ui, -apple-system, sans-serif"
+                                          :color      "#666"
+                                          :lineHeight "1.4"}}
+                          (mapv (fn [lbl]
+                                  (dom/div {:key (str "entry-" lbl)} (str "entry / " lbl)))
+                            entry-labels)
+                          (mapv (fn [lbl]
+                                  (dom/div {:key (str "exit-" lbl)} (str "exit / " lbl)))
+                            exit-labels)))))))))
           states)))))
 
 (def ui-visualizer

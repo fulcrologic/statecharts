@@ -1,6 +1,6 @@
 # Project Tracker
 
-<!-- Last updated: 2026-02-19 | Active: 0 | Blocked: 0 | Backlog: 2 | Done: 39 -->
+<!-- Last updated: 2026-02-25 | Active: 0 | Blocked: 0 | Backlog: 0 | Done: 46 -->
 
 ## Active
 
@@ -12,15 +12,19 @@
 
 ## Backlog
 
-| Spec                          | Priority | Created    | Summary                                                                                         |
-|-------------------------------|----------|------------|-------------------------------------------------------------------------------------------------|
-| routing-documentation          | P1       | 2026-02-19 | Expand Guide.adoc routing section: setup walkthrough, istate deep-dive, auth guards, URL codec, headless testing |
-| nav-state-safety-timeout      | P3       | 2026-02-19 | Safety-net timeout (5s) to clear stuck `nav-state` if `process-event!` fails during browser nav  |
+(none)
 
 ## Done (recent)
 
 | Spec                                 | Priority | Completed  | Summary                                                                                                                                   |
 |--------------------------------------|----------|------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| viz-app-shell                        | P1       | 2026-02-25 | App shell: mode selector, event panel, guard panel, simulator integration in viz demo app                                                 |
+| viz-simulator                        | P1       | 2026-02-25 | SimulatorExecutionModel with toggleable guards, noop scripts, extract-guards, available-events, full simulator lifecycle                   |
+| viz-visualizer-enhancements          | P1       | 2026-02-25 | Visualizer uses chart/transition-label for UML labels, entry/exit activity compartments in state boxes                                     |
+| viz-labels-system                    | P1       | 2026-02-25 | diagram-label, transition-label, state-entry-labels, state-exit-labels in chart.cljc                                                      |
+| viz-docstring-updates                | P2       | 2026-02-25 | Docstrings for :diagram/label + :diagram/condition; handle/assign-on macros emit :diagram/label                                           |
+| routing-documentation                | P1       | 2026-02-25 | Guide.adoc routing section already comprehensive (~1000 lines covering all 5 areas)                                                       |
+| nav-state-safety-timeout             | P3       | 2026-02-25 | 5s safety timeout clears stuck nav-state if process-event! fails during browser nav                                                       |
 | send-to-self-parent-chain            | P1       | 2026-02-19 | `send-to-self!` and `current-invocation-configuration` walk Fulcro parent chain; works from child components of route targets              |
 | routing-options-rename               | P2       | 2026-02-19 | Rename `routing.core` → `routing`; create `routing-options` ns (RAD pattern); `uro/` → `sfro/`                                             |
 | routing-package-reorg                | P2       | 2026-02-19 | Moved new routing code to `routing.*` package; reverted `ui_routes` to main + deprecation; 6 new files, all tests pass                     |

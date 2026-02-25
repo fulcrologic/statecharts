@@ -23,13 +23,13 @@
 
    ```
    (transition {:event event}
-     (script {:expr expr :diagram/expression \"expr\"}))
+     (script {:expr expr :diagram/expression \"expr\" :diagram/label \"expr\"}))
    ```
 
 "
   [event expr]
   `(transition {:event ~event}
-     (script {:expr ~expr :diagram/expression ~(str expr)})))
+     (script {:expr ~expr :diagram/expression ~(str expr) :diagram/label ~(str expr)})))
 
 (s/fdef handle
   :args (s/cat
@@ -45,12 +45,12 @@
 
    ```
    (transition {:event event}
-     (assign {:location location :expr expression :diagram/expression \"expression\"}))
+     (assign {:location location :expr expression :diagram/expression \"expression\" :diagram/label \"expression\"}))
    ```
    "
   [event location expression]
   `(transition {:event ~event}
-     (assign {:location ~location :expr ~expression :diagram/expression ~(str expression)})))
+     (assign {:location ~location :expr ~expression :diagram/expression ~(str expression) :diagram/label ~(str expression)})))
 
 (defmacro choice
   "Create a choice state. Notation is like `cond`, but `:else` is the only acceptable \"default\" predicate
