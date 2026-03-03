@@ -2993,7 +2993,7 @@ When the statechart enters this state, three things happen automatically:</p>
 <dl>
 <dt class="hdlist1"><code>:route/target</code></dt>
 <dd>
-<p>(Required) A component class or anything accepted by <code>comp/registry-key&#8594;class</code>. The state ID is automatically derived from this&#8201;&#8212;&#8201;do not pass an explicit <code>:id</code>.</p>
+<p>(Required) A component class or anything accepted by <code>comp/registry-key&#8594;class</code>. The state ID is automatically derived from this&#8201;&#8212;&#8201;do not pass an explicit <code>:id</code>. Prefer using the class directly (via syntax-quote, e.g. <code>`ui/Dashboard</code>) rather than a keyword symbol — using the class forces a <code>require</code> on the target namespace, so the compiler catches missing dependencies at build time. Use a keyword only when necessary to break circular requires.</p>
 </dd>
 <dt class="hdlist1"><code>:route/segment</code></dt>
 <dd>
@@ -3027,7 +3027,7 @@ When the statechart enters this state, three things happen automatically:</p>
 <div class="sect4">
 <h5 id="_segment_composition"><a class="anchor" href="#_segment_composition"></a><a class="link" href="#_segment_composition">Segment Composition</a></h5>
 <div class="paragraph">
-<p>Each route state contributes one URL path segment.
+<p>Each route state contributes one URL path segment in the default URLCodec.
 By default the segment is the simple name of its <code>:route/target</code>.
 Use <code>:route/segment</code> to override with a human-friendly string.</p>
 </div>
@@ -3132,7 +3132,7 @@ For singleton screens (dashboards, settings pages), use a constant ident:</p>
 <div class="paragraph">
 <p>The routing system dynamically rewrites parent component queries to include a join to the active route target.
 Fulcro hot code reload resets queries to their original values&#8201;&#8212;&#8201;which would break active routes.
-To prevent this, <strong>every component that renders a subroute must set</strong>:</p>
+To prevent this, <strong>every component that renders a subroute must set the option to preserve dynamic queries</strong>:</p>
 </div>
 <div class="listingblock">
 <div class="content">
@@ -3278,12 +3278,38 @@ When the parent exits the <code>istate</code>, the child session is terminated.<
 <div class="sect4">
 <h5 id="_cross_chart_routing_via_routereachable"><a class="anchor" href="#_cross_chart_routing_via_routereachable"></a><a class="link" href="#_cross_chart_routing_via_routereachable">Cross-Chart Routing via :route/reachable</a></h5>
 <div class="paragraph">
-<p>The parent chart needs to know which targets exist inside the child chart so it can generate transitions to them.
-This is declared with <code>:route/reachable</code> on the <code>istate</code>:</p>
+<p>The parent chart needs to know which targets exist inside the child chart so it can generate transitions to them.</p>
+</div>
+<div class="paragraph">
+<p><strong>Auto-derivation (recommended):</strong> When the <code>istate</code> target component has a co-located chart via <code>sfro/statechart</code>, the reachable targets are <strong>automatically derived</strong> by walking the child chart&#8217;s route targets. You do not need to declare <code>:route/reachable</code> at all:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; In the parent chart:</span>
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; In the parent chart — reachable targets are auto-derived from AdminPanel's sfro/statechart:</span>
+(sroute/istate {<span class="symbol">:route/target</span> `ui/AdminPanel})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This works because <code>istate</code> calls <code>reachable-targets</code> on the co-located child chart at chart construction time, collecting all <code>:route/target</code> values transitively (including nested child charts).</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Auto-derivation requires <code>sfro/statechart</code> on the target component (not <code>sfro/statechart-id</code>). If neither an explicit <code>:route/reachable</code> nor a resolvable <code>sfro/statechart</code> is found, <code>istate</code> throws an error at chart construction time.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p><strong>Manual override:</strong> You can still provide an explicit <code>:route/reachable</code> set, which takes precedence over auto-derivation. This is useful when you want to do code splitting and don&#8217;t have the component available at initial base load.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; Explicit reachable — good for code splitting</span>
 (sroute/istate {<span class="symbol">:route/target</span>    `ui/AdminPanel
                 <span class="symbol">:route/reachable</span> #{<span class="symbol">::ui/AdminUsersList</span>
                                    <span class="symbol">::ui/AdminUserDetail</span>
@@ -3291,13 +3317,15 @@ This is declared with <code>:route/reachable</code> on the <code>istate</code>:<
 </div>
 </div>
 <div class="paragraph">
-<p>With this declaration, <code>sroute/route-to!</code> can navigate directly to <code>::ui/AdminUsersList</code> from anywhere in the parent chart.
-Two mechanisms handle this:</p>
+<p>With reachable targets (whether auto-derived or explicit), <code>sroute/route-to!</code> can navigate directly to any child from anywhere in the parent chart.</p>
+</div>
+<div class="paragraph">
+<p>Two mechanisms handle this:</p>
 </div>
 <div class="olist arabic">
 <ol class="arabic">
 <li>
-<p><strong>Not yet in the owner istate</strong>: The parent transitions into the <code>AdminPanel</code> istate and stores the desired route as <code>::pending-child-route</code>. When the child chart starts, its <code>routes</code> on-entry handler detects the pending route and raises it as an event.</p>
+<p><strong>Not yet in the owner istate</strong>: The parent transitions into the istate and stores the desired route as <code>::pending-child-route</code>. When the child chart starts, its <code>routes</code> on-entry handler detects the pending route and raises it as an event.</p>
 </li>
 <li>
 <p><strong>Already in the owner istate</strong>: The parent sends the route event directly to the child session via <code>scp/send!</code>. The child chart transitions internally without re-entering the <code>istate</code>.</p>
@@ -3314,7 +3342,7 @@ The key differences are:</p>
 <div class="ulist">
 <ul>
 <li>
-<p>Its <code>:routing/root</code> is the <code>istate</code> target component (e.g. <code>AdminPanel</code>).</p>
+<p>Its <code>:routing/root</code> is the parent <code>istate&#8217;s target component (e.g. `AdminPanel</code>).</p>
 </li>
 <li>
 <p>The <code>::pending-child-route</code> mechanism is handled automatically by <code>routes</code> on-entry.</p>
@@ -3377,24 +3405,28 @@ The key differences are:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; From a component that is an istate target:</span>
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; From the istate target component or any of its UI children:</span>
 (sroute/send-to-self! this <span class="symbol">:event/save</span> {<span class="symbol">:some</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">data</span><span class="delimiter">&quot;</span></span>})</code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>This looks up the child session ID from the Fulcro state (at <code>[:invocation/id &lt;target-key&gt;]</code> in the routing session&#8217;s local data) and forwards the event.</p>
+<p>This walks up the Fulcro component parent chain starting from <code>this</code> to find the nearest ancestor whose registry key has an invocation session ID.
+This means you can call <code>send-to-self!</code> from a child component rendered inside a route target — it will find the route target&#8217;s co-located chart automatically.</p>
 </div>
 </div>
 <div class="sect4">
 <h5 id="_inspecting_child_state"><a class="anchor" href="#_inspecting_child_state"></a><a class="link" href="#_inspecting_child_state">Inspecting Child State</a></h5>
 <div class="paragraph">
-<p>To read the current configuration of a child chart from its parent component:</p>
+<p>To read the current configuration of a child chart from the route target or any of its UI children:</p>
 </div>
 <div class="listingblock">
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="clojure">(sroute/current-invocation-configuration this)
 <span class="comment">;; =&gt; #{:admin/routes :region/routing-info ...}</span></code></pre>
 </div>
+</div>
+<div class="paragraph">
+<p>Like <code>send-to-self!</code>, this walks the parent chain to find the nearest ancestor with a co-located chart.</p>
 </div>
 </div>
 <div class="sect4">
@@ -3417,7 +3449,11 @@ If the child chart needs additional actors, declare them on the component:</p>
 <h4 id="_authentication_guard_pattern"><a class="anchor" href="#_authentication_guard_pattern"></a><a class="link" href="#_authentication_guard_pattern">7.6.6. Authentication Guard Pattern</a></h4>
 <div class="paragraph">
 <p>A common requirement is redirecting unauthenticated users to a login screen, then returning them to their original destination after login.
-The demo application (<code>routing-demo2/chart.cljc</code>) demonstrates this pattern.</p>
+There is no built-in library code for this, because the elements allow you to build the pattern and customize it to your
+application&#8217;s needs via things that statecharts can already do.</p>
+</div>
+<div class="paragraph">
+<p>The demo application (<code>routing-demo2/chart.cljc</code>) demonstrates this pattern.</p>
 </div>
 <div class="sect4">
 <h5 id="_structure"><a class="anchor" href="#_structure"></a><a class="link" href="#_structure">Structure</a></h5>
@@ -3593,14 +3629,9 @@ Because statecharts evaluate transitions in document order, this catch-all fires
   {<span class="symbol">:query</span>         [<span class="symbol">:ui/notes</span>]
    <span class="symbol">:ident</span>         (<span class="keyword">fn</span> [] [<span class="symbol">:component/id</span> <span class="symbol">::BusyForm</span>])
    <span class="symbol">:initial-state</span> {<span class="symbol">:ui/notes</span> <span class="string"><span class="delimiter">&quot;</span><span class="delimiter">&quot;</span></span>}
-   sfro/busy?     (<span class="keyword">fn</span> [{<span class="symbol">:fulcro/keys</span> [app]} _data]
-                    (<span class="keyword">let</span> [state-map (rapp/current-state app)
-                          notes     (<span class="keyword">get-in</span> state-map [<span class="symbol">:component/id</span> <span class="symbol">::BusyForm</span> <span class="symbol">:ui/notes</span>])]
-                      (<span class="keyword">and</span> (<span class="keyword">string?</span> notes) (<span class="keyword">pos?</span> (<span class="keyword">count</span> notes)))))})</code></pre>
+   sfro/busy?     (<span class="keyword">fn</span> [_app {<span class="symbol">:ui/keys</span> [notes]}]
+                    (<span class="keyword">and</span> (<span class="keyword">string?</span> notes) (<span class="keyword">pos?</span> (<span class="keyword">count</span> notes))))})</code></pre>
 </div>
-</div>
-<div class="paragraph">
-<p>Fulcro forms using <code>form-state</code> are <strong>auto-guarded</strong>: a dirty form is automatically considered busy without any extra configuration.</p>
 </div>
 </div>
 <div class="sect4">
@@ -3641,7 +3672,7 @@ Because statecharts evaluate transitions in document order, this catch-all fires
 <div class="content">
 <pre class="CodeRay highlight"><code data-lang="clojure"><span class="comment">;; In your Root component's render:</span>
 (<span class="keyword">when</span> (sroute/route-denied? this)
-  (dom/div {}
+  (dom/div {} <span class="comment">; possibly render as a modal, etc. Use ui props to optionally customize messages. None of that needs statechart specifics.</span>
     (dom/p {} <span class="string"><span class="delimiter">&quot;</span><span class="content">You have unsaved changes. Leave anyway?</span><span class="delimiter">&quot;</span></span>)
     (dom/button {<span class="symbol">:onClick</span> #(sroute/force-continue-routing! this)} <span class="string"><span class="delimiter">&quot;</span><span class="content">Leave</span><span class="delimiter">&quot;</span></span>)
     (dom/button {<span class="symbol">:onClick</span> #(sroute/abandon-route-change! this)} <span class="string"><span class="delimiter">&quot;</span><span class="content">Stay</span><span class="delimiter">&quot;</span></span>)))</code></pre>
@@ -3669,10 +3700,6 @@ Because statecharts evaluate transitions in document order, this catch-all fires
 </li>
 </ol>
 </div>
-</div>
-<div class="sect4">
-<h5 id="_disabling_guards"><a class="anchor" href="#_disabling_guards"></a><a class="link" href="#_disabling_guards">Disabling Guards</a></h5>
-
 </div>
 </div>
 <div class="sect3">
@@ -3836,7 +3863,7 @@ It is cross-platform (CLJ + CLJS) and works in kaocha, REPL, and CI environments
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/istate</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Route state that invokes a child statechart.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Route state that invokes a child statechart. Auto-derives <code>:route/reachable</code> from <code>sfro/statechart</code> when not explicitly provided.</p></td>
 </tr>
 </tbody>
 </table>
@@ -3906,7 +3933,7 @@ It is cross-platform (CLJ + CLJS) and works in kaocha, REPL, and CI environments
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/send-to-self! [this event data]</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Send event to co-located child chart.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Send event to nearest ancestor&#8217;s co-located child chart.</p></td>
 </tr>
 </tbody>
 </table>
@@ -3927,7 +3954,7 @@ It is cross-platform (CLJ + CLJS) and works in kaocha, REPL, and CI environments
 <tbody>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/busy? [env data]</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Deep recursive busy check (guard condition).</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Deep recursive busy check (guard condition). Component-level <code>sfro/busy?</code> receives <code>(app props)</code>.</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/route-denied? [app-ish]</code></p></td>
@@ -3964,11 +3991,11 @@ It is cross-platform (CLJ + CLJS) and works in kaocha, REPL, and CI environments
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/reachable-targets [chart]</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Set of all reachable target keywords in a chart.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Set of all reachable target keywords in a chart, including transitive targets from co-located child charts. Useful for debugging and inspection.</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/current-invocation-configuration [this]</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Child chart&#8217;s configuration from parent component.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Child chart&#8217;s configuration from <code>this</code> or nearest ancestor with a co-located chart.</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>sroute/has-routes? [chart id]</code></p></td>
@@ -4119,11 +4146,11 @@ Functions like <code>route-to!</code>, <code>route-back!</code>, and others acce
 </dd>
 <dt class="hdlist1"><code>sfro/busy?</code></dt>
 <dd>
-<p>A <code>(fn [env data] boolean?)</code> predicate. When true, routing away from this target is denied. Forms with <code>form-state</code> are auto-guarded (dirty form = busy).</p>
+<p>A <code>(fn [app props] boolean?)</code> predicate where <code>app</code> is the Fulcro app and <code>props</code> are the pre-resolved UI props of the component. When true, routing away from this target is denied. Forms with <code>form-state</code> are auto-guarded (dirty form = busy).</p>
 </dd>
 <dt class="hdlist1"><code>sfro/statechart</code></dt>
 <dd>
-<p>A co-located statechart definition. Auto-registered using the component&#8217;s registry key when the <code>istate</code> is entered.</p>
+<p>A co-located statechart definition. Auto-registered using the component&#8217;s registry key when the <code>istate</code> is entered. Also enables auto-derivation of <code>:route/reachable</code> targets — <code>istate</code> walks this chart to discover all route targets transitively.</p>
 </dd>
 <dt class="hdlist1"><code>sfro/statechart-id</code></dt>
 <dd>
@@ -4162,7 +4189,7 @@ Functions like <code>route-to!</code>, <code>route-back!</code>, and others acce
 <p><strong>Duplicate segment chains</strong>&#8201;&#8212;&#8201;two leaf routes with identical full segment paths (e.g. both resolve to <code>/users/edit</code>).</p>
 </li>
 <li>
-<p><strong>Reachable collisions</strong>&#8201;&#8212;&#8201;a <code>:route/reachable</code> target whose simple name collides with a direct route target.</p>
+<p><strong>Reachable collisions</strong>&#8201;&#8212;&#8201;a <code>:route/reachable</code> target (whether auto-derived or explicit) whose simple name collides with a direct route target.</p>
 </li>
 <li>
 <p><strong>Invalid routing root</strong>&#8201;&#8212;&#8201;a <code>routes</code> node with a nil or non-coercible <code>:routing/root</code>.</p>
@@ -4237,7 +4264,7 @@ Call <code>(sroute/route-denied? app)</code> to verify.
 If the route is denied, either clear the busy condition or use <code>force-continue-routing!</code>.</p>
 </div>
 <div class="paragraph">
-<p>Also ensure the target is reachable: for targets inside a child chart, the parent&#8217;s <code>istate</code> must declare the target in <code>:route/reachable</code>.</p>
+<p>Also ensure the target is reachable: for targets inside a child chart, the parent&#8217;s <code>istate</code> must have reachable targets (auto-derived from <code>sfro/statechart</code> or explicitly declared via <code>:route/reachable</code>). Use <code>(sroute/reachable-targets chart)</code> to inspect what targets are visible.</p>
 </div>
 </div>
 <div class="sect4">
@@ -4547,7 +4574,7 @@ Note that it is possible for a bugfix in this library to change the behavior of 
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2026-02-19 19:56:38 -0500
+Last updated 2026-02-23 12:51:55 -0500
 </div>
 </div>
 </body>

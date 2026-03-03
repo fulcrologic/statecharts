@@ -1009,6 +1009,27 @@
         ;; not destroyed.
         settling?                               (atom false)
         debounce-timer #?(:cljs (atom nil) :clj nil)
+        safety-timer #?(:cljs (atom nil) :clj nil)
+
+        cancel-safety-timer!                    (fn []
+                                                  #?(:cljs (when-let [t @safety-timer]
+                                                             (js/clearTimeout t)
+                                                             (reset! safety-timer nil))))
+
+        start-safety-timer!                     (fn []
+                                                  #?(:cljs
+                                                     (do
+                                                       (when-let [t @safety-timer] (js/clearTimeout t))
+                                                       (reset! safety-timer
+                                                         (js/setTimeout
+                                                           (fn []
+                                                             (reset! safety-timer nil)
+                                                             (when @nav-state
+                                                               (log/error "URL sync: nav-state stuck for 5s — process-event! likely failed. Clearing to restore URL sync.")
+                                                               (reset! nav-state nil)
+                                                               (reset! outstanding-navs 0)
+                                                               (reset! settling? false)))
+                                                           5000)))))
 
         ;; Tracks the history index after each push/replace/acceptance. Used to
         ;; determine which direction to undo on route denial. We cannot rely on
@@ -1035,6 +1056,7 @@
                                                                            :pre-nav-index      pre-nav-index
                                                                            :popped-index       popped-index
                                                                            :pre-nav-url        pre-nav-url})
+                                                        (start-safety-timer!)
                                                         (resolve-route-and-navigate! app elements-by-id provider url-codec)))))
 
         popstate-fn #?(:cljs (fn [popped-index]
@@ -1089,6 +1111,7 @@
                                                                           (cstr/starts-with? browser-url root-url))))
                                                                 ;; ACCEPTED
                                                                 (do
+                                                                  (cancel-safety-timer!)
                                                                   (log/debug "URL sync: browser nav accepted" browser-url)
                                                                   (reset! nav-state nil)
                                                                   ;; Use browser-url (not new-url) as prev-url so that
@@ -1107,6 +1130,7 @@
                                                                   #?(:cljs (js/setTimeout #(reset! settling? false) 0)))
                                                                 ;; DENIED
                                                                 (let [{:keys [popped-index pre-nav-index pre-nav-url]} nav]
+                                                                  (cancel-safety-timer!)
                                                                   (log/debug "URL sync: route denied, undoing browser nav" browser-url "→" pre-nav-url)
                                                                   (reset! nav-state nil)
                                                                   (reset! restoring? true)
@@ -1171,6 +1195,7 @@
       (swap-url-sync! app update :child-to-root
         (fn [m] (into {} (remove (fn [[_ root]] (= root session-id))) m)))
       #?(:cljs (when-let [t @debounce-timer] (js/clearTimeout t)))
+      (cancel-safety-timer!)
       (ruh/set-popstate-listener! provider nil))))
 
 (defn route-current-url

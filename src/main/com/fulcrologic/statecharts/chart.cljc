@@ -431,3 +431,69 @@
                                      (and deep? (seq target) (not targets-are-proper-descendants?)) (e "Deep history transition target should be a proper descendant of the parent state."))]
           :when (pos-int? (count (:msgs possible-problem)))]
       possible-problem)))
+
+;; ============================================================================
+;; Diagram Label Functions
+;; ============================================================================
+
+(defn diagram-label
+  "Returns a display label for a statechart element. Prefers `:diagram/label` if present,
+   otherwise falls back to `(name id)`."
+  [{:keys [id] :as element}]
+  (or (:diagram/label element)
+      (some-> id name)))
+
+(defn transition-label
+  "Returns a UML-formatted label for a transition: `event [guard] / action1, action2`.
+
+   If the transition has a `:diagram/label`, that overrides everything.
+   Otherwise assembles from `:event`, `:diagram/condition` (or `[cond]` if `:cond` is present),
+   and `:diagram/label` values from executable content children."
+  [elements-by-id transition-element]
+  (if-let [override (:diagram/label transition-element)]
+    override
+    (let [{:keys [event children]} transition-element
+          has-cond?      (contains? transition-element :cond)
+          condition-part (:diagram/condition transition-element)
+          guard         (cond
+                          condition-part (str "[" condition-part "]")
+                          has-cond? "[cond]"
+                          :else nil)
+          action-labels (into []
+                          (keep (fn [child-id]
+                                  (:diagram/label (get elements-by-id child-id))))
+                          children)
+          parts         (cond-> []
+                          event (conj (str event))
+                          guard (conj guard)
+                          (seq action-labels) (conj (str "/ " (str/join ", " action-labels))))]
+      (when (seq parts)
+        (str/join " " parts)))))
+
+(defn state-entry-labels
+  "Returns a vec of `:diagram/label` strings from the executable content children
+   of the on-entry handlers of `state-element`."
+  [elements-by-id state-element]
+  (let [entry-ids (filterv #(= :on-entry (:node-type (get elements-by-id %)))
+                    (:children state-element))]
+    (into []
+      (comp
+        (mapcat (fn [entry-id]
+                  (:children (get elements-by-id entry-id))))
+        (keep (fn [child-id]
+                (:diagram/label (get elements-by-id child-id)))))
+      entry-ids)))
+
+(defn state-exit-labels
+  "Returns a vec of `:diagram/label` strings from the executable content children
+   of the on-exit handlers of `state-element`."
+  [elements-by-id state-element]
+  (let [exit-ids (filterv #(= :on-exit (:node-type (get elements-by-id %)))
+                   (:children state-element))]
+    (into []
+      (comp
+        (mapcat (fn [exit-id]
+                  (:children (get elements-by-id exit-id))))
+        (keep (fn [child-id]
+                (:diagram/label (get elements-by-id child-id)))))
+      exit-ids)))
