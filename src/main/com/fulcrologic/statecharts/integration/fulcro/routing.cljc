@@ -1011,6 +1011,12 @@
         debounce-timer #?(:cljs (atom nil) :clj nil)
         safety-timer #?(:cljs (atom nil) :clj nil)
 
+        ;; Outstanding browser-initiated navigations counter. Increments on each
+        ;; popstate that passes the debounce filter, decrements on each root save
+        ;; while nav-state is set. Only resolves acceptance/denial when counter
+        ;; reaches zero (i.e., the last root save for the last popstate).
+        outstanding-navs                        (atom 0)
+
         cancel-safety-timer!                    (fn []
                                                   #?(:cljs (when-let [t @safety-timer]
                                                              (js/clearTimeout t)
@@ -1037,12 +1043,6 @@
         ;; (e.g. SimulatedURLHistory) update their cursor before calling the
         ;; listener, making the "current" index actually the post-nav index.
         settled-index                           (atom 0)
-
-        ;; Outstanding browser-initiated navigations counter. Increments on each
-        ;; popstate that passes the debounce filter, decrements on each root save
-        ;; while nav-state is set. Only resolves acceptance/denial when counter
-        ;; reaches zero (i.e., the last root save for the last popstate).
-        outstanding-navs                        (atom 0)
 
         do-popstate                             (fn [popped-index]
                                                   (if @restoring?
