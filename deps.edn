@@ -9,7 +9,7 @@
            ;; pg2-core comes transitively via pg2-honey (local/root "../pg-core" in pg-honey/deps.edn)
            ;; Do NOT add pg2-core as a direct dep — it conflicts with the local/root coordinate
            com.github.igrishaev/pg2-honey {:git/url "git@github.com:brian-study/pg2.git"
-                                            :sha "d7187c6532bc393813639e10eb07dd9621c91196"
+                                            :sha "58c6fa4cec0e9d6a932810da2b6695bf586f44f3"
                                             :deps/root "pg-honey"}
            com.taoensso/nippy             {:mvn/version "3.4.2"}}
 
