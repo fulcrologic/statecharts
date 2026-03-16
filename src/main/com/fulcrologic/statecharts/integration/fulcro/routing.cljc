@@ -986,11 +986,11 @@
    * `:provider` — A `URLHistoryProvider`. Defaults to `(browser-url-history)` on CLJS.
      Required on CLJ (throws if not provided).
    * `:url-codec` — A `URLCodec` instance for encoding/decoding URLs. Defaults to
-     `(ruct/transit-base64-codec)`.
-   * `:prefix` — URL path prefix (default \"/\")
+     `(ruct/transit-base64-codec)`. Pass `(ruct/transit-base64-codec \"/app\")` to
+     deploy under a sub-path prefix.
    * `:on-route-denied` — `(fn [url])` called when back/forward navigation is denied by the busy guard"
-  [app & [{:keys [prefix on-route-denied provider url-codec routing/checks]
-           :or   {prefix "/" checks :warn}}]]
+  [app & [{:keys [on-route-denied provider url-codec routing/checks]
+           :or   {checks :warn}}]]
   (let [statechart-id                           (or (session-statechart-id app)
                                                   (throw (ex-info "install-url-sync! called but no routing session found. Call start! first." {})))
         url-codec                               (or url-codec (ruct/transit-base64-codec))

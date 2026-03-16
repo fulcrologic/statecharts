@@ -81,10 +81,42 @@
     {:segments segments :p-param p-param}))
 
 ;; ---------------------------------------------------------------------------
+;; Prefix utilities
+;; ---------------------------------------------------------------------------
+
+(defn normalize-prefix
+  "Normalizes a URL path `prefix` so it starts with `/` and does not end with `/`.
+   Returns `\"/\"` for nil, empty, or root-only input."
+  [prefix]
+  (let [p (or prefix "/")]
+    (cond-> p
+      (not (str/starts-with? p "/")) (->> (str "/"))
+      (and (not= p "/") (str/ends-with? p "/")) (subs 0 (dec (count p))))))
+
+(defn strip-prefix
+  "Removes `prefix` from the front of `path`. Returns `path` unchanged when `prefix`
+   is `\"/\"` or `path` does not start with `prefix`."
+  [prefix path]
+  (if (or (= prefix "/")
+        (not (str/starts-with? path prefix)))
+    path
+    (let [stripped (subs path (count prefix))]
+      (if (str/starts-with? stripped "/")
+        stripped
+        (str "/" stripped)))))
+
+(defn add-prefix
+  "Prepends `prefix` to `path`. Returns `path` unchanged when `prefix` is `\"/\"`."
+  [prefix path]
+  (if (= prefix "/")
+    path
+    (str prefix path)))
+
+;; ---------------------------------------------------------------------------
 ;; TransitBase64Codec
 ;; ---------------------------------------------------------------------------
 
-(defrecord TransitBase64Codec []
+(defrecord TransitBase64Codec [prefix]
   url-codec/URLCodec
   (encode-url [_this {:keys [segments params route-elements]}]
     (let [seg-strs (mapv (fn [state-id]
@@ -96,11 +128,13 @@
           encoded  (when raw-b64
                      #?(:cljs (js/encodeURIComponent raw-b64)
                         :clj  (java.net.URLEncoder/encode ^String raw-b64 "UTF-8")))]
-      (if encoded
-        (str path "?_p=" encoded)
-        path)))
+      (add-prefix prefix
+        (if encoded
+          (str path "?_p=" encoded)
+          path))))
   (decode-url [_this href route-elements]
-    (let [{:keys [segments p-param]} (parse-href-parts href)
+    (let [href*     (strip-prefix prefix href)
+          {:keys [segments p-param]} (parse-href-parts href*)
           params    (when p-param (decode-params-base64 p-param))
           leaf-name (peek segments)
           leaf-id   (when leaf-name
@@ -115,6 +149,9 @@
 
 (defn transit-base64-codec
   "Creates the default URLCodec that encodes params as transit->base64->uri-encode.
-   URL shape: `/Seg1/Seg2?_p=<base64-encoded-transit>`."
-  []
-  (->TransitBase64Codec))
+   URL shape: `/Seg1/Seg2?_p=<base64-encoded-transit>`.
+
+   When `prefix` is provided (e.g. `\"/app\"`), it is prepended on encode and stripped
+   on decode, allowing deployment under a sub-path."
+  ([] (transit-base64-codec "/"))
+  ([prefix] (->TransitBase64Codec (normalize-prefix prefix))))

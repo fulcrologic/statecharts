@@ -13,6 +13,7 @@
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
     [com.fulcrologic.statecharts.integration.fulcro.routing.simulated-history :as rsh]
     [com.fulcrologic.statecharts.integration.fulcro.routing :as sroute]
+    [com.fulcrologic.statecharts.integration.fulcro.routing.url-codec-transit :as ruct]
     [com.fulcrologic.statecharts.integration.fulcro.routing.url-history :as ruh]
     [com.fulcrologic.statecharts.integration.fulcro.routing-options :as sfro]
     [com.fulcrologic.statecharts.protocols :as scp]
@@ -776,3 +777,105 @@
           "routes statechart to match URL"
           (helper-active-leaf app) => #{helper-page-c-key})
         (cleanup)))))
+
+;; ---------------------------------------------------------------------------
+;; URL prefix support
+;; ---------------------------------------------------------------------------
+
+(specification "URL prefix via codec"
+  (component "programmatic navigation writes prefixed URLs"
+    (let [app      (helper-test-app)
+          provider (rsh/simulated-url-history "/app/")]
+      (sroute/start! app helper-routing-chart)
+      (scf/process-events! app)
+      (let [cleanup (sroute/install-url-sync! app {:provider  provider
+                                                   :url-codec (ruct/transit-base64-codec "/app")})]
+        (sroute/url-sync-on-save sroute/session-id nil app)
+        (assertions
+          "initial URL has prefix"
+          (ruh/current-href provider) => "/app/HelperPageA")
+        ;; Navigate to B
+        (sroute/route-to! app `HelperPageB)
+        (scf/process-events! app)
+        (sroute/url-sync-on-save sroute/session-id nil app)
+        (assertions
+          "pushed URL has prefix"
+          (ruh/current-href provider) => "/app/HelperPageB")
+        (cleanup))))
+
+  (component "popstate with prefixed URL routes correctly"
+    (let [app      (helper-test-app)
+          provider (rsh/simulated-url-history "/app/HelperPageB")]
+      (sroute/start! app helper-routing-chart)
+      (scf/process-events! app)
+      (let [cleanup (sroute/install-url-sync! app {:provider  provider
+                                                   :url-codec (ruct/transit-base64-codec "/app")})]
+        ;; Initial URL restoration should strip prefix and route to B
+        (scf/process-events! app)
+        (sroute/url-sync-on-save sroute/session-id nil app)
+        (assertions
+          "initial URL restoration with prefix routes to correct state"
+          (helper-active-leaf app) => #{helper-page-b-key})
+        (cleanup))))
+
+  (component "default prefix is identity"
+    (let [app      (helper-test-app)
+          provider (rsh/simulated-url-history "/")]
+      (sroute/start! app helper-routing-chart)
+      (scf/process-events! app)
+      (let [cleanup (sroute/install-url-sync! app {:provider provider})]
+        (sroute/url-sync-on-save sroute/session-id nil app)
+        (assertions
+          "URL has no extra prefix"
+          (ruh/current-href provider) => "/HelperPageA")
+        (cleanup))))
+
+  (component "prefix with trailing slash is normalized"
+    (let [app      (helper-test-app)
+          provider (rsh/simulated-url-history "/app/")]
+      (sroute/start! app helper-routing-chart)
+      (scf/process-events! app)
+      (let [cleanup (sroute/install-url-sync! app {:provider  provider
+                                                   :url-codec (ruct/transit-base64-codec "/app/")})]
+        (sroute/url-sync-on-save sroute/session-id nil app)
+        (assertions
+          "trailing slash in prefix is normalized away"
+          (ruh/current-href provider) => "/app/HelperPageA")
+        (cleanup)))))
+
+;; ---------------------------------------------------------------------------
+;; Codec prefix utility functions
+;; ---------------------------------------------------------------------------
+
+(specification "normalize-prefix"
+  (assertions
+    "nil becomes root"
+    (ruct/normalize-prefix nil) => "/"
+    "empty string becomes root"
+    (ruct/normalize-prefix "") => "/"
+    "root stays root"
+    (ruct/normalize-prefix "/") => "/"
+    "strips trailing slash"
+    (ruct/normalize-prefix "/app/") => "/app"
+    "adds leading slash"
+    (ruct/normalize-prefix "app") => "/app"
+    "leaves clean prefix unchanged"
+    (ruct/normalize-prefix "/app") => "/app"))
+
+(specification "strip-prefix"
+  (assertions
+    "root prefix is identity"
+    (ruct/strip-prefix "/" "/foo/bar") => "/foo/bar"
+    "strips matching prefix"
+    (ruct/strip-prefix "/app" "/app/foo") => "/foo"
+    "non-matching prefix is identity"
+    (ruct/strip-prefix "/app" "/other/foo") => "/other/foo"
+    "ensures leading slash after strip"
+    (ruct/strip-prefix "/app" "/appfoo") => "/foo"))
+
+(specification "add-prefix"
+  (assertions
+    "root prefix is identity"
+    (ruct/add-prefix "/" "/foo") => "/foo"
+    "prepends prefix"
+    (ruct/add-prefix "/app" "/foo") => "/app/foo"))
