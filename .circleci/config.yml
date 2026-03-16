@@ -1,12 +1,13 @@
 version: 2.1
 orbs:
-  browser-tools: circleci/browser-tools@1.5.2
+  browser-tools: circleci/browser-tools@2.4.0
 jobs:
   cljs:
     docker:
       - image: cimg/clojure:1.12.0-openjdk-21.0-browsers
     steps:
-      - browser-tools/install-browser-tools
+      - browser-tools/install_chrome
+      - browser-tools/install_chromedriver
       - checkout
       - restore_cache:
           key: cljs-{{ checksum "deps.edn" }}-{{ checksum "package.json" }}

@@ -3,8 +3,10 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [final initial on-entry on-exit parallel script state transition]]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=> assertions specification]]
+    [taoensso.timbre :as log]))
 
+(log/set-min-level! :error)
 
 (let [substates [(initial {:id :I}
                    (transition {:id     :it
