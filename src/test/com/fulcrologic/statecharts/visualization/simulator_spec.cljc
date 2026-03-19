@@ -153,13 +153,37 @@
 (specification "available-events: returns correct event set for a given configuration"
   (let [sim-state (sim/start-simulation! guarded-chart)
         config    (sim/current-configuration sim-state)
-        events    (sim/available-events guarded-chart config)]
+        events    (sim/available-events guarded-chart config (:guard-values sim-state))]
     (assertions
-      "Returns events available from :start state"
+      "Returns events available from :start state (both guards default true)"
       (contains? events :try-left) => true
       (contains? events :try-right) => true
       "Does not include events from other states"
-      (contains? events :back) => false)))
+      (contains? events :back) => false))
+
+  (component "Guards affect available events"
+    (let [sim-state (sim/start-simulation! guarded-chart)]
+      ;; Toggle blocked? is already false by default (extract-guards sets :default true,
+      ;; but blocked? returns false so let's explicitly set it)
+      (sim/toggle-guard! sim-state blocked? false)
+      (let [events (sim/available-events guarded-chart
+                     (sim/current-configuration sim-state)
+                     (:guard-values sim-state))]
+        (assertions
+          "try-right is excluded when its guard (blocked?) is false"
+          (contains? events :try-right) => false
+          "try-left is still available (allowed? defaults to true)"
+          (contains? events :try-left) => true))
+
+      ;; Toggle both off
+      (sim/toggle-guard! sim-state allowed? false)
+      (let [events (sim/available-events guarded-chart
+                     (sim/current-configuration sim-state)
+                     (:guard-values sim-state))]
+        (assertions
+          "No guarded events available when all guards are false"
+          (contains? events :try-left) => false
+          (contains? events :try-right) => false)))))
 
 (specification "reset-simulation!: returns to initial configuration"
   (let [sim-state (sim/start-simulation! guarded-chart)]
@@ -223,12 +247,14 @@
         "Reject goes back to :idle"
         (contains? (sim/current-configuration sim-state) :idle) => true))
 
-    (component "available-events reflects current state"
+    (component "available-events reflects current state and guard values"
       (let [events (sim/available-events multi-guard-chart
-                     (sim/current-configuration sim-state))]
+                     (sim/current-configuration sim-state)
+                     (:guard-values sim-state))]
         (assertions
-          "Shows :attempt and :skip from :idle"
-          (contains? events :attempt) => true
+          "Shows :skip (unguarded) from :idle"
           (contains? events :skip) => true
+          "Shows :attempt because ready? was toggled back on"
+          (contains? events :attempt) => true
           "Does not show :approve from :processing"
           (contains? events :approve) => false)))))

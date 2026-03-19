@@ -44,21 +44,21 @@
 
 (defn extract-guards
   "Walks `::sc/elements-by-id` in `chart`, finds all transitions with a `:cond`,
-   and returns a map of `{fn-ref {:label str :transition-id keyword :default true}}`.
+   and returns a map of `{fn-ref {:label str :default true}}`.
 
-   Uses `:diagram/condition` for the label when present."
+   Uses `:diagram/condition` for the label when present, falling back to
+   the string representation of the guard function."
   [chart]
   (let [elements-by-id (::sc/elements-by-id chart)]
     (reduce-kv
-      (fn [acc id element]
+      (fn [acc _id element]
         (if (and (= :transition (:node-type element))
                  (contains? element :cond))
           (let [cond-fn (:cond element)]
             (if (contains? acc cond-fn)
               acc
-              (assoc acc cond-fn {:label         (or (:diagram/condition element) (str id))
-                                  :transition-id id
-                                  :default       true})))
+              (assoc acc cond-fn {:label   (or (:diagram/condition element) (str cond-fn))
+                                  :default true})))
           acc))
       {}
       elements-by-id)))
@@ -68,24 +68,49 @@
 ;; =============================================================================
 
 (defn available-events
-  "Returns the set of event keywords from transitions on states in `configuration`."
-  [chart configuration]
-  (let [elements-by-id (::sc/elements-by-id chart)]
+  "Returns the set of event keywords that would produce enabled transitions per the
+   W3C `selectTransitions` algorithm.
+
+   For each atomic state in `configuration`, walks up through ancestors collecting
+   events from transitions whose guards are satisfied. A transition for event E on
+   a descendant state (with a true guard) shadows same-event transitions on ancestor
+   states, matching the priority semantics of the spec."
+  [chart configuration guard-values-atom]
+  (let [elements-by-id (::sc/elements-by-id chart)
+        guard-map      @guard-values-atom
+        atomic-states  (filterv #(chart/atomic-state? chart %) configuration)]
     (into #{}
-      (comp
-        (mapcat (fn [state-id]
-                  (let [state-el (get elements-by-id state-id)]
-                    ;; Get transitions from this state and all ancestors
-                    (loop [sid  state-id
-                           tids []]
-                      (if (or (nil? sid) (= :ROOT sid))
-                        tids
-                        (let [el (if (= sid state-id) state-el (get elements-by-id sid))]
-                          (recur (chart/get-parent chart sid)
-                            (into tids (chart/transitions chart el)))))))))
-        (keep (fn [tid]
-                (:event (get elements-by-id tid)))))
-      configuration)))
+      (mapcat
+        (fn [state-id]
+          (loop [sid          state-id
+                 claimed      #{}
+                 events       []]
+            (if (or (nil? sid) (= :ROOT sid))
+              events
+              (let [tids       (chart/transitions chart (get elements-by-id sid))
+                    [claimed' events']
+                    (reduce
+                      (fn [[claimed acc] tid]
+                        (let [t         (get elements-by-id tid)
+                              event     (:event t)
+                              cond-fn   (:cond t)
+                              guard-ok? (if cond-fn
+                                          (get guard-map cond-fn true)
+                                          true)]
+                          (cond
+                            ;; Eventless transition — skip (handled separately as microsteps)
+                            (nil? event)        [claimed acc]
+                            ;; Already claimed by a closer state — shadowed
+                            (claimed event)     [claimed acc]
+                            ;; Guard satisfied — this event is available and now claimed
+                            guard-ok?           [(conj claimed event) (conj acc event)]
+                            ;; Guard false — not available here, but don't claim it;
+                            ;; an ancestor may have a same-event transition with a true guard
+                            :else               [claimed acc])))
+                      [claimed events]
+                      tids)]
+                (recur (chart/get-parent chart sid) claimed' events'))))))
+      atomic-states)))
 
 ;; =============================================================================
 ;; Simulator State & Lifecycle

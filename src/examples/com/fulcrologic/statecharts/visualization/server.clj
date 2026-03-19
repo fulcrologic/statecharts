@@ -162,7 +162,7 @@
   ;; With env containing protocols:
   (let [my-registry (demo-registry/create-example-registry)
         env         (simple/simple-env {::sc/statechart-registry my-registry})]
-    (def loop-atom (loop/run-event-loop! env))
+    (def loop-atom (loop/run-event-loop! env 10))
     (def server
       (start-server!
         {:port 8081

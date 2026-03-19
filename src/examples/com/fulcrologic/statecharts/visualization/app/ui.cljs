@@ -224,8 +224,9 @@
 (defn ui-event-panel
   "Renders available events, event data textarea, and Send button."
   [this {:keys [chart-id chart-def mode selected-event event-data-text configuration]}]
-  (let [events (when (and chart-def configuration)
-                 (sort (sim/available-events chart-def configuration)))]
+  (let [sim    (get @simulators chart-id)
+        events (when (and chart-def configuration sim)
+                 (sort (sim/available-events chart-def configuration (:guard-values sim))))]
     (dom/div {:style (assoc panel-style :marginBottom "1rem")}
       (dom/h3 {:style {:fontSize     "1rem"
                         :fontWeight   "600"
