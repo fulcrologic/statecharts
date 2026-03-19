@@ -95,23 +95,37 @@
                  :or {batch-size 10}}]
   ;; Use raw SQL for the locking query since HoneySQL doesn't directly support
   ;; SELECT FOR UPDATE SKIP LOCKED with subquery pattern
-  (let [session-filter (if session-id
-                         (str "AND target_session_id = '" (core/session-id->str session-id) "'")
-                         "")
-        claim-sql (str "UPDATE statechart_events "
-                       "SET claimed_at = now(), claimed_by = $1 "
-                       "WHERE id IN ("
-                       "  SELECT id FROM statechart_events "
-                       "  WHERE processed_at IS NULL "
-                       "    AND claimed_at IS NULL "
-                       "    AND deliver_at <= now() "
-                       "    " session-filter " "
-                       "  ORDER BY deliver_at, id "
-                       "  LIMIT " batch-size " "
-                       "  FOR UPDATE SKIP LOCKED"
-                       ") "
-                       "RETURNING *")]
-    (pg/execute conn claim-sql {:params [node-id]
+  (let [batch-size (long batch-size) ;; ensure numeric
+        [claim-sql params]
+        (if session-id
+          [(str "UPDATE statechart_events "
+                "SET claimed_at = now(), claimed_by = $1 "
+                "WHERE id IN ("
+                "  SELECT id FROM statechart_events "
+                "  WHERE processed_at IS NULL "
+                "    AND claimed_at IS NULL "
+                "    AND deliver_at <= now() "
+                "    AND target_session_id = $2 "
+                "  ORDER BY deliver_at, id "
+                "  LIMIT " batch-size " "
+                "  FOR UPDATE SKIP LOCKED"
+                ") "
+                "RETURNING *")
+           [node-id (core/session-id->str session-id)]]
+          [(str "UPDATE statechart_events "
+                "SET claimed_at = now(), claimed_by = $1 "
+                "WHERE id IN ("
+                "  SELECT id FROM statechart_events "
+                "  WHERE processed_at IS NULL "
+                "    AND claimed_at IS NULL "
+                "    AND deliver_at <= now() "
+                "  ORDER BY deliver_at, id "
+                "  LIMIT " batch-size " "
+                "  FOR UPDATE SKIP LOCKED"
+                ") "
+                "RETURNING *")
+           [node-id]])]
+    (pg/execute conn claim-sql {:params params
                                 :kebab-keys? true})))
 
 (defn- mark-processed!
@@ -172,42 +186,48 @@
 
   (receive-events! [_ env handler options]
     (let [process-fn (fn [conn]
-                       (pg/with-tx [conn]
-                         (let [claimed-events (claim-events! conn node-id options)
-                               claimed-count (count claimed-events)]
-                           (when (pos? claimed-count)
-                             (log/debug "Claimed events for processing"
-                                        {:count claimed-count
-                                         :node-id node-id
-                                         :session-filter (:session-id options)}))
-                           (doseq [row claimed-events]
-                             (let [event-id (:id row)
-                                   event-name (:event-name row)
-                                   target (:target-session-id row)
-                                   start-time (System/nanoTime)]
-                               (try
-                                 (let [event (row->event row)]
-                                   (handler env event)
-                                   (mark-processed! conn event-id)
-                                   (let [duration-ms (/ (- (System/nanoTime) start-time) 1e6)]
-                                     (log/debug "Event processed"
-                                                {:event-id event-id
-                                                 :event event-name
-                                                 :target target
-                                                 :duration-ms duration-ms
-                                                 :node-id node-id})))
-                                 (catch Exception e
-                                   (log/error e "Event handler threw an exception"
+                       ;; Claim events in their own transaction
+                       (let [claimed-events (pg/with-tx [conn]
+                                              (claim-events! conn node-id options))
+                             claimed-count (count claimed-events)]
+                         (when (pos? claimed-count)
+                           (log/debug "Claimed events for processing"
+                                      {:count claimed-count
+                                       :node-id node-id
+                                       :session-filter (:session-id options)}))
+                         ;; Process each event in its own transaction so that
+                         ;; a failure in event N doesn't roll back the
+                         ;; mark-processed of events 1..N-1.
+                         (doseq [row claimed-events]
+                           (let [event-id (:id row)
+                                 event-name (:event-name row)
+                                 target (:target-session-id row)
+                                 start-time (System/nanoTime)]
+                             (try
+                               (let [event (row->event row)]
+                                 (handler env event)
+                                 (pg/with-tx [conn]
+                                   (mark-processed! conn event-id))
+                                 (let [duration-ms (/ (- (System/nanoTime) start-time) 1e6)]
+                                   (log/debug "Event processed"
                                               {:event-id event-id
-                                               :event-name event-name
+                                               :event event-name
                                                :target target
-                                               :node-id node-id})
-                                   ;; Release claim so event can be retried
-                                   (release-claim! conn event-id)
-                                   (log/info "Event released for retry"
-                                             {:event-id event-id
-                                              :event-name event-name
-                                              :target target}))))))))]
+                                               :duration-ms duration-ms
+                                               :node-id node-id})))
+                               (catch Exception e
+                                 (log/error e "Event handler threw an exception"
+                                            {:event-id event-id
+                                             :event-name event-name
+                                             :target target
+                                             :node-id node-id})
+                                 ;; Release claim so event can be retried
+                                 (pg/with-tx [conn]
+                                   (release-claim! conn event-id))
+                                 (log/info "Event released for retry"
+                                           {:event-id event-id
+                                            :event-name event-name
+                                            :target target})))))))]
       (if (pool/pool? pool)
         (pg/with-connection [c pool]
           (process-fn c))

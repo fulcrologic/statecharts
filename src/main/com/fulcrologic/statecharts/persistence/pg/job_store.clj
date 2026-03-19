@@ -132,7 +132,8 @@
   (with-conn pool
     (fn [conn]
       (pg/with-tx [conn]
-        (let [now (OffsetDateTime/now)
+        (let [limit (long limit) ;; ensure numeric
+              now (OffsetDateTime/now)
               lease-until (.plus now (Duration/ofSeconds lease-duration-seconds))
               rows (pg/execute conn
                      (str "UPDATE statechart_jobs"
