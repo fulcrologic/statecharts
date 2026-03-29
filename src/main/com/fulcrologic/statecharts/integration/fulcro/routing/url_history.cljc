@@ -67,22 +67,26 @@
   "Searches the parent chart's elements AND `:route/reachable` sets on istate elements.
    If a direct match is found in `elements-by-id` (via `element-segment`), returns
    `{:target-id id :child? false}`.
-   If the leaf-name matches a keyword in a `:route/reachable` set (by keyword name),
-   returns `{:target-key matched-keyword :child? true :owner-id istate-id}`.
-   Returns nil if not found.
+   If the leaf-name matches a keyword in a `:route/reachable` set, returns
+   `{:target-key matched-keyword :child? true :owner-id istate-id}`.
 
-   NOTE: Reachable matching uses `(name kw)`, not `:route/segment`. If a child chart
-   uses `:route/segment` on a reachable target, ensure the keyword name matches."
+   Reachable matching checks `:route/reachable-segments` first (a map of keyword to
+   custom segment string), then falls back to matching by `(name kw)`."
   [elements-by-id leaf-name]
   (or
     ;; Direct match in this chart (uses element-segment)
     (when-let [id (find-target-by-leaf-name elements-by-id leaf-name)]
       {:target-id id :child? false})
-    ;; Search reachable sets on istates (matches by keyword name)
+    ;; Search reachable targets on istates
     (some (fn [[id element]]
             (when-let [reachable (:route/reachable element)]
-              (when-let [matched (some (fn [kw] (when (= (name kw) leaf-name) kw)) reachable)]
-                {:target-key matched :child? true :owner-id id})))
+              (let [seg-map (:route/reachable-segments element)
+                    ;; Check segment map first, then fall back to keyword name
+                    matched (or (when seg-map
+                                  (some (fn [[kw seg]] (when (= seg leaf-name) kw)) seg-map))
+                              (some (fn [kw] (when (= (name kw) leaf-name) kw)) reachable))]
+                (when matched
+                  {:target-key matched :child? true :owner-id id}))))
       elements-by-id)))
 
 ;; ---------------------------------------------------------------------------

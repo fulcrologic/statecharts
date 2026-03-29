@@ -748,6 +748,135 @@
            (cleanup))))))
 
 ;; ---------------------------------------------------------------------------
+;; Custom segments on reachable targets (Issue #27)
+;; ---------------------------------------------------------------------------
+
+(defsc DashMain [_ _]
+  {:query         [:page/id]
+   :ident         :page/id
+   :initial-state {:page/id :dash-main}})
+
+(defsc DashReports [_ _]
+  {:query         [:page/id]
+   :ident         :page/id
+   :initial-state {:page/id :dash-reports}})
+
+(def dash-main-key (comp/class->registry-key DashMain))
+(def dash-reports-key (comp/class->registry-key DashReports))
+
+;; Child chart with custom :route/segment values
+(def dash-child-chart
+  (chart/statechart {:initial :state/route-root}
+    (sroute/routing-regions
+      (sroute/routes {:id :region/dash-routes :routing/root `DashPanel :initial dash-main-key}
+        (sroute/rstate {:route/target `DashMain :route/segment "overview"})
+        (sroute/rstate {:route/target `DashReports :route/segment "reports"})))))
+
+(defsc DashPanel [_ _]
+  {:query                                                                      [:dash/id :ui/current-route]
+   :ident                                                                      (fn [] [:component/id ::dash-panel])
+   :initial-state                                                              {:dash/id :dash}
+   sfro/statechart dash-child-chart})
+
+(def dash-panel-key (comp/class->registry-key DashPanel))
+
+;; Parent chart using map form of :route/reachable to declare custom segments
+(def segment-cross-chart
+  (chart/statechart {:initial :state/route-root}
+    (sroute/routing-regions
+      (sroute/routes {:id :region/routes :routing/root `RootComp :initial page-a-key}
+        (sroute/rstate {:route/target `PageA})
+        (sroute/rstate {:route/target `PageB})
+        (sroute/istate {:route/target    `DashPanel
+                        :route/segment   "dash"
+                        :route/reachable {dash-main-key    "overview"
+                                          dash-reports-key "reports"}})))))
+
+#?(:clj
+   (specification "Reachable targets with custom :route/segment (Issue #27)"
+     (component "URL restoration resolves custom segment on reachable target"
+       (let [app      (test-app)
+             provider (rsh/simulated-url-history "/")]
+         (sroute/start! app segment-cross-chart)
+         (settle! app)
+         (let [cleanup (sroute/install-url-sync! app {:provider provider})]
+           (sroute/url-sync-on-save sid nil app)
+
+           ;; Navigate to DashMain (reachable through DashPanel istate)
+           (sroute/route-to! app `DashMain)
+           (settle! app)
+           (sroute/url-sync-on-save sid nil app)
+
+           (assertions
+             "URL uses custom segments for both parent and child"
+             (ruh/current-href provider) => "/dash/overview"
+             "active leaf is DashMain"
+             (sroute/active-leaf-routes app) => #{dash-main-key})
+
+           ;; Navigate within child: DashMain -> DashReports
+           (sroute/route-to! app `DashReports)
+           (settle! app)
+           (let [state-map        (rapp/current-state app)
+                 child-session-id (get-in state-map [::sc/local-data sid :invocation/id dash-panel-key])]
+             (when child-session-id
+               (sroute/url-sync-on-save child-session-id nil app)))
+
+           (assertions
+             "URL uses custom segment for child route"
+             (ruh/current-href provider) => "/dash/reports")
+           (cleanup))))
+
+     (component "browser back resolves custom segment on reachable target"
+       (let [app      (test-app)
+             provider (rsh/simulated-url-history "/")]
+         (sroute/start! app segment-cross-chart)
+         (settle! app)
+         (let [cleanup (sroute/install-url-sync! app {:provider provider})]
+           (sroute/url-sync-on-save sid nil app)
+
+           ;; Navigate: PageA -> DashMain -> DashReports -> PageB
+           (sroute/route-to! app `DashMain)
+           (settle! app)
+           (sroute/url-sync-on-save sid nil app)
+
+           (sroute/route-to! app `DashReports)
+           (settle! app)
+           (sroute/url-sync-on-save sid nil app)
+
+           (sroute/route-to! app `PageB)
+           (settle! app)
+           (sroute/url-sync-on-save sid nil app)
+
+           (assertions
+             "at PageB"
+             (sroute/active-leaf-routes app) => #{page-b-key})
+
+           ;; Back to DashReports — this is the bug scenario from issue #27
+           ;; URL will be /dash/reports, and "reports" must resolve via reachable-segments
+           (ruh/go-back! provider)
+           (settle! app)
+           (sroute/url-sync-on-save sid nil app)
+
+           (assertions
+             "back navigated to DashReports via custom segment"
+             (sroute/active-leaf-routes app) => #{dash-reports-key}
+             "URL is /dash/reports"
+             (ruh/current-href provider) => "/dash/reports")
+
+           ;; Back to DashMain
+           (ruh/go-back! provider)
+           (settle! app)
+           (sroute/url-sync-on-save sid nil app)
+
+           (assertions
+             "back navigated to DashMain via custom segment"
+             (sroute/active-leaf-routes app) => #{dash-main-key}
+             "URL is /dash/overview"
+             (ruh/current-href provider) => "/dash/overview")
+
+           (cleanup))))))
+
+;; ---------------------------------------------------------------------------
 ;; Slice 6: Child communication
 ;; ---------------------------------------------------------------------------
 

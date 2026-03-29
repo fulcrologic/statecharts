@@ -383,7 +383,10 @@
 
    * `:route/target` — The component registry key with a co-located statechart (or statechart-id).
    * `:route/segment` — (optional) Custom URL path segment string. Defaults to `(name target)`.
-   * `:route/reachable` — A set of route target keywords reachable through the child chart.
+   * `:route/reachable` — A set of route target keywords reachable through the child chart,
+     or a map of `{target-keyword \"segment\"}` when child targets use custom `:route/segment` values.
+     When a map is provided, the keys become the reachable set and the values are stored as
+     `:route/reachable-segments` for URL restoration.
    * `invoke-params` — A map merged into the invoke `params`.
    * `namelist`, `finalize`, `autoforward` — Same as `invoke` element options.
    * `on-done` — `(fn [env data & rest] ops)` run if the child chart hits a final state.
@@ -397,22 +400,54 @@
   (when (contains? state-props :id)
     (throw (ex-info "istate does not accept :id — the state ID is always derived from :route/target"
              {:route/target target :id id})))
-  (let [target-key  (coerce-to-keyword target)
-        id          target-key
-        reachable   (or reachable
-                      (let [cls (rc/registry-key->class target-key)]
-                        (when (nil? cls)
-                          (throw (ex-info (str "istate: component " target-key " is not registered. "
-                                           "Either require the component namespace or provide explicit :route/reachable.")
-                                   {:route/target target-key})))
-                        (let [child (rc/component-options cls sfro/statechart)]
-                          (when (nil? child)
-                            (throw (ex-info (str "istate: component " target-key " has no sfro/statechart option. "
-                                             "Either co-locate the chart on the component or provide explicit :route/reachable.")
-                                     {:route/target target-key})))
-                          (not-empty (reachable-targets child)))))
-        state-props (cond-> state-props
-                      reachable (assoc :route/reachable reachable))]
+  (let [target-key         (coerce-to-keyword target)
+        id                 target-key
+        ;; Normalize reachable: accept set (legacy) or map {kw "segment"} (new)
+        reachable-input    (or reachable
+                             (let [cls (rc/registry-key->class target-key)]
+                               (when (nil? cls)
+                                 (throw (ex-info (str "istate: component " target-key " is not registered. "
+                                                   "Either require the component namespace or provide explicit :route/reachable.")
+                                          {:route/target target-key})))
+                               (let [child-chart (rc/component-options cls sfro/statechart)]
+                                 (when (nil? child-chart)
+                                   (throw (ex-info (str "istate: component " target-key " has no sfro/statechart option. "
+                                                     "Either co-locate the chart on the component or provide explicit :route/reachable.")
+                                            {:route/target target-key})))
+                                 (not-empty (reachable-targets child-chart)))))
+        reachable-map?     (and reachable-input (map? reachable-input))
+        reachable          (cond
+                             (nil? reachable-input) nil
+                             reachable-map? (not-empty (set (keys reachable-input)))
+                             :else reachable-input)
+        ;; Build segment map: when user provides a map, values are segments.
+        ;; When auto-derived, walk child chart elements to extract :route/segment overrides.
+        reachable-segments (cond
+                             reachable-map?
+                             (not-empty (into {}
+                                         (map (fn [[kw seg]] [(coerce-to-keyword kw) seg]))
+                                         reachable-input))
+
+                             (and reachable (not reachable-input))
+                             nil
+
+                             reachable
+                             (let [cls         (rc/registry-key->class target-key)
+                                   child-chart (some-> cls (rc/component-options sfro/statechart))]
+                               (when child-chart
+                                 (not-empty
+                                   (into {}
+                                     (comp
+                                       (filter (fn [[_id el]]
+                                                 (and (:route/target el) (:route/segment el))))
+                                       (map (fn [[_id el]]
+                                              [(coerce-to-keyword (:route/target el)) (:route/segment el)])))
+                                     (::sc/elements-by-id child-chart)))))
+
+                             :else nil)
+        state-props        (cond-> state-props
+                             reachable (assoc :route/reachable reachable)
+                             reachable-segments (assoc :route/reachable-segments reachable-segments))]
     (apply state (-> (assoc state-props :id id :route/target target-key)
                    (dissoc :invoke-params :finalize :autoforward :namelist :on-done :exit-target :statechart-id))
       (on-exit {}

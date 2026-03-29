@@ -1,6 +1,6 @@
 # Project Tracker
 
-<!-- Last updated: 2026-02-25 | Active: 0 | Blocked: 0 | Backlog: 0 | Done: 46 -->
+<!-- Last updated: 2026-03-29 | Active: 0 | Blocked: 0 | Backlog: 1 | Done: 46 -->
 
 ## Active
 
@@ -12,7 +12,9 @@
 
 ## Backlog
 
-(none)
+| Spec                          | Priority | Created    | Summary                                                                                      |
+|-------------------------------|----------|------------|----------------------------------------------------------------------------------------------|
+| reachable-segment-mismatch    | P1       | 2026-03-29 | `find-target-by-leaf-name-deep` ignores `:route/segment` on reachable (child chart) targets  |
 
 ## Done (recent)
 
