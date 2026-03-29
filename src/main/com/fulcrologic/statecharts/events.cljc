@@ -24,8 +24,13 @@
    a dot-separated segment-by-segment basis)"
   [candidates event]
   [(? [:or ::sc/event-name [:* ::sc/event-name]]) (? ::sc/event-or-name) => boolean?]
-  (let [event-name    (if (map? event) (::sc/event-name event) event)
-        prefix-match? (fn [a b] (str/starts-with? (str b) (str/replace (str a) #"\.\*$" "")))]
+  (let [event-name     (if (map? event) (::sc/event-name event) event)
+        name-segments  (fn [kw] (str/split (name kw) #"[./]"))
+        full-segments  (fn [kw] (str/split (subs (str kw) 1) #"[./]"))
+        segment-match? (fn [candidate-segs event-segs]
+                         (and
+                           (<= (count candidate-segs) (count event-segs))
+                           (= candidate-segs (subvec event-segs 0 (count candidate-segs)))))]
     (boolean
       (and
         (not (nil? event-name))
@@ -33,17 +38,14 @@
           (nil? candidates)
           (boolean
             (if (keyword? candidates)
-              (or
-                (and
-                  (= (namespace candidates) (namespace event-name))
-                  (let [candidate  (remove #(= "*" %) (str/split (name candidates) #"\."))
-                        event-name (str/split (name event-name) #"\.")]
-                    (and
-                      (<= (count candidate) (count event-name))
-                      (= candidate (subvec event-name 0 (count candidate))))))
-                (and
-                  (nil? (namespace candidates))
-                  (prefix-match? candidates event-name)))
+              (let [candidate-segs (remove #(= "*" %) (name-segments candidates))]
+                (or
+                  (and
+                    (= (namespace candidates) (namespace event-name))
+                    (segment-match? candidate-segs (name-segments event-name)))
+                  (and
+                    (nil? (namespace candidates))
+                    (segment-match? candidate-segs (full-segments event-name)))))
               (some #(name-match? % event-name) (seq candidates)))))))))
 
 (>defn new-event

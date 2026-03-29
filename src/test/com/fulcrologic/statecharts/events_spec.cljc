@@ -17,9 +17,19 @@
       "match if it contains strange characters"
       (evts/name-match? :done.invoke :done.invoke.:child/future) => true
       (evts/name-match? :done.invoke.* :done.invoke.:child/future) => true
-      "match if its prefix matches"
+      "match if its prefix matches on token boundaries"
       (evts/name-match? :a :a.b) => true
       (evts/name-match? :a.b :a.b) => true
+      "treats / as a token boundary"
+      (evts/name-match? :error.network :error.network/timeout) => true
+      (evts/name-match? :a :a/b) => true
+      (evts/name-match? :done.invoke :done.invoke/child) => true
+      "does not match partial tokens across / or ."
+      (evts/name-match? :error.net :error.network/timeout) => false
+      "does NOT match on substrings (issue #28)"
+      (evts/name-match? :foo :foobar) => false
+      (evts/name-match? :a :ab) => false
+      (evts/name-match? :done :donething) => false
       "match even if they end with an explicit wildcard"
       (evts/name-match? :* :a.b) => true
       (evts/name-match? :a.* :a.b) => true

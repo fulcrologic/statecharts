@@ -627,10 +627,20 @@ table.CodeRay td.code{padding:0 0 0 .75em}
 <li><a href="#_starting_in_a_specific_configuration">8.3. Starting in a Specific Configuration</a></li>
 </ul>
 </li>
-<li><a href="#_relationship_to_scxml">9. Relationship to SCXML</a>
+<li><a href="#_visualization_and_simulation">9. Visualization and Simulation</a>
 <ul class="sectlevel2">
-<li><a href="#_related_work">9.1. Related Work</a></li>
-<li><a href="#_conformance">9.2. Conformance</a></li>
+<li><a href="#_the_simulator_api">9.1. The Simulator API</a></li>
+<li><a href="#_diagram_labels">9.2. Diagram Labels</a></li>
+<li><a href="#_standalone_visualization_server">9.3. Standalone Visualization Server</a></li>
+<li><a href="#_embedding_in_your_own_server">9.4. Embedding in Your Own Server</a></li>
+<li><a href="#_live_session_monitoring">9.5. Live Session Monitoring</a></li>
+<li><a href="#_post_api_for_external_tools">9.6. POST API for External Tools</a></li>
+</ul>
+</li>
+<li><a href="#_relationship_to_scxml">10. Relationship to SCXML</a>
+<ul class="sectlevel2">
+<li><a href="#_related_work">10.1. Related Work</a></li>
+<li><a href="#_conformance">10.2. Conformance</a></li>
 </ul>
 </li>
 </ul>
@@ -1448,10 +1458,28 @@ As such, and event queue might be distributed and durable (e.g. using Kafka or t
 <h4 id="_event_name_matching"><a class="anchor" href="#_event_name_matching"></a><a class="link" href="#_event_name_matching">4.6.1. Event Name Matching</a></h4>
 <div class="paragraph">
 <p>The SCXML standard describes a name matching algorithm for event names that allows for wildcard pattern matching.
-Event names are dot-separated, and are prefix-matched.
-In this library keywords are used for event names, but other than that the interpretation is as specified in the standard.
+Event names are token-based and prefix-matched.
+Both <code>.</code> (dot) and <code>/</code> (slash) are treated as token separators.
+In this library keywords are used for event names.
 For example, the event name <code>:a.b.c</code> is matched by <code>:a.b.c.*</code>, <code>:a.b.c</code>, <code>:a.b.*</code>, <code>:a.b</code>, etc.
 That is to say that a transition with <code>:event :a.b</code> would be enabled by event <code>:a.b.c</code>.</p>
+</div>
+<div class="paragraph">
+<p>Since <code>/</code> is also a token separator, Clojure&#8217;s namespaced keywords work naturally with prefix matching.
+For example, <code>:error.network</code> matches <code>:error.network/timeout</code>, and <code>:done.invoke</code> matches <code>:done.invoke/child</code>.</p>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Important</div>
+</td>
+<td class="content">
+Matching is strictly token-based, not substring-based.
+<code>:foo</code> matches <code>:foo.bar</code> but does <strong>not</strong> match <code>:foobar</code>.
+</td>
+</tr>
+</table>
 </div>
 <div class="paragraph">
 <p>The wildcard is always implied, but can be specified on a transition for clarity.
@@ -4448,7 +4476,345 @@ So, another helper <code>testing/configuration-for-states</code> allows you to g
 </div>
 </div>
 <div class="sect1">
-<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">9. Relationship to SCXML</a></h2>
+<h2 id="_visualization_and_simulation"><a class="anchor" href="#_visualization_and_simulation"></a><a class="link" href="#_visualization_and_simulation">9. Visualization and Simulation</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <code>com.fulcrologic.statecharts.visualization</code> namespace provides tools for visualizing and
+interactively simulating statecharts. The visualizer renders your chart as a UML-style state
+diagram and, when connected to a running application, lets you observe live session state in
+real time.</p>
+</div>
+<div class="paragraph">
+<p>There are two main components:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Simulator</strong> — A pure CLJ/CLJS API for stepping through a statechart interactively at the
+REPL or in a browser UI, using the real processor but with a mock execution model.</p>
+</li>
+<li>
+<p><strong>Visualization Server</strong> — A standalone Ring server (or embeddable Pathom resolvers) that
+exposes chart definitions and live session state to the browser visualizer.</p>
+</li>
+</ul>
+</div>
+<div class="sect2">
+<h3 id="_the_simulator_api"><a class="anchor" href="#_the_simulator_api"></a><a class="link" href="#_the_simulator_api">9.1. The Simulator API</a></h3>
+<div class="paragraph">
+<p>The simulator (<code>com.fulcrologic.statecharts.visualization.simulator</code>) runs your chart using the
+real processor but with a custom execution model: guard predicates become user-toggleable
+booleans, and all other executable content (scripts, assigns, sends) is a noop. This lets you
+step through the chart&#8217;s control flow without any real side-effects.</p>
+</div>
+<div class="paragraph">
+<p>Key functions:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>start-simulation!</code> — Registers the chart, starts a session, and returns a <em>simulator state map</em>.</p>
+</li>
+<li>
+<p><code>send-event!</code> — Sends a named event through the processor and returns the new active configuration.</p>
+</li>
+<li>
+<p><code>toggle-guard!</code> — Flips a guard predicate&#8217;s boolean value in the simulator&#8217;s guard atom.</p>
+</li>
+<li>
+<p><code>reset-simulation!</code> — Restarts from the initial configuration.</p>
+</li>
+<li>
+<p><code>extract-guards</code> — Returns all guard fns found in the chart, keyed by function reference.</p>
+</li>
+<li>
+<p><code>available-events</code> — Returns the set of event keywords reachable from the current configuration.</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">require</span> '[com.fulcrologic.statecharts.visualization.simulator <span class="symbol">:as</span> sim])
+
+<span class="comment">;; Start a simulation — returns a simulator state map</span>
+(<span class="keyword">def</span> <span class="function">s</span> (sim/start-simulation! my-chart))
+
+<span class="comment">;; Check which states are active</span>
+(sim/current-configuration s)
+<span class="comment">;; =&gt; #{:idle}</span>
+
+<span class="comment">;; Send an event</span>
+(sim/send-event! s <span class="symbol">:submit</span>)
+<span class="comment">;; =&gt; #{:validating}</span>
+
+<span class="comment">;; Toggle a guard off (guards default to true)</span>
+(sim/toggle-guard! s valid-form? <span class="predefined-constant">false</span>)
+
+<span class="comment">;; Send the event again — a different path is taken</span>
+(sim/send-event! s <span class="symbol">:submit</span>)
+<span class="comment">;; =&gt; #{:error}</span>
+
+<span class="comment">;; Reset to the beginning</span>
+(sim/reset-simulation! s)
+<span class="comment">;; =&gt; #{:idle}</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The simulator state map returned by <code>start-simulation!</code> contains:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>:env</code> — the full statechart environment (registry, data model, event queue, etc.)</p>
+</li>
+<li>
+<p><code>:session-id</code> — the unique session identifier</p>
+</li>
+<li>
+<p><code>:chart</code> — the statechart definition</p>
+</li>
+<li>
+<p><code>:chart-key</code> — the registry key used to register the chart</p>
+</li>
+<li>
+<p><code>:guard-values</code> — an atom mapping guard fn references to their current boolean values</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_diagram_labels"><a class="anchor" href="#_diagram_labels"></a><a class="link" href="#_diagram_labels">9.2. Diagram Labels</a></h3>
+<div class="paragraph">
+<p>By default the visualizer uses element IDs and transition event names as labels. You can
+override these with two metadata keys on your chart elements:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>:diagram/label</code> on a <code>script</code> element — displayed in the state&#8217;s entry/exit activity compartment</p>
+</li>
+<li>
+<p><code>:diagram/condition</code> on a <code>transition</code> — used as the guard label on the transition arrow</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">require</span> '[com.fulcrologic.statecharts.elements <span class="symbol">:refer</span> [state script on-entry on-exit transition final]]
+         '[com.fulcrologic.statecharts.chart <span class="symbol">:refer</span> [statechart]]
+         '[com.fulcrologic.statecharts.convenience <span class="symbol">:refer</span> [on]])
+
+(<span class="keyword">defn</span> <span class="function">valid-form?</span> [_ _] <span class="predefined-constant">true</span>)
+(<span class="keyword">defn</span> <span class="function">has-errors?</span> [_ _] <span class="predefined-constant">false</span>)
+
+(<span class="keyword">def</span> <span class="function">my-chart</span>
+  (statechart {<span class="symbol">:initial</span> <span class="symbol">:idle</span>}
+    (state {<span class="symbol">:id</span> <span class="symbol">:idle</span>}
+      (on-entry {}
+        (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ _] <span class="predefined-constant">nil</span>) <span class="symbol">:diagram/label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">reset-form</span><span class="delimiter">&quot;</span></span>}))
+      (on <span class="symbol">:submit</span> <span class="symbol">:validating</span>))
+
+    (state {<span class="symbol">:id</span> <span class="symbol">:processing</span>}
+      (on-entry {}
+        (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ _] <span class="predefined-constant">nil</span>) <span class="symbol">:diagram/label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">load-data</span><span class="delimiter">&quot;</span></span>})
+        (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ _] <span class="predefined-constant">nil</span>) <span class="symbol">:diagram/label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">start-spinner</span><span class="delimiter">&quot;</span></span>}))
+      (on-exit {}
+        (script {<span class="symbol">:expr</span> (<span class="keyword">fn</span> [_ _] <span class="predefined-constant">nil</span>) <span class="symbol">:diagram/label</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">stop-spinner</span><span class="delimiter">&quot;</span></span>}))
+      (transition {<span class="symbol">:event</span> <span class="symbol">:success</span> <span class="symbol">:target</span> <span class="symbol">:done</span>
+                   <span class="symbol">:diagram/condition</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">all-ok?</span><span class="delimiter">&quot;</span></span>}))
+
+    (final {<span class="symbol">:id</span> <span class="symbol">:done</span>})))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>When this chart is rendered, the <code>:processing</code> state shows <code>load-data</code> and <code>start-spinner</code>
+as entry activities, <code>stop-spinner</code> as an exit activity, and the transition to <code>:done</code> displays
+<code>[all-ok?]</code> as its guard label.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_standalone_visualization_server"><a class="anchor" href="#_standalone_visualization_server"></a><a class="link" href="#_standalone_visualization_server">9.3. Standalone Visualization Server</a></h3>
+<div class="paragraph">
+<p>The easiest way to visualize a chart is to run the standalone server. It serves the browser UI
+and exposes the Pathom API in one step.</p>
+</div>
+<div class="paragraph">
+<p>The server supports three modes:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><strong>Static mode</strong> — renders a chart definition passed on the command line; no live session data.</p>
+</li>
+<li>
+<p><strong>Connected/REPL mode</strong> — connects to a running nREPL server and pulls chart definitions and
+session state from your live application.</p>
+</li>
+<li>
+<p><strong>Proxy mode</strong> — forwards Pathom queries to a remote server that already has the resolvers
+installed.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>A typical <code>deps.edn</code> alias for the standalone server:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="symbol">:viz</span> {<span class="symbol">:extra-deps</span> {com.fulcrologic/statecharts-visualizer {<span class="symbol">:mvn/version</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">LATEST</span><span class="delimiter">&quot;</span></span>}}
+      <span class="symbol">:main-opts</span>  [<span class="string"><span class="delimiter">&quot;</span><span class="content">-m</span><span class="delimiter">&quot;</span></span> <span class="string"><span class="delimiter">&quot;</span><span class="content">com.fulcrologic.statecharts.visualization.standalone</span><span class="delimiter">&quot;</span></span>]}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then run it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="shell"># Static mode — point at a namespace-qualified var that holds your chart
+clojure -M:viz --chart my.app/my-chart
+
+# Connected mode — connect to a running nREPL on port 7000
+clojure -M:viz --nrepl-port 7000
+
+# Proxy mode — forward Pathom queries to an existing server
+clojure -M:viz --proxy-url http://localhost:3000/api</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The browser UI will open (or print its URL) once the server is ready.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_embedding_in_your_own_server"><a class="anchor" href="#_embedding_in_your_own_server"></a><a class="link" href="#_embedding_in_your_own_server">9.4. Embedding in Your Own Server</a></h3>
+<div class="paragraph">
+<p>If you already have a Ring + Pathom server you can add the visualization resolvers directly,
+giving the browser UI access to your live chart registry and working memory store.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">require</span> '[com.fulcrologic.statecharts.visualization.server.resolvers <span class="symbol">:as</span> viz-resolvers]
+         '[com.wsscode.pathom.connect <span class="symbol">:as</span> pc]
+         '[com.wsscode.pathom.core <span class="symbol">:as</span> p])
+
+(<span class="keyword">def</span> <span class="function">pathom-parser</span>
+  (p/parser
+    {<span class="symbol">::p/env</span>     {<span class="symbol">::p/reader</span>               [p/map-reader
+                                            pc/reader2
+                                            pc/open-ident-reader]
+                  <span class="comment">;; Inject your registry and working memory store</span>
+                  <span class="symbol">::sc/statechart-registry</span>  my-registry
+                  <span class="symbol">::sc/working-memory-store</span> my-wmem-store
+                  <span class="symbol">::sc/processor</span>            my-processor}
+     <span class="symbol">::p/mutate</span>  pc/mutate
+     <span class="symbol">::p/plugins</span> [(pc/connect-plugin
+                    {<span class="symbol">::pc/register</span> viz-resolvers/resolvers})
+                  p/error-handler-plugin]}))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The four resolvers in <code>viz-resolvers/resolvers</code> cover:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>registered-charts-resolver</code> — lists all charts in the registry (<code>::sc/all-charts</code>)</p>
+</li>
+<li>
+<p><code>chart-definition-resolver</code> — returns a chart&#8217;s full element map (functions replaced with <code>:fn</code>)</p>
+</li>
+<li>
+<p><code>session-state-resolver</code> — returns <code>::sc/configuration</code> and <code>::sc/working-memory</code> for a session</p>
+</li>
+<li>
+<p><code>search-for-sessions-resolver</code> — delegates to the <code>search-for-sessions</code> multimethod</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_live_session_monitoring"><a class="anchor" href="#_live_session_monitoring"></a><a class="link" href="#_live_session_monitoring">9.5. Live Session Monitoring</a></h3>
+<div class="paragraph">
+<p>When the server has a working memory store available, the browser UI can display which states
+are currently active in any running session. The <code>search-for-sessions</code> multimethod lets you
+plug in your own session-discovery logic.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure">(<span class="keyword">require</span> '[com.fulcrologic.statecharts.visualization.server.resolvers <span class="symbol">:as</span> viz-resolvers])
+
+<span class="comment">;; Implement the multimethod for each chart you want to make discoverable.</span>
+<span class="comment">;; The dispatch value is the chart's registry key.</span>
+(<span class="keyword">defmethod</span> <span class="function">viz-resolvers/search-for-sessions</span> <span class="symbol">:my.app/auth-chart</span>
+  [env chart-registry-key search-string]
+  <span class="comment">;; Return a vector of session descriptor maps.</span>
+  <span class="comment">;; Filter by `search-string` however makes sense for your application.</span>
+  [{<span class="symbol">::sc/session-id</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">session-abc-123</span><span class="delimiter">&quot;</span></span>
+    <span class="symbol">:session/label</span>  <span class="string"><span class="delimiter">&quot;</span><span class="content">user@example.com</span><span class="delimiter">&quot;</span></span>}
+   {<span class="symbol">::sc/session-id</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">session-def-456</span><span class="delimiter">&quot;</span></span>
+    <span class="symbol">:session/label</span>  <span class="string"><span class="delimiter">&quot;</span><span class="content">admin@example.com</span><span class="delimiter">&quot;</span></span>}])</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>search-string</code> argument comes from the browser&#8217;s session search box. You can filter by
+user name, session ID prefix, or any application-specific criterion. The default implementation
+logs a warning and returns an empty vector.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_post_api_for_external_tools"><a class="anchor" href="#_post_api_for_external_tools"></a><a class="link" href="#_post_api_for_external_tools">9.6. POST API for External Tools</a></h3>
+<div class="paragraph">
+<p>The resolvers expose a <code>send-event</code> Pathom mutation that lets external tools trigger state
+transitions without a UI. This is useful for scripted testing or integration from non-Clojure
+environments.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="shell"># Send an event to a running session via curl (Transit+JSON)
+curl -X POST http://localhost:8080/api \
+  -H 'Content-Type: application/transit+json' \
+  -d '[(com.fulcrologic.statecharts/session-id &quot;my-session-uuid&quot;) \
+       {:com.fulcrologic.statecharts/session-id &quot;my-session-uuid&quot; \
+        :event {:name :submit}}]'</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>From a Babashka script you can use <code>babashka.http-client</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="CodeRay highlight"><code data-lang="clojure"><span class="error">#</span>!/usr/bin/env bb
+(<span class="keyword">require</span> '[babashka.http-client <span class="symbol">:as</span> http])
+
+(<span class="keyword">defn</span> <span class="function">send-sc-event!</span> [url session-id event-name]
+  (http/post url
+    {<span class="symbol">:headers</span> {<span class="string"><span class="delimiter">&quot;</span><span class="content">Content-Type</span><span class="delimiter">&quot;</span></span> <span class="string"><span class="delimiter">&quot;</span><span class="content">application/json</span><span class="delimiter">&quot;</span></span>}
+     <span class="symbol">:body</span>    (<span class="keyword">str</span> <span class="string"><span class="delimiter">&quot;</span><span class="content">[{</span><span class="content">\&quot;</span><span class="content">com.fulcrologic.statecharts/session-id</span><span class="content">\&quot;</span><span class="content"> </span><span class="content">\&quot;</span><span class="delimiter">&quot;</span></span>
+                   session-id
+                   <span class="string"><span class="delimiter">&quot;</span><span class="content">\&quot;</span><span class="content">, </span><span class="content">\&quot;</span><span class="content">event</span><span class="content">\&quot;</span><span class="content"> {</span><span class="content">\&quot;</span><span class="content">name</span><span class="content">\&quot;</span><span class="content"> </span><span class="content">\&quot;</span><span class="delimiter">&quot;</span></span>
+                   (<span class="keyword">name</span> event-name)
+                   <span class="string"><span class="delimiter">&quot;</span><span class="content">\&quot;</span><span class="content">}}]</span><span class="delimiter">&quot;</span></span>)}))
+
+(send-sc-event! <span class="string"><span class="delimiter">&quot;</span><span class="content">http://localhost:8080/api</span><span class="delimiter">&quot;</span></span> <span class="string"><span class="delimiter">&quot;</span><span class="content">my-session-uuid</span><span class="delimiter">&quot;</span></span> <span class="symbol">:submit</span>)</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+The <code>send-event</code> mutation requires the Pathom environment to have <code>::sc/working-memory-store</code>
+and <code>::sc/processor</code> available. Static-mode standalone servers do not support this mutation.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_relationship_to_scxml"><a class="anchor" href="#_relationship_to_scxml"></a><a class="link" href="#_relationship_to_scxml">10. Relationship to SCXML</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>This library&#8217;s internal implementation follows (as closely as possible) the official
@@ -4510,7 +4876,7 @@ See the docstrings for details.</p>
 <code>script</code> tags to begin with.</p>
 </div>
 <div class="sect2">
-<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">9.1. Related Work</a></h3>
+<h3 id="_related_work"><a class="anchor" href="#_related_work"></a><a class="link" href="#_related_work">10.1. Related Work</a></h3>
 <div class="paragraph">
 <p>The primary alternative to this library is <a href="https://github.com/lucywang000/clj-statecharts">clj-statecharts</a>, which is a fine library modelled after xstate.</p>
 </div>
@@ -4557,7 +4923,7 @@ Requires you use XML.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">9.2. Conformance</a></h3>
+<h3 id="_conformance"><a class="anchor" href="#_conformance"></a><a class="link" href="#_conformance">10.2. Conformance</a></h3>
 <div class="paragraph">
 <p>This library was written using the reference implementation described in the <a href="https://www.w3.org/TR/scxml">SCXML standard</a>, but without the requirement that the chart be written in XML.</p>
 </div>
@@ -4574,7 +4940,7 @@ Note that it is possible for a bugfix in this library to change the behavior of 
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2026-02-23 12:51:55 -0500
+Last updated 2026-03-29 13:59:23 +0200
 </div>
 </div>
 </body>

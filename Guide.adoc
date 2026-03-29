@@ -383,10 +383,17 @@ The library includes a fully-functional system for simple applications in the `s
 === Event Name Matching
 
 The SCXML standard describes a name matching algorithm for event names that allows for wildcard pattern matching.
-Event names are dot-separated, and are prefix-matched.
-In this library keywords are used for event names, but other than that the interpretation is as specified in the standard.
+Event names are token-based and prefix-matched.
+Both `.` (dot) and `/` (slash) are treated as token separators.
+In this library keywords are used for event names.
 For example, the event name `:a.b.c` is matched by `:a.b.c.\*`, `:a.b.c`, `:a.b.*`, `:a.b`, etc.
 That is to say that a transition with `:event :a.b` would be enabled by event `:a.b.c`.
+
+Since `/` is also a token separator, Clojure's namespaced keywords work naturally with prefix matching.
+For example, `:error.network` matches `:error.network/timeout`, and `:done.invoke` matches `:done.invoke/child`.
+
+IMPORTANT: Matching is strictly token-based, not substring-based.
+`:foo` matches `:foo.bar` but does *not* match `:foobar`.
 
 The wildcard is always implied, but can be specified on a transition for clarity.
 Transitions are enabled and matched "in order", so you can model narrowed and catch-all behavior:
