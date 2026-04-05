@@ -33,7 +33,9 @@
      Context keys: :segments (vector of state IDs), :params (map keyed by state-id),
      :route-elements (map of state-id -> element map).")
   (decode-url [this href route-elements]
-    "Given a URL string and route-elements map, return {:leaf-id <state-id> :params <map>}."))
+    "Given a URL string and route-elements map, return {:leaf-id <state-id> :params <map>},
+     or nil. May return {:params <map>} without :leaf-id when params are present but the
+     leaf segment doesn't match a known route element (e.g. cross-chart targets)."))
 
 ;; ---------------------------------------------------------------------------
 ;; Path generation from active configuration (state -> URL)

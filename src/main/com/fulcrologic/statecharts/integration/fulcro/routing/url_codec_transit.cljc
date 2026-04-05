@@ -143,7 +143,7 @@
                                       (= (url-codec/element-segment element) leaf-name))
                                 id))
                         route-elements))]
-      (when leaf-id
+      (when (or leaf-id params)
         {:leaf-id leaf-id
          :params  params}))))
 
