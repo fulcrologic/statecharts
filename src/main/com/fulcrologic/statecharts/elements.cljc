@@ -1,16 +1,37 @@
 (ns com.fulcrologic.statecharts.elements
   "The elements you can define in charts. The intention is for this model to be potentially serializable for users
    that need that. Thus, the expressions used in these data structures *MAY* use CLJC functions/code, or may represent
-   such elements a strings or other (quoted) EDN. The ExecutionModel is responsible for this part of the interpretation.
+   such elements as strings or other (quoted) EDN. The ExecutionModel is responsible for this part of the interpretation.
 
    The overall data model is represented as a map. The DataModel implementation MAY choose scope and resolution
    rules. Location expressions are interpreted by the DataModel, but it is recommended they be keywords or vectors
    of keywords.
 
-   NOTE: The SCXML standard defines a number of elements (if, else, elseif, foreach, log) for abstract
-   executable content. In cases where you want to transform an SCXML document to this library you should note that we
-   treat those XML nodes as content that can be translated ON DOCUMENT READ into the code form used by this library.
-   "
+   ## Executable Content
+
+   The W3C SCXML spec defines *executable content* as the action elements that do work:
+   `script`, `assign`, `raise`, `send`, `log`, `cancel`, `if`/`elseif`/`else`, and `foreach`.
+
+   These appear as children of *container* elements: `on-entry`, `on-exit`, `transition`,
+   and `finalize`. Some executable content elements (`if`, `elseif`, `else`, `foreach`) can
+   themselves contain executable content as children.
+
+   The exact form of expressions (`:expr`, `:cond`) depends on the installed `ExecutionModel`.
+   With the common `lambda` execution model (`execution-model.lambda`), expressions are
+   Clojure functions:
+
+   ```clojure
+   ;; 2-arg form (default):
+   (script {:expr (fn [env data] (println data))})
+
+   ;; 4-arg form (when :explode-event? is true on the execution model):
+   (script {:expr (fn [env data event-name event-data] ...)})
+   ```
+
+   If a script expression returns a vector, the lambda execution model will attempt to apply
+   it as a data-model update operation.
+
+   See `execution-model.lambda/new-execution-model` for full details."
   #?(:cljs (:require-macros [com.fulcrologic.statecharts.elements]))
   (:refer-clojure :exclude [send])
   (:require
@@ -32,6 +53,7 @@
    :on-exit    executable-content-types
    :history    #{:transition}
    :script     #{}
+   :invoke     #{:finalize}
    :parallel   #{:on-entry :on-exit :transition :state :parallel :history :data-model :invoke}
    :transition executable-content-types
    :if         executable-content-types
@@ -68,13 +90,12 @@
 
 (defn In
   "Returns a predicate function that checks if the statechart is currently in the given state.
-   This is the W3C SCXML standard In() predicate (Section 5.9) for use in condition expressions.
+   SCXML In() predicate (Section 5.9). Returns a `(fn [env data])` that returns true when
+   `state-id` is in the current configuration. For use in `:cond` expressions.
 
-   Usage:
-     (transition {:event :check :target :next :cond (In :some-state)})
-
-   The returned function takes [env data] and returns true if the current configuration
-   includes the specified state-id, false otherwise."
+   ```clojure
+   (transition {:event :check :target :next :cond (In :some-state)})
+   ```"
   [state-id]
   (fn [{::sc/keys [vwmem] :as _env} & _]
     (boolean
@@ -85,8 +106,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn state
-  "Create a state. ID will be generated if not supplied. The `initial` element is an alias for this
-   element with `:initial? true`. The `:initial` key can be used in PLACE of a nested initial element.
+  "Atomic or compound state.
+
+   Attrs: `:id`, `:initial` (keyword target, shorthand for nested `initial` element), `:initial?`.
+   Children: `on-entry`, `on-exit`, `transition`, `state`, `parallel`, `final`, `history`,
+             `data-model`, `invoke`.
 
    https://www.w3.org/TR/scxml/#state"
   [{:keys [id initial initial?] :as attrs} & children]
@@ -96,9 +120,13 @@
   (new-element :state attrs children))
 
 (defn parallel
-  "Create a parallel node.
+  "Parallel state — all child regions are active simultaneously.
 
-  https://www.w3.org/TR/scxml/#parallel"
+   Attrs: `:id`.
+   Children: `on-entry`, `on-exit`, `transition`, `state`, `parallel`, `history`,
+             `data-model`, `invoke`.
+
+   https://www.w3.org/TR/scxml/#parallel"
   [{:keys [id] :as attrs} & children]
   #?(:cljs
      (when (and goog.DEBUG (not id))
@@ -106,15 +134,21 @@
   (new-element :parallel attrs children))
 
 (defn transition
-  "Define a transition. The `target` parameter can be a single keyword or a set of them (when the transition activates
-   multiple specific states (e.g. parallel children).
+  "Event-driven or eventless transition.
 
-   `:event` - Name of the event as a keyword, or a list of such keywords. See `events/name-match?` or SCXML for semantics.
-   `:cond` - Expression that must be true for this transition to be enabled. See execution model.
-   `:target` - Target state or parallel region(s) as a single keyword or list of them.
-   `:type` - :internal or :external (default)
-   `:diagram/label` - (optional) A human-readable label for this transition, displayed on diagram edges.
-   `:diagram/condition` - (optional) A string representation of the condition, displayed on diagram edges.
+   Attrs:
+   - `:event` — keyword or list of keywords. A list means the transition is enabled when
+     any of the listed events match (via token-based `events/name-match?`).
+   - `:cond` — predicate expression; transition is enabled only when truthy
+   - `:target` — keyword or list of keywords (target state(s))
+   - `:type` — `:internal` or `:external` (default). An external transition will exit and
+     re-enter the source state (immediate parent) even if the target is the source state
+     or a descendant. An internal transition will not exit the source state when the target
+     is the source or a descendant.
+   - `:diagram/label` — optional human-readable label for diagram rendering
+   - `:diagram/condition` — optional string representation of the condition for diagrams
+
+   Children: `raise`, `log`, `if`, `elseif`, `else`, `foreach`, `assign`, `script`, `send`, `cancel`.
 
    https://www.w3.org/TR/scxml/#transition"
   [{:keys [event cond target type] :as attrs} & children]
@@ -123,9 +157,18 @@
     (new-element :transition (assoc attrs :target t :type type) children)))
 
 (>defn initial
-  "Alias for `(state {:initial? true} (transition-or-target ...))`.
+  "Shorthand for a state marked as the initial child.
 
-   `id` The (optional) ID of this state
+   An initial state must be unique in the compound parent, and implies an immediate transition
+   to a target. Statecharts always have an initial node, even if implied (auto-inserted to
+   auto-transition to the first child in document order if unspecified).
+
+   ```clojure
+   (initial {} :target-state)
+   ;; => (state {:initial? true} (transition {:target :target-state}))
+   ```
+
+   The second argument may be a keyword target or a `transition` element.
 
    https://www.w3.org/TR/scxml/#initial"
   [{:keys [id] :as attrs} transition-or-target]
@@ -137,17 +180,48 @@
       transition-or-target)))
 
 (defn final
-  "https://www.w3.org/TR/scxml/#final"
+  "Final (accepting) state — entering this state generates a `done` event.
+
+   Attrs: `:id`.
+   Children: `on-entry`, `on-exit`, `done-data`.
+
+   https://www.w3.org/TR/scxml/#final"
   [{:keys [id] :as attrs} & children]
   (new-element :final attrs children))
 
 (defn on-entry
-  "https://www.w3.org/TR/scxml/#onentry"
+  "Actions to execute when entering the parent state.
+
+   Attrs: `:id`.
+   Children: `raise`, `log`, `if`, `elseif`, `else`, `foreach`, `assign`, `script`, `send`, `cancel`.
+
+   e.g.
+
+   ```
+   (state {:id :x}
+     (on-entry {}
+       (script {:expr ...})))
+   ```
+
+   https://www.w3.org/TR/scxml/#onentry"
   [{:keys [id] :as attrs} & children]
   (new-element :on-entry attrs children))
 
 (defn on-exit
-  "https://www.w3.org/TR/scxml/#onexit"
+  "Actions to execute when exiting the parent state.
+
+   Attrs: `:id`.
+   Children: `raise`, `log`, `if`, `elseif`, `else`, `foreach`, `assign`, `script`, `send`, `cancel`.
+
+   e.g.
+
+   ```
+   (state {:id :x}
+     (on-exit {}
+       (script {:expr ...})))
+   ```
+
+   https://www.w3.org/TR/scxml/#onexit"
   [{:keys [id] :as attrs} & children]
   (new-element :on-exit attrs children))
 
@@ -156,53 +230,40 @@
 (declare script)
 
 (defmacro exit-fn
-  "A macro that emits a `on-exit` element, but looks more like a normal CLJC lambda:
+  "Shorthand for an `on-exit` with a single script expression.
 
-  ```
-  (exit-fn [env data] ...body...)
-  ```
-
-  is shorthand for
-
-  ```
-  (on-exit {}
-    (script {:expr (fn [env data] ...body...)}))
-  ```
-
-  "
+   ```clojure
+   (exit-fn [env data] body)
+   ;; => (on-exit {} (script {:expr (fn [env data] body)}))
+   ```"
   [arglist & body]
   `(on-exit {:diagram/label ~(expr-label body)}
      (script {:expr (fn ~arglist ~@body)})))
 
 (defmacro entry-fn
-  "A macro that emits a `on-entry` element, but looks more like a normal CLJC lambda:
+  "Shorthand for an `on-entry` with a single script expression.
 
-  ```
-  (entry-fn [env data] ...)
-  ```
-
-  is shorthand for
-
-  ```
-  (on-entry {}
-    (script {:expr (fn [env data] ...)})
-  ```
-
-  "
+   ```clojure
+   (entry-fn [env data] body)
+   ;; => (on-entry {} (script {:expr (fn [env data] body)}))
+   ```"
   [arglist & body]
   `(on-entry {:diagram/label ~(expr-label body)}
      (script {:expr (fn ~arglist ~@body)})))
 
 
 (defn history
-  "Create a history node.
+  "History pseudo-state — remembers the last active child configuration.
 
-   :type - :deep or :shallow (can also use `deep? as an alias). Defaults to shallow.
-   `default-transition` can be a transition element with a `:target` (per standard), or as a shortcut
-     simply the value you want for the target of the transition.
+   Attrs:
+   - `:id` — identifier for this history node
+   - `:type` — `:deep` or `:shallow` (default `:shallow`)
+   - `:deep?` — alias for `:type :deep` when true
 
-   https://www.w3.org/TR/scxml/#history
-   "
+   The second argument is the default transition, used when the parent has never been entered.
+   It may be a `transition` element or a keyword target (shorthand).
+
+   https://www.w3.org/TR/scxml/#history"
   [{:keys [id type deep?] :as attrs} default-transition]
   (let [{:keys [cond event target]
          :as   default-transition} (if (map? default-transition)
@@ -224,18 +285,24 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn raise
-  "Raise an event in the current session.
+  "Place an event on the internal event queue of the current session.
 
-  https://www.w3.org/TR/scxml/#raise"
+   Attrs:
+   - `:id`
+   - `:event` — keyword name of the event to raise
+   - `:data` — literal data or expression (see ns docstring) to include as event data (optional)
+
+   https://www.w3.org/TR/scxml/#raise"
   [{:keys [id event] :as attrs}]
   (new-element :raise attrs nil))
 
 (defn log
-  "Log a message. (Currently uses Timbre, with debug level)
+  "Log a message. See ns docstring for expression details.
 
-  Support :level, which is passed through to the lower-level implementation.
+   Attrs: `:id`, `:label` (string prefix), `:expr` (expression whose result is logged),
+          `:level` (passed to the logging implementation).
 
-  https://www.w3.org/TR/scxml/#log"
+   https://www.w3.org/TR/scxml/#log"
   [{:keys [id label expr] :as attrs}]
   (new-element :log attrs nil))
 
@@ -244,28 +311,30 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn If
-  "Conditional execution. Evaluates `:cond` predicate and executes children if truthy.
-   May contain Elseif and Else elements as children for multi-way branching.
+  "Conditional execution. Capitalized to avoid collision with `clojure.core/if`.
 
-   Name is capitalized to prevent Clojure lang collision.
-
-   Per SCXML spec: children before the first Elseif/Else are the 'then' branch.
+   Attrs: `:id`, `:cond` (predicate expression).
+   Children: `raise`, `log`, `if`, `elseif`, `else`, `foreach`, `assign`, `script`, `send`, `cancel`.
 
    https://www.w3.org/TR/scxml/#if"
   [{:keys [id cond] :as attrs} & children]
   (new-element :if attrs children))
 
 (defn elseif
-  "Conditional branch within If. Must be a child of If.
-   Evaluates `:cond` and executes children if truthy.
+  "Conditional branch within an `If` element.
+
+   Attrs: `:id`, `:cond` (predicate expression).
+   Children: `raise`, `log`, `if`, `elseif`, `else`, `foreach`, `assign`, `script`, `send`, `cancel`.
 
    https://www.w3.org/TR/scxml/#if"
   [{:keys [id cond] :as attrs} & children]
   (new-element :else-if attrs children))
 
 (defn else
-  "Default branch within If. Must be a child of If.
-   Executes children if no prior conditions matched.
+  "Default branch within an `If` element.
+
+   Attrs: `:id`.
+   Children: `raise`, `log`, `if`, `elseif`, `else`, `foreach`, `assign`, `script`, `send`, `cancel`.
 
    https://www.w3.org/TR/scxml/#if"
   [{:keys [id] :as attrs} & children]
@@ -274,9 +343,13 @@
 (defn foreach
   "Iterate over a collection, executing children for each item.
 
-   `:array` - Expression returning the collection to iterate over
-   `:item` - Location (keyword or vector) to bind current item
-   `:index` - Location (keyword or vector) to bind current index (optional)
+   Attrs:
+   - `:id`
+   - `:array` — expression returning the collection to iterate
+   - `:item` — location (keyword or vector) to bind the current item
+   - `:index` — location to bind the current index (optional)
+
+   Children: `raise`, `log`, `if`, `elseif`, `else`, `foreach`, `assign`, `script`, `send`, `cancel`.
 
    https://www.w3.org/TR/scxml/#foreach"
   [{:keys [id array item index] :as attrs} & children]
@@ -287,61 +360,58 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn data-model
-  "Create a data model (in a state or machine context).
+  "Declare the data model for a state or the root chart. See ns docstring for expression details.
 
-   `:expr` is an expression that can be run by your current ExecutionModel. The result of the expression
-   becomes the value of your initial data model (typically a map).
-   `:src` (if the data model supports it) is a location from which to read the data for the data model.
+   Attrs:
+   - `:id`
+   - `:expr` — expression whose result becomes the initial data (typically a map)
+   - `:src` — URI/location from which to load initial data (if the DataModel supports it)
 
    https://www.w3.org/TR/scxml/#data-module"
   [{:keys [id src expr] :as attrs}]
   (new-element :data-model attrs))
 
 (defn assign
-  "Assign the value of `expr` into the data model at `location`. Location expressions are typically vectors of
-   keywords in the DataModel.
+  "Assign the result of `expr` into the data model at `location`.
 
-  https://www.w3.org/TR/scxml/#assign"
+   Attrs: `:id`, `:location` (keyword or vector of keywords), `:expr` (expression).
+
+   https://www.w3.org/TR/scxml/#assign"
   [{:keys [id location expr] :as attrs} & children]
   (new-element :assign attrs children))
 
 (defn done-data
-  "Data (calculated by expr) to return to caller when a final state is entered. See `data-model`.
+  "Data to include in the `done` event when a `final` state is entered.
 
-  NOTE: Differs from spec (uses expr instead of child elements)
+   Attrs: `:id`, `:expr` (expression whose result becomes the event data).
 
-  https://www.w3.org/TR/scxml/#donedata"
+   NOTE: Uses `:expr` rather than child `<param>`/`<content>` elements as in the XML spec.
+
+   https://www.w3.org/TR/scxml/#donedata"
   [{:keys [id expr] :as attrs}]
   (new-element :done-data attrs))
 
 (defn script
   "A script to execute. MAY support loading the code via `src`, or supply the code via `expr` (in the format required
-   by your ExecutionModel).
+   by your ExecutionModel). See ns docstring for expression details.
 
-  `:diagram/expression` - (soft deprecated) A string hint for diagram rendering. Prefer `:diagram/label` instead.
-  `:diagram/label` - A human-readable label for diagram rendering.
+   Attrs:
+   - `:id`
+   - `:expr` — expression to execute (format depends on ExecutionModel)
+   - `:src` — URI from which to load the script (if supported)
+   - `:diagram/label` — human-readable label for diagram rendering
 
-  See the documentation for you data model to understand the semantics and operation of this element.
-
-  https://www.w3.org/TR/scxml/#script"
+   https://www.w3.org/TR/scxml/#script"
   [{:keys [id src expr] :as attrs}]
   (new-element :script attrs))
 
 (defmacro script-fn
-  "A macro that emits a `script` element, but looks more like a normal CLJC lambda:
+  "Shorthand for a `script` with a lambda expression.
 
-  ```
-  (script-fn [env data] ...)
-  ```
-
-  is shorthand for
-
-  ```
-  (script {:expr (fn [env data] ...)})
-  ```
-
-  You can include the number of args that your execution env expects.
-  "
+   ```clojure
+   (script-fn [env data] body)
+   ;; => (script {:expr (fn [env data] body)})
+   ```"
   [arglist & body]
   `(script {:diagram/label ~(expr-label body)
             :expr          (fn ~arglist ~@body)}))
@@ -352,7 +422,7 @@
 
 (defn send
   "Sends an event to the specified (external) target (which could be an external system, this machine,
-   or another machine).
+   or another machine). See ns docstring for expression details.
 
    * `id` - The id of the send element. Used as the event send ID if no idlocation is provided.
    * `:idlocation` a location in the DataModel
@@ -371,14 +441,16 @@
 
   If BOTH namelist and content are supplied, then they will be MERGED as the event data with `content` overwriting
   any conflicting keys from `namelist`.
-  "
+
+  https://www.w3.org/TR/scxml/#send"
   [attrs]
   (new-element :send attrs))
 
 (def Send
   "[attrs]
 
-   Same as `send`, but doesn't alias over clojure.core/send
+   Same as `send`, but doesn't alias over clojure.core/send.
+   See ns docstring for expression details.
 
    Sends an event to the specified (external) target (which could be an external system, this machine,
      or another machine).
@@ -415,6 +487,8 @@
    BEFORE the event is processed by the parent state machine. Used inside `invoke` elements
    to update the data model with data from the child.
 
+   Children: `raise`, `log`, `if`, `elseif`, `else`, `foreach`, `assign`, `script`, `send`, `cancel`.
+
    https://www.w3.org/TR/scxml/#finalize"
   [attrs & children]
   (new-element :finalize attrs children))
@@ -422,6 +496,7 @@
 (defn invoke
   "Create an instance of an external service that can return data (and send events) back to the calling state(s). An
   invoked service stays active while the state is active, and is terminated when the parent state is exited.
+  See ns docstring for expression details.
 
   Parameters (via :namelist or :params) will be pushed into the data model of the invoked chart.
 
@@ -452,6 +527,8 @@
   * `:autoforward` Enable forwarding of (external) events to the invoked process.
   * `:idlocation` a location (i.e. vector of keywords) that specifies a location in the DataModel
                   to store a generated ID that uniquely identifies the invocation instance.
+
+   Children: `finalize`.
 
    NOTES:
 

@@ -4,7 +4,7 @@
   (:require
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.elements :refer [state transition on-entry on-exit script]]
+    [com.fulcrologic.statecharts.elements :refer [raise state transition on-entry on-exit script]]
     [com.fulcrologic.statecharts.testing-async :as testing]
     [com.fulcrologic.statecharts.testing :as sync-testing]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
@@ -395,3 +395,37 @@
       (get (testing/data env) :sync-after) => true
       "Child on-entry saw async-completed as true (proving async completed before child entry)"
       (get (testing/data env) :child-saw-async) => true)))
+
+;; =============================================================================
+;; Test 11: Raise with async data expression
+;; =============================================================================
+
+(def async-raise-data
+  "Expression that returns a promise resolving to event data."
+  (fn [_env _data]
+    (p/resolved {:payload "from-promise"})))
+
+(def capture-event-data
+  "Script that captures the current event's data into the data model."
+  (fn [_env data]
+    (let [event-data (get-in data [:_event :data])]
+      [(ops/assign :received-data event-data)])))
+
+(specification "Raise with :data expression that returns a promise"
+  (let [chart (chart/statechart {:initial :waiting}
+                (state {:id :waiting}
+                  (on-entry {}
+                    (raise {:event :got-data :data async-raise-data}))
+                  (transition {:event :got-data :target :received}))
+                (state {:id :received}
+                  (on-entry {}
+                    (script {:expr capture-event-data}))))
+        env   (testing/new-testing-env {:statechart chart :mocking-options {:run-unmocked? true}} {})]
+
+    (testing/start! env)
+
+    (assertions
+      "Transitions to the target state after processing the raised event"
+      (testing/in? env :received) => true
+      "Event data is the resolved promise value, not a promise object"
+      (get (testing/data env) :received-data) => {:payload "from-promise"})))

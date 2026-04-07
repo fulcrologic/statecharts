@@ -289,9 +289,11 @@
       :info (log/info (or label "LOG") (run-expression! raw-env expr))
       (log/debug (or label "LOG") (run-expression! raw-env expr)))))
 
-(defmethod execute-element-content! :raise [env {:keys [event]}]
+(defmethod execute-element-content! :raise [env {:keys [event data]}]
   (log/debug "Raise " event)
-  (raise env event))
+  (if data
+    (raise env (evts/new-event {:name event :data (run-expression! (assoc env ::sc/raw-result? true) data)}))
+    (raise env event)))
 
 (defmethod execute-element-content! :assign [env {:keys [location expr]}]
   (let [v (run-expression! (assoc env ::sc/raw-result? true) expr)]
