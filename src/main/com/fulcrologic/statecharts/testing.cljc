@@ -52,15 +52,20 @@
           :else false))))
   sp/ExecutionModel
   (run-expression! [_model env expr]
-    (let [{:keys [run-unmocked?]} options
-          raw-result? (::sc/raw-result? env)]
+    (let [{:keys [run-unmocked? explode-event?]} options
+          raw-result? (::sc/raw-result? env)
+          invoke      (fn [f env data]
+                        (if explode-event?
+                          (let [{event-name :name event-data :data} (:_event data)]
+                            (f env data event-name event-data))
+                          (f env data)))]
       (swap! expressions-seen conj expr)
       (swap! call-counts update expr (fnil inc 0))
       (cond
         (fn? (get @mocks expr)) (let [env     (assoc env :ncalls (get @call-counts expr))
-                                      expr    (get @mocks expr)
+                                      mfn     (get @mocks expr)
                                       data    (sp/current-data data-model env)
-                                      result  (log/spy :trace "expr => " (expr env data))
+                                      result  (log/spy :trace "expr => " (invoke mfn env data))
                                       update? (and (not raw-result?) (vector? result))]
                                   (when update?
                                     (log/trace "trying vector result as a data model update" result)
@@ -69,7 +74,7 @@
         (contains? @mocks expr) (get @mocks expr)
         (and run-unmocked? (fn? expr)) (let [env     (assoc env :ncalls (get @call-counts expr))
                                              data    (sp/current-data data-model env)
-                                             result  (log/spy :trace "expr => " (expr env data))
+                                             result  (log/spy :trace "expr => " (invoke expr env data))
                                              update? (and (not raw-result?) (vector? result))]
                                          (when update?
                                            (log/trace "trying vector result as a data model update" result)
@@ -85,8 +90,14 @@
 
    You can use `ran?`, `ran-in-order?` and other ExecutionChecks to do verifications.
 
-   `options` is a map that can contain `:run-unmocked?` to indicate that any unmocked functions
-   should default to their real (clojure(script)) implementation (default false).
+   `options` is a map that can contain:
+     - `:run-unmocked?`  when true, any unmocked fn expressions default to their real
+                         (clojure(script)) implementation (default false).
+     - `:explode-event?` when true, fn expressions (both mocks and unmocked real fns)
+                         are called as `(f env data event-name event-data)` instead of
+                         `(f env data)`. Matches the real lambda execution model's option
+                         of the same name. Default false — 2-arg dispatch is preserved
+                         for existing callers.
    "
   ([data-model]
    (->MockExecutionModel data-model (atom []) (atom {}) (atom {}) {:run-unmocked? false}))
