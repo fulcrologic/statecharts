@@ -1627,7 +1627,8 @@ URL encoding and decoding is handled by the `URLCodec` protocol defined in `rout
     "Given a context map, return a URL path string (with query if needed).
      Context keys: :segments, :params, :route-elements")
   (decode-url [this href route-elements]
-    "Given a URL string and route-elements map, return {:leaf-id :params} or nil."))
+    "Given a URL string and route-elements map, return {:leaf-id :params}, or nil.
+     May return {:params <map>} without :leaf-id for cross-chart targets."))
 -----
 
 ==== Default: TransitBase64Codec

@@ -986,8 +986,8 @@
   [app elements-by-id provider codec]
   (let [href    (ruh/current-href provider)
         decoded (ruc/decode-url codec href elements-by-id)]
-    (if decoded
-      (let [{:keys [leaf-id params]} decoded
+    (if-let [leaf-id (:leaf-id decoded)]
+      (let [{:keys [params]} decoded
             route-params (when params
                            (reduce-kv (fn [acc _state-id state-params]
                                         (merge acc state-params))
@@ -996,12 +996,16 @@
         leaf-id)
       ;; Codec didn't match directly — try reachable targets via deep search
       ;; (needed for cross-chart :route/reachable targets not in this chart's elements)
-      (let [segments  (ruh/current-url-path href)
-            leaf-name (peek segments)]
+      (let [segments    (ruh/current-url-path href)
+            leaf-name   (peek segments)
+            route-params (when-let [params (:params decoded)]
+                           (reduce-kv (fn [acc _state-id state-params]
+                                        (merge acc state-params))
+                             {} params))]
         (when leaf-name
           (when-let [{:keys [target-key child?]} (ruh/find-target-by-leaf-name-deep elements-by-id leaf-name)]
             (when child?
-              (route-to! app target-key {})
+              (route-to! app target-key (or route-params {}))
               target-key)))))))
 
 (defn install-url-sync!

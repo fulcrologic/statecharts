@@ -396,12 +396,12 @@
         "decodes leaf matching by :route/segment"
         (:leaf-id decoded) => :page-b)))
 
-  (component "decode returns nil for unrecognized URL"
+  (component "decode returns nil for unrecognized URL without params"
     (let [codec          (ruct/transit-base64-codec)
           route-elements {:page-a {:route/target 'com.example/PageA}}
           decoded        (ruc/decode-url codec "/unknown/path" route-elements)]
       (assertions
-        "returns nil when no route element matches the leaf segment"
+        "returns nil when no route element matches and no params present"
         decoded => nil)))
 
   (component "single segment route"
