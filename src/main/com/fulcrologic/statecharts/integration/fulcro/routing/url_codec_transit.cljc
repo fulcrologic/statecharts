@@ -119,11 +119,16 @@
 (defrecord TransitBase64Codec [prefix]
   url-codec/URLCodec
   (encode-url [_this {:keys [segments params route-elements]}]
-    (let [seg-strs (mapv (fn [state-id]
-                           (let [element (get route-elements state-id)]
-                             (or (url-codec/element-segment element) (name state-id))))
+    (let [seg-strs (into []
+                     (comp
+                       (map (fn [state-id]
+                              (let [element (get route-elements state-id)]
+                                (or (url-codec/element-segment element) (name state-id)))))
+                       (remove #{""}))
                      segments)
-          path     (str "/" (str/join "/" seg-strs))
+          path     (if (seq seg-strs)
+                     (str "/" (str/join "/" seg-strs))
+                     "/")
           raw-b64  (encode-params-base64 params)
           encoded  (when raw-b64
                      #?(:cljs (js/encodeURIComponent raw-b64)
