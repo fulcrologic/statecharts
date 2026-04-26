@@ -404,6 +404,29 @@
         "returns nil when no route element matches and no params present"
         decoded => nil)))
 
+  (component "empty :route/segment is dropped from the path"
+    (let [codec          (ruct/transit-base64-codec)
+          route-elements {:parent {:route/target 'com.example/Admin :route/segment "admin"}
+                          :leaf   {:route/target 'com.example/Home :route/segment ""}}
+          context        {:segments       [:parent :leaf]
+                          :params         nil
+                          :route-elements route-elements}
+          url            (ruc/encode-url codec context)]
+      (assertions
+        "ancestor segment alone forms the URL with no trailing slash"
+        url => "/admin")))
+
+  (component "all-empty segment chain encodes to root"
+    (let [codec          (ruct/transit-base64-codec)
+          route-elements {:leaf {:route/target 'com.example/Home :route/segment ""}}
+          context        {:segments       [:leaf]
+                          :params         nil
+                          :route-elements route-elements}
+          url            (ruc/encode-url codec context)]
+      (assertions
+        "produces / and not //"
+        url => "/")))
+
   (component "single segment route"
     (let [codec          (ruct/transit-base64-codec)
           route-elements {:dashboard {:route/target 'com.example/Dashboard}}

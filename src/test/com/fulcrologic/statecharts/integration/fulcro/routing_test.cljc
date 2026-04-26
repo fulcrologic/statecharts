@@ -276,6 +276,96 @@
         "Throws ex-info"
         (sroute/validate-route-configuration chart :strict) =throws=> #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)))))
 
+(specification "validate-empty-segments — rejection messages"
+  (component "Issue message names the state and the rule"
+    (let [chart  (chart/statechart {}
+                   (sroute/routes {:id :region/routes :routing/root `Foo :initial :ns/Other}
+                     (sroute/rstate {:route/target :ns/Home :route/segment ""})
+                     (sroute/rstate {:route/target :ns/Other :route/segment "other"})))
+          {:keys [message state-id reason]} (first (sroute/validate-empty-segments chart))]
+      (assertions
+        "names the offending state in the message"
+        (boolean (re-find #":ns/Home" message)) => true
+        "explains it must be on the initial chain"
+        (boolean (re-find #"initial chain" message)) => true
+        "carries the state-id in the issue map"
+        state-id => :ns/Home
+        "carries a non-empty reason string"
+        (boolean (seq reason)) => true)))
+
+  (component "Strict mode error message includes the rule explanation"
+    (let [chart (chart/statechart {}
+                  (sroute/routes {:id :region/routes :routing/root `Foo :initial :ns/Admin}
+                    (sroute/istate {:route/target :ns/Admin :route/segment ""
+                                    :route/reachable {:ns/AdminHome "home"}})))
+          ex    (try
+                  (sroute/validate-route-configuration chart :strict)
+                  nil
+                  (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e e))]
+      (assertions
+        "throws an ex-info"
+        (some? ex) => true
+        "exception message names the offending state"
+        (boolean (re-find #":ns/Admin" (ex-message ex))) => true
+        "exception payload identifies it as :routing/invalid-empty-segment"
+        (:warning-key (ex-data ex)) => :routing/invalid-empty-segment)))
+
+  (component "Warn mode does not throw when an empty segment is invalid"
+    (let [chart (chart/statechart {}
+                  (sroute/routes {:id :region/routes :routing/root `Foo :initial :ns/Other}
+                    (sroute/rstate {:route/target :ns/Home :route/segment ""})
+                    (sroute/rstate {:route/target :ns/Other :route/segment "other"})))]
+      (assertions
+        "Returns the chart unchanged"
+        (sroute/validate-route-configuration chart :warn) => chart))))
+
+(specification "validate-empty-segments"
+  (component "An rstate that is the routes node's initial leaf may carry an empty segment"
+    (let [chart (chart/statechart {}
+                  (sroute/routes {:id :region/routes :routing/root `Foo :initial :ns/Home}
+                    (sroute/rstate {:route/target :ns/Home :route/segment ""})
+                    (sroute/rstate {:route/target :ns/Other :route/segment "other"})))]
+      (assertions
+        "Returns empty"
+        (sroute/validate-empty-segments chart) => [])))
+
+  (component "An rstate that is NOT on the initial chain rejects empty segment"
+    (let [chart (chart/statechart {}
+                  (sroute/routes {:id :region/routes :routing/root `Foo :initial :ns/Other}
+                    (sroute/rstate {:route/target :ns/Home :route/segment ""})
+                    (sroute/rstate {:route/target :ns/Other :route/segment "other"})))
+          issues (sroute/validate-empty-segments chart)]
+      (assertions
+        "Returns one issue"
+        (count issues) => 1
+        "Issue has the correct warning key"
+        (:warning-key (first issues)) => :routing/invalid-empty-segment
+        "Issue names the offending state"
+        (:state-id (first issues)) => :ns/Home)))
+
+  (component "An istate (child-chart host) cannot carry an empty segment"
+    (let [chart (chart/statechart {}
+                  (sroute/routes {:id :region/routes :routing/root `Foo :initial :ns/Admin}
+                    (sroute/istate {:route/target :ns/Admin :route/segment ""
+                                    :route/reachable {:ns/AdminHome "home"}})))
+          issues (sroute/validate-empty-segments chart)]
+      (assertions
+        "Returns one issue"
+        (count issues) => 1
+        "Issue has the correct warning key"
+        (:warning-key (first issues)) => :routing/invalid-empty-segment
+        "Issue names the offending state"
+        (:state-id (first issues)) => :ns/Admin)))
+
+  (component "Strict mode throws on invalid empty segment"
+    (let [chart (chart/statechart {}
+                  (sroute/routes {:id :region/routes :routing/root `Foo :initial :ns/Other}
+                    (sroute/rstate {:route/target :ns/Home :route/segment ""})
+                    (sroute/rstate {:route/target :ns/Other :route/segment "other"})))]
+      (assertions
+        "Throws ex-info"
+        (sroute/validate-route-configuration chart :strict) =throws=> #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Slice 1: Pure utility functions
 ;; ---------------------------------------------------------------------------

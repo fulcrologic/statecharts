@@ -180,7 +180,7 @@
           :else
           (let [seg (ruc/element-segment element)]
             (recur (:parent element)
-              (if seg (cons seg segments) segments))))))))
+              (if (and seg (not= "" seg)) (cons seg segments) segments))))))))
 
 (defn validate-duplicate-segments
   "Checks for leaf route states whose full segment chains collide. Two states with
@@ -206,6 +206,99 @@
                               (mapv :id entries))})))
       by-chain)))
 
+(defn- has-invoke-child?
+  "True when the state element with `state-id` has an `:invoke` child in the normalized chart."
+  [elements-by-id state-id]
+  (boolean
+    (some (fn [child-id]
+            (= :invoke (:node-type (get elements-by-id child-id))))
+      (:children (get elements-by-id state-id)))))
+
+(defn- enclosing-routes-node-id
+  "Walks up from `state-id` through `:parent` links to find the nearest ancestor
+   whose element carries `:routing/root` (i.e. a `routes` node). Returns the
+   ancestor's id, or nil if none found."
+  [elements-by-id state-id]
+  (loop [id (:parent (get elements-by-id state-id))]
+    (let [el (get elements-by-id id)]
+      (cond
+        (nil? el)                       nil
+        (contains? el :routing/root)    id
+        :else                           (recur (:parent el))))))
+
+(defn- initial-chain-leaf
+  "Walks the initial chain from `start-id` (a compound state) by following the
+   `:initial` attribute of each compound state until landing on a leaf state.
+   Returns the leaf's id, or nil if the chain cannot be resolved."
+  [elements-by-id start-id]
+  (loop [id start-id seen #{}]
+    (cond
+      (nil? id) nil
+      (contains? seen id) nil
+      :else
+      (let [el      (get elements-by-id id)
+            initial (:initial el)
+            target  (cond
+                      (keyword? initial) initial
+                      (and (vector? initial) (= 1 (count initial))) (first initial)
+                      :else nil)]
+        (if target
+          (recur target (conj seen id))
+          id)))))
+
+(defn validate-empty-segments
+  "Checks each route state with `:route/segment \"\"` against the rules for the
+   sanctioned 'no URL contribution' marker:
+
+   * Cannot host a child-chart invocation (i.e. cannot be an `istate`).
+   * Cannot have descendants that are themselves route states.
+   * Must lie on the initial chain of its enclosing `routes` node — i.e. walking
+     `:initial` from the routes node down through compound states must arrive
+     at this state.
+
+   Returns a sequence of issue maps, empty when all empty-segment markers are valid."
+  [{::sc/keys [elements-by-id]}]
+  (let [empty-marked  (into []
+                        (comp
+                          (filter (fn [[_ el]]
+                                    (and (:route/target el) (= "" (:route/segment el)))))
+                          (map first))
+                        elements-by-id)
+        invalid-issue (fn [state-id reason]
+                        {:warning-key :routing/invalid-empty-segment
+                         :state-id    state-id
+                         :reason      reason
+                         :message     (str "State " state-id " has :route/segment \"\" but " reason
+                                       ". The empty-segment marker is only valid on a leaf rstate "
+                                       "that lies on the initial chain of its enclosing routes node.")})]
+    (into []
+      (keep
+        (fn [state-id]
+          (let [el          (get elements-by-id state-id)
+                routes-id   (enclosing-routes-node-id elements-by-id state-id)
+                chain-leaf  (when routes-id (initial-chain-leaf elements-by-id routes-id))
+                child-route? (some
+                               (fn [cid]
+                                 (and (not= cid state-id)
+                                   (:route/target (get elements-by-id cid))))
+                               (:children el))]
+            (cond
+              (has-invoke-child? elements-by-id state-id)
+              (invalid-issue state-id "it invokes a child chart (istate) — its segment is the bridge into the child's URL")
+
+              child-route?
+              (invalid-issue state-id "it has a routed descendant — only leaf routes may use the marker")
+
+              (nil? routes-id)
+              (invalid-issue state-id "it is not enclosed by a routes node (no ancestor with :routing/root)")
+
+              (not= chain-leaf state-id)
+              (invalid-issue state-id (str "it is not the initial-chain leaf of its routes node "
+                                        "(initial chain resolves to " (pr-str chain-leaf) ")"))
+
+              :else nil))))
+      empty-marked)))
+
 (defn validate-route-configuration
   "Runs all route configuration validators on `chart`. Reports issues according
    to `mode` (`:warn` or `:strict`). Returns the chart unchanged."
@@ -214,7 +307,8 @@
                  (validate-duplicate-leaf-names chart)
                  (validate-duplicate-segments chart)
                  (validate-reachable-collisions chart)
-                 (validate-routing-root chart))]
+                 (validate-routing-root chart)
+                 (validate-empty-segments chart))]
     (doseq [{:keys [warning-key message] :as issue} issues]
       (report-issue! mode warning-key message (dissoc issue :message :warning-key)))
     chart))

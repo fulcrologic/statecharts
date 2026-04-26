@@ -78,7 +78,7 @@
               :else
               (let [seg (element-segment element)]
                 (recur (:parent element)
-                  (if seg
+                  (if (and seg (not= "" seg))
                     (cons seg segments)
                     segments))))))))))
 
