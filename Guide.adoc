@@ -1274,6 +1274,58 @@ Segments compose from the routing root down to the active leaf:
 | `UserEdit` with `:route/segment "edit"` nested under `UserDetail` nested under `UserList` with `:route/segment "users"` | `/users/UserDetail/edit`
 |===
 
+==== Empty Segments — Initial-Leaf Marker
+
+There is one sanctioned use of `:route/segment ""`: marking the **initial-chain leaf** of a `routes` node so that the parent's URL alone enters the leaf. This is how you make `/admin` (rather than `/admin/dashboard`) display the admin dashboard, or how you make `/` enter a chart's default home leaf.
+
+The marker is intentionally narrow because "no URL contribution" is otherwise ambiguous: the URL→state mapping needs to round-trip, and a non-leaf or non-initial transparent state would make the URL unable to identify which state to enter.
+
+**Rules** (enforced at chart registration when `:routing/checks :strict`):
+
+* The state must be an `rstate` — never an `istate`. (An `istate` invokes a child chart, and its segment is the bridge that lets the URL descend into the child's URL space; without it, deep-URL traversal is impossible.)
+* The state must be a leaf — no descendant route states.
+* The state must be reached by walking `:initial` from its enclosing `routes` node down through any compound states' `:initial` declarations.
+
+**Composition with `rstate` only** — a chart whose default leaf wants to ride on the parent's URL:
+
+[source,clojure]
+-----
+(sroute/routes {:id :region/main :routing/root `ui/Root :initial :ns/Home}
+  ;; "/" enters Home (segment is empty, so only the parent contributes)
+  (sroute/rstate {:route/target :ns/Home :route/segment ""})
+  ;; "/settings" is unaffected — it's not the initial-chain leaf
+  (sroute/rstate {:route/target :ns/Settings :route/segment "settings"}))
+-----
+
+**Composition with `istate` invoking a child chart** — the parent `istate` always carries a real segment; the child chart's *initial* leaf can carry the marker so that the parent's segment alone is the URL:
+
+[source,clojure]
+-----
+;; Parent chart: istate `admin` invokes the admin child chart at /admin
+(sroute/routes {:id :region/main :routing/root `ui/Root}
+  (sroute/istate {:route/target `ui/AdminPanel
+                  :route/segment "admin"     ;; REQUIRED — bridge into child URL
+                  :route/reachable {::Dashboard ""
+                                    ::Users    "users"}}))
+
+;; Child chart: Dashboard is the initial leaf and rides on /admin
+(sroute/routes {:id :admin/routes :routing/root `ui/AdminPanel :initial ::Dashboard}
+  (sroute/rstate {:route/target ::Dashboard :route/segment ""})  ;; "/admin"
+  (sroute/rstate {:route/target ::Users     :route/segment "users"})) ;; "/admin/users"
+-----
+
+URL outcomes:
+
+[cols="2,3"]
+|===
+| Active leaf | URL
+
+| Child chart at `Dashboard` (initial-chain leaf, empty segment) | `/admin`
+| Child chart at `Users`                                         | `/admin/users`
+|===
+
+If you put `:route/segment ""` on the parent `istate`, registration fails with `:routing/invalid-empty-segment` — the parent must always contribute a real segment because it is the bridge into the child's URL.
+
 ==== Route Parameters
 
 In the default URL encoding route parameters are **not** encoded in URL path segments.
@@ -1983,6 +2035,7 @@ The validator detects:
 * **Duplicate segment chains** -- two leaf routes with identical full segment paths (e.g. both resolve to `/users/edit`).
 * **Reachable collisions** -- a `:route/reachable` target (whether auto-derived or explicit) whose simple name collides with a direct route target.
 * **Invalid routing root** -- a `routes` node with a nil or non-coercible `:routing/root`.
+* **Invalid empty segment** -- `:route/segment ""` placed somewhere other than the initial-chain leaf of a `routes` node, or placed on an `istate` (which must always carry a real segment so the URL can descend into the child chart). See <<Empty Segments — Initial-Leaf Marker>>.
 
 TIP: Use `:routing/checks :strict` during development to catch configuration problems as thrown exceptions rather than logged warnings.
 

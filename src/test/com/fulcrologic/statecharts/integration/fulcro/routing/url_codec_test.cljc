@@ -63,6 +63,24 @@
       "returns nil for no match"
       (ruh/find-target-by-leaf-name elements "nope") => nil)))
 
+;; ---------------------------------------------------------------------------
+;; Empty :route/segment — sanctioned "initial-leaf rides on ancestor URL" marker
+;; ---------------------------------------------------------------------------
+
+(specification "path-from-configuration with :route/segment \"\""
+  (let [elements {:root {:id :root :children [:a]}
+                  :a    {:id :a :parent :root :route/target :ns/Dashboard :route/segment ""}}]
+    (assertions
+      "drops the empty segment, producing the chart-root URL with no trailing slash"
+      (ruc/path-from-configuration elements #{:root :a}) => "/"))
+
+  (let [elements {:root   {:id :root :children [:parent]}
+                  :parent {:id :parent :parent :root :route/target :ns/Admin :route/segment "admin" :children [:leaf]}
+                  :leaf   {:id :leaf :parent :parent :route/target :ns/Home :route/segment ""}}]
+    (assertions
+      "ancestor segment alone forms the URL when the leaf segment is empty"
+      (ruc/path-from-configuration elements #{:root :parent :leaf}) => "/admin")))
+
 (specification "current-url-path (cross-platform)"
   (assertions
     "extracts path segments from an absolute URL"
