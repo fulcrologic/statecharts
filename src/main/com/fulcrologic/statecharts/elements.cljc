@@ -547,5 +547,4 @@
     (new-element :invoke (cond-> (dissoc attrs :finalize)
                            id (assoc :explicit-id? true))
       (cond-> (vec children)
-        fattr (conj children (finalize {}
-                               (script {:expr fattr})))))))
+        fattr (conj (finalize {} (script {:expr fattr})))))))
