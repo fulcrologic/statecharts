@@ -437,8 +437,10 @@
         (fn [sent?]
           (when-not sent?
             (raise env (evts/new-event {:name :error.execution
-                                        :data {:type    :send
-                                               :element element}}))))))))
+                                        :data {:type :send :element element}}))
+            ;; W3C §4.4: in strict mode, abort the surrounding block.
+            (when (::sc/strict-block-errors? env)
+              (throw (ex-info "send dispatch failed" {:type :send :element element})))))))))
 
 (defmethod execute-element-content! :cancel [{::sc/keys [event-queue] :as env}
                                              {:keys [sendid sendidexpr] :as element}]
@@ -517,9 +519,12 @@
       (fn [coll]
         (cond
           (or (nil? coll) (and (not (coll? coll)) (not (string? coll))))
-          (raise env (evts/new-event {:name :error.execution
-                                      :data {:type :foreach :reason :not-iterable
-                                             :array coll :element element}}))
+          (do
+            (raise env (evts/new-event {:name :error.execution
+                                        :data {:type :foreach :reason :not-iterable
+                                               :array coll :element element}}))
+            (when strict?
+              (throw (ex-info "foreach over non-iterable" {:type :foreach :array coll}))))
 
           :else
           (do-sequence (map-indexed vector coll)

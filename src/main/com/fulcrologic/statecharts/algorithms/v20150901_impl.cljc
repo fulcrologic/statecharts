@@ -348,8 +348,10 @@
     (log/debug "Send event" element)
     (when-not (send! env element)
       (raise env (evts/new-event {:name :error.execution
-                                  :data {:type    :send
-                                         :element element}})))))
+                                  :data {:type :send :element element}}))
+      ;; W3C §4.4: in strict mode, the rest of the surrounding block must be skipped.
+      (when (::sc/strict-block-errors? env)
+        (throw (ex-info "send dispatch failed" {:type :send :element element}))))))
 
 (defmethod execute-element-content! :cancel [{::sc/keys [event-queue] :as env}
                                              {:keys [sendid sendidexpr] :as element}]
@@ -416,9 +418,13 @@
     (cond
       (or (nil? coll) (and (not (coll? coll)) (not (string? coll))))
       ;; W3C §4.6: array expression that does not yield an iterable must raise error.execution.
-      (raise env (evts/new-event {:name :error.execution
-                                  :data {:type :foreach :reason :not-iterable
-                                         :array coll :element element}}))
+      (do
+        (raise env (evts/new-event {:name :error.execution
+                                    :data {:type :foreach :reason :not-iterable
+                                           :array coll :element element}}))
+        ;; W3C §4.4: in strict mode, abort the surrounding block.
+        (when strict?
+          (throw (ex-info "foreach over non-iterable" {:type :foreach :array coll}))))
 
       :else
       (loop [pairs (seq (map-indexed vector coll))]
