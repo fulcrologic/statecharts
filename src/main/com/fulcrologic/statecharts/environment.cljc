@@ -2,6 +2,7 @@
   "Helper functions related to the environment that can be used in a lambda execution environment on
    `env`."
   (:require
+    [clojure.string :as str]
     [com.fulcrologic.guardrails.malli.core :refer [=> >defn ?]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
@@ -76,6 +77,37 @@
   [{::sc/keys [data-model] :as env} & ks]
   (sp/update! data-model env {:ops [(ops/delete ks)]})
   nil)
+
+(defn resolve-send-target
+  "Resolve a `<send>` `:target` value to one of:
+
+     `:internal`            — route to this session's internal queue (`<send target=\"#_internal\">`).
+     `[:session sid]`       — route to the parent session, with `sid` already resolved
+                              (`<send target=\"#_parent\">`).
+     `[:session sid]`       — route to a specific session keyword (covers
+                              `#_<invokeid>` and `#_scxml_<sessionid>` after stripping).
+     `[:literal v]`         — pass `v` through unchanged (legacy / user-supplied
+                              session-ids that are not keywords).
+
+   Canonical Clojure forms (preferred):
+     `:_internal`           — local internal queue.
+     `:_parent`             — parent session.
+     any other keyword      — that keyword IS the target session-id (no prefix needed).
+
+   W3C string forms (accepted for compatibility with mechanical .scxml→Clojure ports):
+     `\"#_internal\"`, `\"#_parent\"`, `\"#_scxml_<sid>\"`, `\"#_<invokeid>\"`."
+  [env target]
+  (cond
+    (nil? target)                                 [:literal nil]
+    (or (= target :_internal) (= target "#_internal"))
+                                                  :internal
+    (or (= target :_parent)   (= target "#_parent"))
+                                                  [:session (parent-session-id env)]
+    (and (string? target)
+         (str/starts-with? target "#_scxml_"))    [:session (keyword (subs target 8))]
+    (and (string? target)
+         (str/starts-with? target "#_"))          [:session (keyword (subs target 2))]
+    :else                                         [:literal target]))
 
 (>defn raise
   "Place an event on the internal event queue for immediate processing. Only callable from within active runnable content"

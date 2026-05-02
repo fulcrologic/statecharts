@@ -26,3 +26,41 @@ contextual. This implementation:
 which is meant to tell the data model to store the event in the top-level
 context (on the root element, the machine).
 ** The data model keeps this value until the next event is processed.
+
+=== System variable read-only enforcement (intentional deviation)
+
+W3C SCXML §5.10 requires the SCXML processor to raise `error.execution`
+when user code attempts to assign to a system variable
+(`_sessionid`, `_name`, `_event`, `_ioprocessors`, `_x`).
+
+This library does *not* enforce that. The `DataModel` is a pluggable
+protocol (`com.fulcrologic.statecharts.protocols/DataModel`); any
+implementation may store values however it likes (working memory map,
+Datomic, an external store), so the engine has no general way to
+intercept writes to specific keys without breaking the abstraction.
+
+Practical impact:
+
+* `<assign location="_sessionid" .../>` (and equivalents) silently
+  overwrite the system variable instead of raising `error.execution`.
+* The W3C IRP tests that exercise this — 322, 324, 325, 326, 329, 346 —
+  are skipped in `src/test/com/fulcrologic/statecharts/irp/_skipped.md`
+  with this rationale.
+
+Application authors should treat the system variables as read-only by
+convention. A custom `DataModel` that wants W3C semantics may reject
+writes to those keys in its `update!` implementation and queue
+`error.execution` on the internal queue.
+
+=== Other intentionally unsupported W3C features
+
+* *Inline `<invoke><content><scxml>...</scxml></content></invoke>`* —
+  only registry-based invocation (by `:src` keyword resolved via the
+  chart registry) is supported.
+* *Late binding* — only early binding is supported.
+* *Top-level `<script>` (load-time execution)* — there is no load-time
+  pathway; scripts run as executable content during entry/exit/transitions.
+* *Basic HTTP Event I/O Processor* and other voice / network IO
+  processors — out of scope.
+* *External chart loading via `<invoke srcexpr="...">`* to fetch a
+  remote SCXML file — this library uses Clojure data, not XML.

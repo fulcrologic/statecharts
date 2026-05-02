@@ -398,21 +398,30 @@
                     type       (!? env type typeexpr)
                     delay      (!? env delay delayexpr)
                     content    (!? env nil content)]
-              (let [target-is-parent? (= target (env/parent-session-id env))
-                    data              (log/spy :debug
-                                       "Computed send event data"
-                                       (merge
-                                         (named-data env namelist)
-                                         content))]
+              (let [resolved (env/resolve-send-target env target)
+                    data     (log/spy :debug
+                               "Computed send event data"
+                               (merge
+                                 (named-data env namelist)
+                                 content))]
                 (when idlocation (sp/update! data-model env {:ops [(ops/assign idlocation id-v)]}))
-                (sp/send! event-queue env (cond-> {:send-id           id-v
-                                                    :source-session-id (env/session-id env)
-                                                    :event             event-name
-                                                    :data              data
-                                                    :target            target
-                                                    :type              (or type ::sc/chart)
-                                                    :delay             (or delay 0)}
-                                            target-is-parent? (assoc :invoke-id (env/invoke-id env))))))))]
+                (if (= :internal resolved)
+                  (do
+                    (env/raise env (evts/new-event (cond-> {:name event-name :data data}
+                                                     id-v (assoc :sendid id-v ::sc/send-id id-v))))
+                    true)
+                  (let [resolved-target   (second resolved)
+                        parent-sid        (env/parent-session-id env)
+                        target-is-parent? (and (some? parent-sid)
+                                               (= resolved-target parent-sid))]
+                    (sp/send! event-queue env (cond-> {:send-id           id-v
+                                                       :source-session-id (env/session-id env)
+                                                       :event             event-name
+                                                       :data              data
+                                                       :target            resolved-target
+                                                       :type              (or type ::sc/chart)
+                                                       :delay             (or delay 0)}
+                                                target-is-parent? (assoc :invoke-id (env/invoke-id env))))))))))]
   (defmethod execute-element-content! :send [env element]
     (log/debug "Send event" element)
     (let [result (send! env element)]
