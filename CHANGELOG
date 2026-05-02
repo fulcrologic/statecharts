@@ -1,6 +1,18 @@
 UNRELEASED
 ----------
 
+* `_event.origin` and `_event.origintype` are now populated on events delivered
+  by the manually-polled queue (W3C SCXML §5.10.1). `:origin` is the source
+  session id; `:origintype` defaults to the send `:type` (or `::sc/chart` for
+  the SCXML chart processor). Charts that round-trip events back to the sender
+  via `<send target=":origin/_event">` now work.
+* Compound states whose only children are `<final>` now receive a synthetic
+  initial transition pointing at the first final (W3C SCXML §3.3). Previously
+  they had no initial and could not be entered correctly.
+* The IRP test corpus under `src/test/com/fulcrologic/statecharts/irp/` now
+  uses `simple/strict-env`, since the W3C IRP exercises full §4.4 conformance.
+  This unlocked the `<if>/<elseif>/<else>` and `<foreach>` test families.
+
 * `<send>` `:target` now accepts Clojure-keyword forms (`:_internal`, `:_parent`,
   and any other keyword as a direct session-id) in addition to the W3C string forms.
   See `Guide.adoc` "Send Targets / Special target keywords" and `Conformance.adoc`.
