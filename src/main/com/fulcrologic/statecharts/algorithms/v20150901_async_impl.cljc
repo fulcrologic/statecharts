@@ -1088,8 +1088,9 @@
                         (exit-interpreter! env)
                         (do
                           (env/assign! env [:ROOT :_event] event)
-                          (maybe-let [_ (select-transitions! env event)
-                                  _ (handle-external-invocations! env event)
+                          ;; W3C SCXML mainEventLoop: applyFinalize and autoforward run before selectTransitions
+                          (maybe-let [_ (handle-external-invocations! env event)
+                                  _ (select-transitions! env event)
                                   _ (microstep! env)]
                             (before-event! env))))]
       (maybe-then body-result
