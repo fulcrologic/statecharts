@@ -83,6 +83,9 @@
       namelist)
     {}))
 
+;; Forward declarations for symbols defined later in this file.
+(declare raise run-many! execute! add-descendant-states-to-enter!)
+
 (defn- run-expression! [{::sc/keys [execution-model] :as env} expr]
   (try
     (log/debug "Running expression" expr)
@@ -134,8 +137,6 @@
                                                             (fn [s] (in-final-state? env s))
                                                             (chart/child-states statechart non-atomic-state))
       :else false)))
-
-(declare add-descendant-states-to-enter!)
 
 (>defn raise
   "Add an event to the internal (working memory) event queue."
@@ -263,8 +264,6 @@
         (map? expr) (sp/update! data-model env {:ops (log/spy :debug (ops/set-map-ops expr))})
         :else (sp/update! data-model env {:ops (ops/set-map-ops {})})))
     nil))
-
-(declare execute!)
 
 (defmulti execute-element-content!
   "Multimethod. Extensible mechanism for running the content of elements on the state machine. Dispatch by :node-type

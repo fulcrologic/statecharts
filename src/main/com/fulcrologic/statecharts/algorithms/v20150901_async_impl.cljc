@@ -136,6 +136,9 @@
       namelist)
     {}))
 
+;; Forward declarations for symbols defined later in this file.
+(declare raise run-many! execute! add-descendant-states-to-enter!)
+
 (defn- run-expression!
   "Run an expression through the execution model. Errors (sync throw OR promise rejection)
    queue an `:error.execution` event on the INTERNAL queue (W3C §4.4). When
@@ -202,7 +205,6 @@
 
       :else false)))
 
-(declare add-descendant-states-to-enter!)
 
 (defn raise
   "Add an event to the internal (working memory) event queue."
@@ -339,7 +341,6 @@
 ;; Executable content — multimethods, async-aware
 ;; =============================================================================
 
-(declare execute!)
 
 (defmulti execute-element-content!
   "Multimethod. Extensible mechanism for running the content of elements on the state machine.

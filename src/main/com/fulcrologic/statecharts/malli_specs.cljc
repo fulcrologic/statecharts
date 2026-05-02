@@ -53,8 +53,12 @@
 (>def :org.w3.scxml.event/data map?)
 (>def :org.w3.scxml.event/type [:or string? keyword?])
 (>def :org.w3.scxml.event/sendid ::sc/id)
-(>def :org.w3.scxml.event/origin vector?)
-(>def :org.w3.scxml.event/origintype keyword?)
+;; W3C §5.10.1: origin is a routable target reference. This library does not constrain
+;; the shape of `:target` (it is whatever the EventQueue accepts), so `:origin` matches.
+(>def :org.w3.scxml.event/origin some?)
+;; W3C §5.10.1: origintype is the IO Processor type. Accept URL strings AND keywords
+;; (this library uses ::sc/chart for the in-process chart processor).
+(>def :org.w3.scxml.event/origintype [:or string? keyword?])
 (>def :org.w3.scxml.event/invokeid ::sc/id)
 
 (>def ::sc/event [:map {:closed false}

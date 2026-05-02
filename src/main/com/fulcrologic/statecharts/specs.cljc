@@ -52,8 +52,13 @@
 (s/def :org.w3.scxml.event/data map?)
 (s/def :org.w3.scxml.event/type (s/or :s string? :k keyword?))
 (s/def :org.w3.scxml.event/sendid ::sc/id)
-(s/def :org.w3.scxml.event/origin vector?)
-(s/def :org.w3.scxml.event/origintype keyword?)
+;; W3C §5.10.1: origin is a routable target reference. This library does not constrain
+;; the shape of `:target` (it is whatever the EventQueue accepts), so `:origin` matches.
+(s/def :org.w3.scxml.event/origin some?)
+;; W3C §5.10.1: origintype names the IO Processor type. This library accepts both
+;; the standard URL string (`"http://www.w3.org/TR/scxml/..."`) and the Clojure-keyword
+;; sentinel `::sc/chart` for the default in-process chart processor.
+(s/def :org.w3.scxml.event/origintype (s/or :s string? :k keyword?))
 (s/def :org.w3.scxml.event/invokeid ::sc/id)
 
 (s/def ::sc/event (s/keys
