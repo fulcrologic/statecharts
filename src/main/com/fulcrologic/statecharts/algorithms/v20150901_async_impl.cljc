@@ -601,8 +601,9 @@
                                  _ (when-let [t (and (contains? states-for-default-entry s)
                                                   (some->> s (chart/initial-element statechart) (chart/transition-element statechart)))]
                                      (execute! env t))
+                                 ;; W3C: defaultHistoryContent is a list of executable elements; run them.
                                  _ (when-let [content (get default-history-content (chart/element-id statechart s))]
-                                     (execute-element-content! env (chart/element statechart content)))]
+                                     (run-many! env content))]
                            ;; Final state handling
                            (when (log/spy :debug (chart/final-state? statechart s))
                              (if (= :ROOT (chart/get-parent statechart s))

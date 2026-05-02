@@ -509,8 +509,11 @@
         (when-let [t (and (contains? states-for-default-entry s)
                        (some->> s (chart/initial-element statechart) (chart/transition-element statechart)))]
           (execute! env t))
+        ;; W3C SCXML enterStates: execute defaultHistoryContent for the parent state
+        ;; on first entry only (it is populated only when no recorded history existed).
+        ;; The stored value is a list of executable-content children; run them in order.
         (when-let [content (get default-history-content (chart/element-id statechart s))]
-          (execute-element-content! env (chart/element statechart content)))
+          (run-many! env content))
         (when (log/spy :debug (chart/final-state? statechart s))
           (if (= :ROOT (chart/get-parent statechart s))
             (vswap! vwmem assoc ::sc/running? false)
