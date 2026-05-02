@@ -1,3 +1,28 @@
+UNRELEASED
+----------
+
+* `<send>` `:target` now accepts Clojure-keyword forms (`:_internal`, `:_parent`,
+  and any other keyword as a direct session-id) in addition to the W3C string forms.
+  See `Guide.adoc` "Send Targets / Special target keywords" and `Conformance.adoc`.
+* `<finalize>` now runs before transition selection for events from invoked
+  processes, matching W3C SCXML mainEventLoop pseudocode (Appendix D). Previously
+  finalize ran after `selectTransitions`, so transition guards could not see the
+  data-model side effects of finalize. Both sync and async impls.
+* Errors in executable content now queue `error.execution` on the *internal* event
+  queue (was external), so transitions on `error.execution` fire in the same macrostep.
+  This is the W3C-conformant routing.
+* New `simple/strict-env` constructor (and `::sc/strict-block-errors?` env flag)
+  enables W3C §4.4 strict block-error semantics: an error in executable content
+  aborts the rest of the current block. Default behavior (without the flag) is
+  unchanged: siblings still run. See `Guide.adoc` "Error Handling in Executable
+  Content".
+* Bugfix: `(elements/invoke {... :finalize fn})` now correctly produces a
+  `:finalize` child element. Previously a stray `conj` arg malformed the
+  children vector. (PR #35, @tomconnors)
+* New `com.fulcrologic.statecharts.irp` namespace under `src/test/` containing
+  ports of the W3C IRP automated test suite (191 tests, 159 ported, 32 skipped
+  for intentionally-unsupported features). See `src/test/com/fulcrologic/statecharts/irp/README.md`.
+
 1.1.6
 -----
 

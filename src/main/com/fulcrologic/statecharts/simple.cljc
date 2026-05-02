@@ -64,6 +64,21 @@
                     extra-env)]
      env)))
 
+(defn strict-env
+  "Like `simple-env`, but enables W3C SCXML §4.4 strict block-error semantics:
+   when an executable-content element raises an error, the rest of the current
+   block is aborted. Either way, an `:error.execution` event is queued so user
+   code can recover via `(transition {:event :error.execution :target ...})`.
+
+   This is the conformant behavior. The default (`simple-env`) is non-strict
+   for backwards compatibility — see `Conformance.adoc` for details.
+
+   Custom environment builders can opt in by setting
+   `::sc/strict-block-errors?` to `true` on their env."
+  ([] (strict-env {}))
+  ([extra-env]
+   (assoc (simple-env extra-env) ::sc/strict-block-errors? true)))
+
 (defn register!
   "Register a statechart `chart` at `chart-key` in the registry known by `env`."
   [{::sc/keys [statechart-registry]} chart-key chart]

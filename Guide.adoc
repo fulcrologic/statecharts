@@ -414,6 +414,28 @@ See the SCXML standard for the rules on transition preemption regarding conflict
 The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that these are often URLs.
 The default implementation of the event queue in this library only supports targeting other state charts (see Send Types below), and when using the default send type, the target is expected to simply be a `session-id`, where `session-id`  is a unique identifier, such as a GUUID.
 
+==== Special target keywords
+
+The W3C SCXML spec (§C.1.1) defines a few special string targets such as `#_internal`, `#_parent`, and `#_<invokeid>`.
+This library accepts those strings for compatibility with mechanical XML→Clojure ports, but the *canonical* (and recommended) form uses Clojure keywords:
+
+[options="header",cols="1,2"]
+|===
+| Target | Meaning
+| `:_internal` | Place the event on this session's internal queue (drained in the same macrostep). Equivalent to `&lt;raise&gt;` semantics, but lets you carry data the same way `&lt;send&gt;` does.
+| `:_parent`   | Send to the parent session (the session that `&lt;invoke&gt;`-d this chart). Resolves to `(env/parent-session-id env)` and propagates `:invoke-id` for parent-side correlation.
+| any other keyword (e.g. `:my-session`) | Treated as a literal session-id. This covers both the W3C `#_scxml_<sessionid>` form and the `#_<invokeid>` form, since this library uses the invocation id as the child's session id.
+|===
+
+Examples:
+
+[source,clojure]
+------
+(Send {:event :keep-alive :target :_internal})           ;; raise on this session's internal queue
+(Send {:event :report :target :_parent :data {...}})     ;; reply to invoking parent
+(Send {:event :ping :target :other-session})             ;; send to a known sibling session
+------
+
 Other implementations of the EventQueue protocol may choose to define further refinements.
 
 === Send Types
@@ -421,6 +443,50 @@ Other implementations of the EventQueue protocol may choose to define further re
 The SCXML standard (section 6.2.5) defines types as a URI as well.
 The internal implementations in this library do not enforce this, but this library *does* recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
 as a desire to talk to another state chart session (and is the only/default predefined value).
+
+=== Error Handling in Executable Content (W3C §4.4 Strict Mode)
+
+When executable content (`&lt;script&gt;`, `&lt;assign&gt;`, `&lt;send&gt;`, `&lt;foreach&gt;`, ...) raises an error,
+the W3C SCXML specification mandates two things:
+
+. An `error.execution` event MUST be placed on the *internal* event queue, so the chart can react via a `(transition {:event :error.execution ...})` handler.
+. The remainder of the *current block* of executable content MUST be skipped (the offending element's siblings do not run).
+
+By default, this library implements (1) but *not* (2): an error queues `error.execution`, but subsequent siblings still run.
+This is a deliberate, backwards-compatible default for charts written before strict semantics were available.
+
+To opt into the fully W3C-conformant behavior, use `simple/strict-env` instead of `simple/simple-env`:
+
+[source,clojure]
+------
+(require '[com.fulcrologic.statecharts.simple :as simple])
+
+(def env (simple/strict-env))
+------
+
+Or, if you assemble your own `env` from custom protocol implementations (a common pattern), set the flag directly:
+
+[source,clojure]
+------
+(def env
+  (-> (build-my-env)            ;; your registry, data model, etc.
+      (assoc :com.fulcrologic.statecharts/strict-block-errors? true)))
+------
+
+Either way, all of the following will then abort the surrounding block on first error and route the queued `error.execution` event to a transition handler:
+
+[source,clojure]
+------
+(state {:id :doing-work}
+  (on-entry {}
+    (script {:expr (fn [_ _] (do-something-risky))}) ;; if this throws...
+    (assign {:location [:result] :expr 42}))         ;; ...this is skipped (strict mode)
+  (transition {:event :error.execution :target :recovery}))
+------
+
+In non-strict mode the same chart still queues the `error.execution` event and routes to `:recovery`,
+but the `assign` would also have run before the transition fires.
+Most charts will not see a behavior difference; charts that *did* rely on later siblings running after a thrown earlier sibling should either fix the underlying error or stay on the default env.
 
 === Manual Polling Queue
 

@@ -83,23 +83,21 @@
       namelist)
     {}))
 
-(defn- run-expression! [{::sc/keys [event-queue execution-model] :as env} expr]
+(defn- run-expression! [{::sc/keys [execution-model] :as env} expr]
   (try
     (log/debug "Running expression" expr)
     (log/spy :debug
       (sp/run-expression! execution-model env expr))
-    ;; W3C SCXML Section 4.4: errors in executable content MUST generate error.execution
-    ;; events rather than crashing the state machine. Broad catch is intentional.
+    ;; W3C SCXML §4.4: errors in executable content MUST generate error.execution
+    ;; events on the INTERNAL queue rather than crashing the state machine.
     (catch #?(:clj Throwable :cljs :default) e
       (log/error e "Expression failure")
-      (let [session-id (env/session-id env)]
-        (log/debug "Sending event" :error.execution "for exception" (ex-message e))
-        (sp/send! event-queue env {:event             :error.execution
-                                   :send-id           session-id
-                                   :data              {:error e}
-                                   :source-session-id session-id})
-        ; Expression failed to run
-        nil))))
+      (raise env (evts/new-event {:name :error.execution
+                                  :data {:error e :expression expr}}))
+      ;; Strict mode (W3C §4.4 conformance) propagates the error so the surrounding
+      ;; block can abort. Default mode swallows it (legacy behavior).
+      (when (::sc/strict-block-errors? env) (throw e))
+      nil)))
 
 (>defn condition-match
   [{::sc/keys [statechart] :as env} element-or-id]
@@ -107,10 +105,15 @@
   (let [{:keys [cond]} (chart/element statechart element-or-id)]
     (if (nil? cond)
       true
-      (do
+      ;; Per W3C §3.13, a cond expression that errors disables the transition AND
+      ;; queues error.execution. `run-expression!` already queues the event; here we
+      ;; just need to catch any (strict-mode) rethrow so transition selection can
+      ;; continue evaluating other transitions.
+      (try
         (log/debug "evaluating condition" cond)
         (log/spy :debug
-          (boolean (run-expression! (assoc env ::sc/raw-result? true) cond)))))))
+          (boolean (run-expression! (assoc env ::sc/raw-result? true) cond)))
+        (catch #?(:clj Throwable :cljs :default) _ false)))))
 
 (>defn session-id
   "Returns the unique session id from an initialized `env`."
@@ -408,29 +411,63 @@
 (defmethod execute-element-content! :for-each [{::sc/keys [data-model statechart] :as env}
                                                 {:keys [array item index children] :as element}]
   (log/debug "Executing for-each" element)
-  (let [coll (run-expression! (assoc env ::sc/raw-result? true) array)]
-    (doseq [[idx value] (map-indexed vector coll)]
-      (when item
-        (sp/update! data-model env {:ops [(ops/assign item value)]}))
-      (when index
-        (sp/update! data-model env {:ops [(ops/assign index idx)]}))
-      (doseq [child-id children]
-        (execute-element-content! env (chart/element statechart child-id))))))
+  (let [coll    (run-expression! (assoc env ::sc/raw-result? true) array)
+        strict? (::sc/strict-block-errors? env)]
+    (cond
+      (or (nil? coll) (and (not (coll? coll)) (not (string? coll))))
+      ;; W3C §4.6: array expression that does not yield an iterable must raise error.execution.
+      (raise env (evts/new-event {:name :error.execution
+                                  :data {:type :foreach :reason :not-iterable
+                                         :array coll :element element}}))
+
+      :else
+      (loop [pairs (seq (map-indexed vector coll))]
+        (when pairs
+          (let [[idx value] (first pairs)]
+            (when item  (sp/update! data-model env {:ops [(ops/assign item value)]}))
+            (when index (sp/update! data-model env {:ops [(ops/assign index idx)]}))
+            (let [child-aborted?
+                  (loop [cs (seq children)]
+                    (if (nil? cs)
+                      false
+                      (let [n (first cs)
+                            aborted? (try
+                                       (execute-element-content! env (chart/element statechart n))
+                                       false
+                                       (catch #?(:clj Throwable :cljs :default) e
+                                         (raise env (evts/new-event {:name :error.execution
+                                                                     :data {:type :foreach :node n :exception e}}))
+                                         (log/error e "Error inside <foreach>")
+                                         strict?))]
+                        (if aborted? true (recur (next cs))))))]
+              (when-not child-aborted?
+                (recur (next pairs))))))))))
 
 (>defn execute!
-  "Run the executable content (immediate children) of s."
+  "Run the executable content (immediate children) of s.
+
+   Errors raised by any child queue an `:error.execution` event on the internal queue.
+   When `(::sc/strict-block-errors? env)` is true, also abort the rest of the block
+   (W3C SCXML §4.4); otherwise the remaining children still execute."
   [{::sc/keys [statechart] :as env} s]
   [::sc/processing-env ::sc/element-or-id => nil?]
   (log/debug "Execute content of" s)
-  (let [{:keys [children]} (chart/element statechart s)]
-    (doseq [n children]
-      (try
-        (let [ele (chart/element statechart n)]
-          (execute-element-content! env ele))
-        ;; W3C SCXML Section 4.4: executable content errors must not crash the machine.
-        ;; Broad catch is intentional to match spec behavior.
-        (catch #?(:clj Throwable :cljs :default) t
-          (log/error t "Unexpected exception in content")))))
+  (let [{:keys [children]} (chart/element statechart s)
+        strict?            (::sc/strict-block-errors? env)]
+    (loop [remaining (seq children)]
+      (when remaining
+        (let [n        (first remaining)
+              aborted? (try
+                         (let [ele (chart/element statechart n)]
+                           (execute-element-content! env ele))
+                         false
+                         ;; W3C SCXML §4.4: executable content errors must not crash the machine.
+                         (catch #?(:clj Throwable :cljs :default) t
+                           (raise env (evts/new-event {:name :error.execution
+                                                       :data {:element s :node n :exception t}}))
+                           (log/error t "Unexpected exception in content")
+                           strict?))]
+          (when-not aborted? (recur (next remaining)))))))
   nil)
 
 (>defn compute-done-data! [{::sc/keys [statechart] :as env} final-state]
@@ -642,17 +679,27 @@
     nil))
 
 (>defn run-many!
-  "Run the code associated with the given nodes. Does NOT set context id of the nodes run."
+  "Run the code associated with the given nodes. Does NOT set context id of the nodes run.
+
+   Errors raised by any element queue an `:error.execution` event on the internal queue
+   in either mode. When `(::sc/strict-block-errors? env)` is true, also abort the rest
+   of the block (W3C SCXML §4.4); otherwise the remaining nodes still execute."
   [{::sc/keys [statechart] :as env} nodes]
   [::sc/processing-env [:sequential ::sc/element-or-id] => nil?]
-  (doseq [n nodes]
-    (try
-      (execute-element-content! env (chart/element statechart n))
-      (catch #?(:clj Throwable :cljs :default) e
-        (raise env (evts/new-event {:name :error.execution
-                                    :data {:node      n
-                                           :exception e}}))
-        (log/error e "Unexpected execution error"))))
+  (let [strict? (::sc/strict-block-errors? env)]
+    (loop [remaining (seq nodes)]
+      (when remaining
+        (let [n        (first remaining)
+              aborted? (try
+                         (execute-element-content! env (chart/element statechart n))
+                         false
+                         (catch #?(:clj Throwable :cljs :default) e
+                           (raise env (evts/new-event {:name :error.execution
+                                                       :data {:node      n
+                                                              :exception e}}))
+                           (log/error e "Unexpected execution error")
+                           strict?))]
+          (when-not aborted? (recur (next remaining)))))))
   nil)
 
 (letfn [(stop-invocation!
