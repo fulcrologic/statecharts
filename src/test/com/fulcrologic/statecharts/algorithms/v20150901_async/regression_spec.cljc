@@ -474,7 +474,7 @@
     (testing/run-events! env (evt/new-event :pong {:x 2}))
     (assertions
       "Eventless transitions get just the data model"
-      (first @events-seen) => {:y 1}
+      (dissoc (first @events-seen) :_sessionid :_name) => {:y 1}
       "Event transitions get the event in :_event"
       (count @events-seen) => 3
       (contains? (second @events-seen) :_event) => true

@@ -527,19 +527,29 @@
               (throw (ex-info "foreach over non-iterable" {:type :foreach :array coll}))))
 
           :else
-          (do-sequence (map-indexed vector coll)
-            (fn [[idx value]]
-              (when item  (sp/update! data-model env {:ops [(ops/assign item value)]}))
-              (when index (sp/update! data-model env {:ops [(ops/assign index idx)]}))
-              (do-sequence children
-                (fn [child-id]
-                  (try
-                    (execute-element-content! env (chart/element statechart child-id))
-                    (catch #?(:clj Throwable :cljs :default) e
-                      (raise env (evts/new-event {:name :error.execution
-                                                  :data {:type :foreach :node child-id :exception e}}))
-                      (log/error e "Error inside <foreach>")
-                      (if strict? ::abort nil))))))))))))
+          (let [aborted? (volatile! false)
+                handle-err (fn [child-id e]
+                             (raise env (evts/new-event {:name :error.execution
+                                                         :data {:type :foreach :node child-id :exception e}}))
+                             (log/error e "Error inside <foreach>")
+                             (when strict? (vreset! aborted? true))
+                             (if strict? ::abort nil))]
+            (do-sequence (map-indexed vector coll)
+              (fn [[idx value]]
+                (if @aborted?
+                  ::abort
+                  (do
+                    (when item  (sp/update! data-model env {:ops [(ops/assign item value)]}))
+                    (when index (sp/update! data-model env {:ops [(ops/assign index idx)]}))
+                    (do-sequence children
+                      (fn [child-id]
+                        (let [r (try
+                                  (execute-element-content! env (chart/element statechart child-id))
+                                  (catch #?(:clj Throwable :cljs :default) e
+                                    (handle-err child-id e)))]
+                          (if (p/promise? r)
+                            (p/catch r (fn [e] (handle-err child-id e)))
+                            r))))))))))))))
 
 (defn execute!
   "Run the executable content (immediate children) of `s`. May return a promise.
@@ -550,17 +560,21 @@
   [{::sc/keys [statechart] :as env} s]
   (log/debug "Execute content of" s)
   (let [{:keys [children]} (chart/element statechart s)
-        strict?            (::sc/errors-abort-siblings? env)]
+        strict?            (::sc/errors-abort-siblings? env)
+        handle-err (fn [n t]
+                     (raise env (evts/new-event {:name :error.execution
+                                                 :data {:element s :node n :exception t}}))
+                     (log/error t "Unexpected exception in content")
+                     (if strict? ::abort nil))]
     (do-sequence children
       (fn [n]
-        (try
-          (let [ele (chart/element statechart n)]
-            (execute-element-content! env ele))
-          (catch #?(:clj Throwable :cljs :default) t
-            (raise env (evts/new-event {:name :error.execution
-                                        :data {:element s :node n :exception t}}))
-            (log/error t "Unexpected exception in content")
-            (if strict? ::abort nil)))))))
+        (let [r (try
+                  (execute-element-content! env (chart/element statechart n))
+                  (catch #?(:clj Throwable :cljs :default) t
+                    (handle-err n t)))]
+          (if (p/promise? r)
+            (p/catch r (fn [t] (handle-err n t)))
+            r))))))
 
 (defn compute-done-data!
   [{::sc/keys [statechart] :as env} final-state]
@@ -1179,6 +1193,11 @@
                                    (in-state-context env n
                                      (initialize-data-model! env (chart/get-parent statechart n)))))))]
             (maybe-let [_ early-init
+                    _ (let [session-id (env/session-id env)
+                            chart-name (:name statechart)
+                            system-vars (cond-> {:_sessionid session-id}
+                                          chart-name (assoc :_name chart-name))]
+                        (sp/update! data-model env {:ops (ops/set-map-ops system-vars)}))
                     _ (when (map? invocation-data)
                         (sp/update! data-model env {:ops (ops/set-map-ops invocation-data)}))
                     _ (enter-states! env)
