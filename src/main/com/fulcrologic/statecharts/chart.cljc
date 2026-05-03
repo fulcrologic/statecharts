@@ -43,10 +43,13 @@
 
 (>defn- with-default-initial-state
   "Scans children for an initial state. If no such state is found then it creates one and sets the target to the
-   first child that is a state."
+   first child that is a state, parallel, or final element.
+
+   Per W3C SCXML §3.3, a compound state whose only children are `<final>` elements still
+   needs a default initial transition; entering it should immediately enter that final."
   [{:keys [id initial] :as parent} children]
   [(? ::sc/element) [:sequential ::sc/element] => [:sequential ::sc/element]]
-  (let [states (filter #(#{:state :parallel} (:node-type %)) children)]
+  (let [states (filter #(#{:state :parallel :final} (:node-type %)) children)]
     (when (and initial (some :initial? states))
       (log/warn "You specified BOTH an :initial attribute and state in element. Preferring the element." id))
     (cond

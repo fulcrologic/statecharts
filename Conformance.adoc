@@ -26,3 +26,93 @@ contextual. This implementation:
 which is meant to tell the data model to store the event in the top-level
 context (on the root element, the machine).
 ** The data model keeps this value until the next event is processed.
+
+=== Strict block-error semantics (opt-in)
+
+W3C SCXML §4.4 requires that when an element of executable content raises
+an error, an `error.execution` event MUST be queued AND the remainder of
+the current block MUST be skipped.
+
+This library always queues `error.execution` (on the internal queue, per
+the spec). The block-abort half is *opt-in* to preserve compatibility with
+charts written against the original (non-strict) behavior of this library.
+
+To enable strict behavior:
+
+* Use the convenience constructor:
++
+[source,clojure]
+----
+(simple/strict-env)
+----
+* Or, when assembling a custom environment from protocol implementations,
+set the flag directly:
++
+[source,clojure]
+----
+(assoc my-env ::sc/errors-abort-siblings? true)
+----
+
+In non-strict (default) mode, an exception in executable content queues
+`error.execution` and execution continues with the next sibling element.
+In strict mode, the same `error.execution` event is queued but the rest
+of the surrounding block is skipped, and a `(transition {:event :error.execution ...})`
+handler will fire as soon as the entry/exit/transition completes.
+
+This applies to errors raised by `&lt;script&gt;`, `&lt;assign&gt;`, `&lt;send&gt;`,
+`&lt;foreach&gt;`, and any other executable-content element, and to both the
+synchronous and async algorithm implementations.
+
+See the User Guide section "Error Handling in Executable Content (W3C §4.4
+Strict Mode)" for examples.
+
+=== Special `&lt;send&gt;` target keywords
+
+This library accepts both the W3C string forms (`"#_internal"`, `"#_parent"`,
+`"#_scxml_<sid>"`, `"#_<invokeid>"`) and Clojure-keyword equivalents:
+
+* `:_internal` — local internal queue.
+* `:_parent`   — parent session (resolves to `(env/parent-session-id env)`).
+* any other keyword — direct session-id (replaces both `#_scxml_<sid>` and `#_<invokeid>`,
+  since this library uses the invocation id as the child's session id).
+
+The keyword forms are the canonical API; the string forms exist for
+mechanical compatibility with ported `.scxml` files.
+
+=== System variable read-only enforcement (intentional deviation)
+
+W3C SCXML §5.10 requires the SCXML processor to raise `error.execution`
+when user code attempts to assign to a system variable
+(`_sessionid`, `_name`, `_event`, `_ioprocessors`, `_x`).
+
+This library does *not* enforce that. The `DataModel` is a pluggable
+protocol (`com.fulcrologic.statecharts.protocols/DataModel`); any
+implementation may store values however it likes (working memory map,
+Datomic, an external store), so the engine has no general way to
+intercept writes to specific keys without breaking the abstraction.
+
+Practical impact:
+
+* `<assign location="_sessionid" .../>` (and equivalents) silently
+  overwrite the system variable instead of raising `error.execution`.
+* The W3C IRP tests that exercise this — 322, 324, 325, 326, 329, 346 —
+  are skipped in `src/test/com/fulcrologic/statecharts/irp/_skipped.md`
+  with this rationale.
+
+Application authors should treat the system variables as read-only by
+convention. A custom `DataModel` that wants W3C semantics may reject
+writes to those keys in its `update!` implementation and queue
+`error.execution` on the internal queue.
+
+=== Other intentionally unsupported W3C features
+
+* *Inline `<invoke><content><scxml>...</scxml></content></invoke>`* —
+  only registry-based invocation (by `:src` keyword resolved via the
+  chart registry) is supported.
+* *Late binding* — only early binding is supported.
+* *Top-level `<script>` (load-time execution)* — there is no load-time
+  pathway; scripts run as executable content during entry/exit/transitions.
+* *Basic HTTP Event I/O Processor* and other voice / network IO
+  processors — out of scope.
+* *External chart loading via `<invoke srcexpr="...">`* to fetch a
+  remote SCXML file — this library uses Clojure data, not XML.

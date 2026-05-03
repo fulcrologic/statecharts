@@ -334,9 +334,8 @@ form the "then" branch:
       (assign {:location [:result] :expr :default}))))
 -----
 
-Each branch can contain any executable content (including nested `If` statements). This is
-particularly useful for leveraging nested `raise`, allowing you to conditionally queue events
-on the internal queue without having the write a script or use the external queue.
+Each branch can contain any executable content (including nested `If` statements).
+This is particularly useful for leveraging nested `raise`, allowing you to conditionally queue events on the internal queue without having the write a script or use the external queue.
 
 === foreach
 
@@ -414,6 +413,28 @@ See the SCXML standard for the rules on transition preemption regarding conflict
 The SCXML standard (section 6.2.4) allows the format of the target to change based on the type, and implies that these are often URLs.
 The default implementation of the event queue in this library only supports targeting other state charts (see Send Types below), and when using the default send type, the target is expected to simply be a `session-id`, where `session-id`  is a unique identifier, such as a GUUID.
 
+==== Special target keywords
+
+The W3C SCXML spec (§C.1.1) defines a few special string targets such as `#_internal`, `#_parent`, and `#_<invokeid>`.
+This library accepts those strings for compatibility with mechanical XML→Clojure ports, but the *canonical* (and recommended) form uses Clojure keywords:
+
+[options="header",cols="1,2"]
+|===
+| Target | Meaning
+| `:_internal` | Place the event on this session's internal queue (drained in the same macrostep). Equivalent to `&lt;raise&gt;` semantics, but lets you carry data the same way `&lt;send&gt;` does.
+| `:_parent`   | Send to the parent session (the session that `&lt;invoke&gt;`-d this chart). Resolves to `(env/parent-session-id env)` and propagates `:invoke-id` for parent-side correlation.
+| any other keyword (e.g. `:my-session`) | Treated as a literal session-id. This covers both the W3C `#_scxml_<sessionid>` form and the `#_<invokeid>` form, since this library uses the invocation id as the child's session id.
+|===
+
+Examples:
+
+[source,clojure]
+------
+(Send {:event :keep-alive :target :_internal})           ;; raise on this session's internal queue
+(Send {:event :report :target :_parent :data {...}})     ;; reply to invoking parent
+(Send {:event :ping :target :other-session})             ;; send to a known sibling session
+------
+
 Other implementations of the EventQueue protocol may choose to define further refinements.
 
 === Send Types
@@ -421,6 +442,48 @@ Other implementations of the EventQueue protocol may choose to define further re
 The SCXML standard (section 6.2.5) defines types as a URI as well.
 The internal implementations in this library do not enforce this, but this library *does* recognize the string "http://www.w3.org/TR/scxml/#SCXMLEventProcessor"
 as a desire to talk to another state chart session (and is the only/default predefined value).
+
+=== Error Handling in Executable Content (W3C §4.4 Strict Mode)
+
+When executable content (`&lt;script&gt;`, `&lt;assign&gt;`, `&lt;send&gt;`, `&lt;foreach&gt;`, ...) raises an error, the W3C SCXML specification mandates two things:
+
+. An `error.execution` event MUST be placed on the *internal* event queue, so the chart can react via a `(transition {:event :error.execution ...})` handler.
+. The remainder of the *current block* of executable content MUST be skipped (the offending element's siblings do not run).
+
+By default, this library implements (1) but *not* (2): an error queues `error.execution`, but subsequent siblings still run.
+This is a deliberate, backwards-compatible default for charts written before strict semantics were available.
+
+To opt into the fully W3C-conformant behavior, use `simple/strict-env` instead of `simple/simple-env`:
+
+[source,clojure]
+------
+(require '[com.fulcrologic.statecharts.simple :as simple])
+
+(def env (simple/strict-env))
+------
+
+Or, if you assemble your own `env` from custom protocol implementations (a common pattern), set the flag directly:
+
+[source,clojure]
+------
+(def env
+  (-> (build-my-env)            ;; your registry, data model, etc.
+      (assoc :com.fulcrologic.statecharts/errors-abort-siblings? true)))
+------
+
+Either way, all of the following will then abort the surrounding block on first error and route the queued `error.execution` event to a transition handler:
+
+[source,clojure]
+------
+(state {:id :doing-work}
+  (on-entry {}
+    (script {:expr (fn [_ _] (do-something-risky))}) ;; if this throws...
+    (assign {:location [:result] :expr 42}))         ;; ...this is skipped (strict mode)
+  (transition {:event :error.execution :target :recovery}))
+------
+
+In non-strict mode the same chart still queues the `error.execution` event and routes to `:recovery`, but the `assign` would also have run before the transition fires.
+Most charts will not see a behavior difference; charts that *did* rely on later siblings running after a thrown earlier sibling should either fix the underlying error or stay on the default env.
 
 === Manual Polling Queue
 
@@ -799,8 +862,8 @@ This means that you'd normally need to syntax-quote the transaction; however, re
 When using the async execution engine (`:async? true`), you can issue Fulcro loads and remote mutations that resolve as promises within the algorithm.
 The chart transitions atomically — it never observably rests in a "loading" state.
 
-The point is to make async operations "park" (effectively block) the statechart execution until the promise is fulfilled or rejected. This
-allows you to write statecharts that do not need so many intermediate states for tracking if a promise is fulfilled.
+The point is to make async operations "park" (effectively block) the statechart execution until the promise is fulfilled or rejected.
+This allows you to write statecharts that do not need so many intermediate states for tracking if a promise is fulfilled.
 
 To enable async operations, pass `:async? true` when installing statecharts:
 
@@ -925,17 +988,13 @@ NOTE: The existing `fop/load` and `fop/invoke-remote` operations remain unchange
 === Functions
 
 `(scf/local-data-path session-id)`:: Get the path of the local data for a given session.
-This
-is useful for adding a lookup ref to a UI component whose rendering depends on changes to this local state.
+This is useful for adding a lookup ref to a UI component whose rendering depends on changes to this local state.
 `(scf/statechart-session-ident session-id)`:: Get the ident of the state chart session itself.
-This
-is useful for adding a lookup ref to a UI component whose rendering depends on changes to the state chart's configuration.
+This is useful for adding a lookup ref to a UI component whose rendering depends on changes to the state chart's configuration.
 `(resolve-aliases data)`:: Used in executable content to return a map for all aliases.
-It looks up every
-alias from `:fulcro/aliases` and returns a map with them as keys, and their extracted data as values.
+It looks up every alias from `:fulcro/aliases` and returns a map with them as keys, and their extracted data as values.
 `(resolve-actors data :actor/thing :actor/other ...)`:: Resolves the UI props of multiple named actors.
-The
-return value is a map from actor name to the UI props (tree).
+The return value is a map from actor name to the UI props (tree).
 `(resolve-actors data :actor/thing)`:: Resolves the UI props of a single actor, and returns them.
 `(resolve-actor-class data actor-key)`:: Returns the Fulcro component that is currently acting as the UI
 counterpart of the named actor, if known.
@@ -1041,10 +1100,9 @@ Here is an example of using this support to create a simple traffic light that c
 
 == Hierarchical Routing
 
-NOTE: The legacy `com.fulcrologic.statecharts.integration.fulcro.ui-routes` namespace is
-deprecated. All examples below use the new `routing` namespace. The old namespace
-remains available for backward compatibility but does not include URL sync, cross-chart
-routing, or configuration validation.
+NOTE: The legacy `com.fulcrologic.statecharts.integration.fulcro.ui-routes` namespace is deprecated.
+All examples below use the new `routing` namespace.
+The old namespace remains available for backward compatibility but does not include URL sync, cross-chart routing, or configuration validation.
 
 === Why Statechart-Driven Routing?
 
@@ -1073,7 +1131,9 @@ This enables code splitting, module boundaries, and isolated testing.
 The URL is derived from the statechart configuration -- not the other way around.
 Browser back/forward triggers a statechart event that goes through the same guard and transition logic as programmatic navigation.
 
-IMPORTANT: Routing works best with async statechart processing. When calling `install-fulcro-statecharts!`, pass `:async? true` so that on-entry handlers (which often trigger data loads) complete before the next event is processed. The demo code in this section assumes async mode.
+IMPORTANT: Routing works best with async statechart processing.
+When calling `install-fulcro-statecharts!`, pass `:async? true` so that on-entry handlers (which often trigger data loads) complete before the next event is processed.
+The demo code in this section assumes async mode.
 
 === End-to-End Setup Walkthrough
 
@@ -1215,7 +1275,8 @@ It generates transitions for every descendant `:route/target` and for every cros
 Required options:
 
 `:id`:: The state ID for this routes node.
-`:routing/root`:: The Fulcro component that serves as the rendering parent for these routes. Must have a constant ident (e.g. `[:component/id ::RoutingRoot]`) or be the app root (no ident).
+`:routing/root`:: The Fulcro component that serves as the rendering parent for these routes.
+Must have a constant ident (e.g. `[:component/id ::RoutingRoot]`) or be the app root (no ident).
 
 Optional:
 
@@ -1239,9 +1300,15 @@ When the statechart enters this state, three things happen automatically:
 
 Options:
 
-`:route/target`:: (Required) A component class or anything accepted by `comp/registry-key->class`. The state ID is automatically derived from this -- do not pass an explicit `:id`. Prefer using the class directly (via syntax-quote, e.g. pass:[<code>`ui/Dashboard</code>]) rather than a keyword symbol — using the class forces a `require` on the target namespace, so the compiler catches missing dependencies at build time. Use a keyword only when necessary to break circular requires.
-`:route/segment`:: (Optional) Custom URL path segment string. When absent, defaults to the simple name of the target (e.g. `ProjectDetail`). Used by the default URLCodec, which is customizable.
-`:route/params`:: (Optional) A set of keywords. When present in the routing event data, these keys are extracted and stored at `[:routing/parameters <state-id>]` in the data model.
+`:route/target`:: (Required) A component class or anything accepted by `comp/registry-key->class`.
+The state ID is automatically derived from this -- do not pass an explicit `:id`.
+Prefer using the class directly (via syntax-quote, e.g. pass:[<code>`ui/Dashboard</code>]) rather than a keyword symbol — using the class forces a `require` on the target namespace, so the compiler catches missing dependencies at build time.
+Use a keyword only when necessary to break circular requires.
+`:route/segment`:: (Optional) Custom URL path segment string.
+When absent, defaults to the simple name of the target (e.g. `ProjectDetail`).
+Used by the default URLCodec, which is customizable.
+`:route/params`:: (Optional) A set of keywords.
+When present in the routing event data, these keys are extracted and stored at `[:routing/parameters <state-id>]` in the data model.
 `:parallel?`:: (Optional) When true, this node is a parallel state.
 
 You can nest `rstate` nodes to create hierarchical routes:
@@ -1276,13 +1343,15 @@ Segments compose from the routing root down to the active leaf:
 
 ==== Empty Segments — Initial-Leaf Marker
 
-There is one sanctioned use of `:route/segment ""`: marking the **initial-chain leaf** of a `routes` node so that the parent's URL alone enters the leaf. This is how you make `/admin` (rather than `/admin/dashboard`) display the admin dashboard, or how you make `/` enter a chart's default home leaf.
+There is one sanctioned use of `:route/segment ""`: marking the **initial-chain leaf** of a `routes` node so that the parent's URL alone enters the leaf.
+This is how you make `/admin` (rather than `/admin/dashboard`) display the admin dashboard, or how you make `/` enter a chart's default home leaf.
 
 The marker is intentionally narrow because "no URL contribution" is otherwise ambiguous: the URL→state mapping needs to round-trip, and a non-leaf or non-initial transparent state would make the URL unable to identify which state to enter.
 
 **Rules** (enforced at chart registration when `:routing/checks :strict`):
 
-* The state must be an `rstate` — never an `istate`. (An `istate` invokes a child chart, and its segment is the bridge that lets the URL descend into the child's URL space; without it, deep-URL traversal is impossible.)
+* The state must be an `rstate` — never an `istate`.
+(An `istate` invokes a child chart, and its segment is the bridge that lets the URL descend into the child's URL space; without it, deep-URL traversal is impossible.)
 * The state must be a leaf — no descendant route states.
 * The state must be reached by walking `:initial` from its enclosing `routes` node down through any compound states' `:initial` declarations.
 
@@ -1500,7 +1569,8 @@ This is the pattern used in the demo application.
 
 The parent chart needs to know which targets exist inside the child chart so it can generate transitions to them.
 
-**Auto-derivation (recommended):** When the `istate` target component has a co-located chart via `sfro/statechart`, the reachable targets are **automatically derived** by walking the child chart's route targets. You do not need to declare `:route/reachable` at all:
+**Auto-derivation (recommended):** When the `istate` target component has a co-located chart via `sfro/statechart`, the reachable targets are **automatically derived** by walking the child chart's route targets.
+You do not need to declare `:route/reachable` at all:
 
 [source,clojure]
 -----
@@ -1510,9 +1580,11 @@ The parent chart needs to know which targets exist inside the child chart so it 
 
 This works because `istate` calls `reachable-targets` on the co-located child chart at chart construction time, collecting all `:route/target` values transitively (including nested child charts).
 
-NOTE: Auto-derivation requires `sfro/statechart` on the target component (not `sfro/statechart-id`). If neither an explicit `:route/reachable` nor a resolvable `sfro/statechart` is found, `istate` throws an error at chart construction time.
+NOTE: Auto-derivation requires `sfro/statechart` on the target component (not `sfro/statechart-id`).
+If neither an explicit `:route/reachable` nor a resolvable `sfro/statechart` is found, `istate` throws an error at chart construction time.
 
-**Manual override:** You can still provide an explicit `:route/reachable` set, which takes precedence over auto-derivation. This is useful when you want to do code splitting and don't have the component available at initial base load.
+**Manual override:** You can still provide an explicit `:route/reachable` set, which takes precedence over auto-derivation.
+This is useful when you want to do code splitting and don't have the component available at initial base load.
 
 [source,clojure]
 -----
@@ -1527,9 +1599,11 @@ With reachable targets (whether auto-derived or explicit), `sroute/route-to!` ca
 
 Two mechanisms handle this:
 
-1. **Not yet in the owner istate**: The parent transitions into the istate and stores the desired route as `::pending-child-route`. When the child chart starts, its `routes` on-entry handler detects the pending route and raises it as an event.
+1. **Not yet in the owner istate**: The parent transitions into the istate and stores the desired route as `::pending-child-route`.
+When the child chart starts, its `routes` on-entry handler detects the pending route and raises it as an event.
 
-2. **Already in the owner istate**: The parent sends the route event directly to the child session via `scp/send!`. The child chart transitions internally without re-entering the `istate`.
+2. **Already in the owner istate**: The parent sends the route event directly to the child session via `scp/send!`.
+The child chart transitions internally without re-entering the `istate`.
 
 ==== The Child Chart
 
@@ -1556,7 +1630,8 @@ The key differences are:
 
 ==== Advanced istate Options
 
-The `istate` function accepts additional options for controlling the child statechart invocation lifecycle. These are less commonly needed but available for advanced use cases:
+The `istate` function accepts additional options for controlling the child statechart invocation lifecycle.
+These are less commonly needed but available for advanced use cases:
 
 `on-done`:: Transition target when the child chart reaches a final state.
 `exit-target`:: Target to transition to when the istate is exited (before the child chart is torn down).
@@ -1607,8 +1682,7 @@ If the child chart needs additional actors, declare them on the component:
 === Authentication Guard Pattern
 
 A common requirement is redirecting unauthenticated users to a login screen, then returning them to their original destination after login.
-There is no built-in library code for this, because the elements allow you to build the pattern and customize it to your
-application's needs via things that statecharts can already do.
+There is no built-in library code for this, because the elements allow you to build the pattern and customize it to your application's needs via things that statecharts can already do.
 
 The demo application (`routing-demo2/chart.cljc`) demonstrates this pattern.
 
@@ -1759,8 +1833,8 @@ When a route transition is denied:
 3. `sroute/route-denied?` returns `true`.
 4. Your UI renders a confirmation dialog.
 5. The user chooses one of:
-   - `(sroute/force-continue-routing! app)` -- resends the failed event with a `::force?` flag that bypasses the busy check.
-   - `(sroute/abandon-route-change! app)` -- closes the routing info and stays on the current route.
+- `(sroute/force-continue-routing! app)` -- resends the failed event with a `::force?` flag that bypasses the busy check.
+- `(sroute/abandon-route-change! app)` -- closes the routing info and stays on the current route.
 
 [source,clojure]
 -----
@@ -1998,24 +2072,34 @@ See `url_sync_headless_spec.cljc` in the test suite for comprehensive examples c
 | `sroute/route-to-event-name [target]` | Converts a target (class or keyword) to the `:route-to.<fqn>` event keyword. Useful in auth guard patterns.
 |===
 
-NOTE: Functions like `route-to!`, `route-back!`, and others accept either a Fulcro app instance or a component instance (referred to as `app-ish` in the source). Use whichever is convenient in your context.
+NOTE: Functions like `route-to!`, `route-back!`, and others accept either a Fulcro app instance or a component instance (referred to as `app-ish` in the source).
+Use whichever is convenient in your context.
 
 [[ComponentOptions]]
 === Component Options Reference
 
 Route target components can declare these options via `rc/component-options` (namespace alias `sfro` for `routing-options`):
 
-`sfro/initialize`:: One of `:once` (default), `:always`, or `:never`. Controls when the routing on-entry handler initializes the target component's state. Forms default to `:always`; reports and plain components default to `:once`.
+`sfro/initialize`:: One of `:once` (default), `:always`, or `:never`.
+Controls when the routing on-entry handler initializes the target component's state.
+Forms default to `:always`; reports and plain components default to `:once`.
 
-`sfro/initial-props`:: A `(fn [env data] props-map)` that returns initial state for the route target. Defaults to `rc/get-initial-state`. Required when the target has a dynamic ident that depends on event data.
+`sfro/initial-props`:: A `(fn [env data] props-map)` that returns initial state for the route target.
+Defaults to `rc/get-initial-state`.
+Required when the target has a dynamic ident that depends on event data.
 
-`sfro/busy?`:: A `(fn [app props] boolean?)` predicate where `app` is the Fulcro app and `props` are the pre-resolved UI props of the component. When true, routing away from this target is denied. Forms with `form-state` are auto-guarded (dirty form = busy).
+`sfro/busy?`:: A `(fn [app props] boolean?)` predicate where `app` is the Fulcro app and `props` are the pre-resolved UI props of the component.
+When true, routing away from this target is denied.
+Forms with `form-state` are auto-guarded (dirty form = busy).
 
-`sfro/statechart`:: A co-located statechart definition. Auto-registered using the component's registry key when the `istate` is entered. Also enables auto-derivation of `:route/reachable` targets — `istate` walks this chart to discover all route targets transitively.
+`sfro/statechart`:: A co-located statechart definition.
+Auto-registered using the component's registry key when the `istate` is entered.
+Also enables auto-derivation of `:route/reachable` targets — `istate` walks this chart to discover all route targets transitively.
 
 `sfro/statechart-id`:: The ID of a pre-registered statechart to invoke when the component is routed to (alternative to `sfro/statechart`).
 
-`sfro/actors`:: A `(fn [env data] actors-map)` returning additional actors for the co-located statechart. The `:actor/component` actor is always set automatically.
+`sfro/actors`:: A `(fn [env data] actors-map)` returning additional actors for the co-located statechart.
+The `:actor/component` actor is always set automatically.
 
 === Route Configuration Validation
 
@@ -2036,7 +2120,8 @@ The validator detects:
 * **Duplicate segment chains** -- two leaf routes with identical full segment paths (e.g. both resolve to `/users/edit`).
 * **Reachable collisions** -- a `:route/reachable` target (whether auto-derived or explicit) whose simple name collides with a direct route target.
 * **Invalid routing root** -- a `routes` node with a nil or non-coercible `:routing/root`.
-* **Invalid empty segment** -- `:route/segment ""` placed somewhere other than the initial-chain leaf of a `routes` node, or placed on an `istate` (which must always carry a real segment so the URL can descend into the child chart). See <<Empty Segments — Initial-Leaf Marker>>.
+* **Invalid empty segment** -- `:route/segment ""` placed somewhere other than the initial-chain leaf of a `routes` node, or placed on an `istate` (which must always carry a real segment so the URL can descend into the child chart).
+See <<Empty Segments — Initial-Leaf Marker>>.
 
 TIP: Use `:routing/checks :strict` during development to catch configuration problems as thrown exceptions rather than logged warnings.
 
@@ -2044,17 +2129,26 @@ TIP: Use `:routing/checks :strict` during development to catch configuration pro
 
 The following invariants hold for statechart-driven routing:
 
-Constant ident roots:: The `:routing/root` component MUST have a constant ident (e.g. `[:component/id ::Root]`). A nil second element in the ident is an error and the routing entry handler will log an error and skip query rewriting. The app root (no ident) is also acceptable.
+Constant ident roots:: The `:routing/root` component MUST have a constant ident (e.g. `[:component/id ::Root]`).
+A nil second element in the ident is an error and the routing entry handler will log an error and skip query rewriting.
+The app root (no ident) is also acceptable.
 
-Dynamic query preservation:: Route target parents MUST set `:preserve-dynamic-query? true` in their component options. Without this, Fulcro hot code reload will reset the dynamically-rewritten query, breaking the active route's rendering.
+Dynamic query preservation:: Route target parents MUST set `:preserve-dynamic-query? true` in their component options.
+Without this, Fulcro hot code reload will reset the dynamically-rewritten query, breaking the active route's rendering.
 
-Unique URL segments:: Each route target's URL segment (`:route/segment` or the simple name of `:route/target`) must be unique within its routing region. Duplicate segments cause ambiguous URL-to-route matching. Use `:routing/checks :strict` during development to catch these early.
+Unique URL segments:: Each route target's URL segment (`:route/segment` or the simple name of `:route/target`) must be unique within its routing region.
+Duplicate segments cause ambiguous URL-to-route matching.
+Use `:routing/checks :strict` during development to catch these early.
 
-Guard evaluation order:: When a route transition is attempted, `sroute/busy?` is evaluated first. If any active route target (at any depth in the invocation tree) returns busy, the transition is denied and `record-failed-route!` stores the event for potential retry via `force-continue-routing!`.
+Guard evaluation order:: When a route transition is attempted, `sroute/busy?` is evaluated first.
+If any active route target (at any depth in the invocation tree) returns busy, the transition is denied and `record-failed-route!` stores the event for potential retry via `force-continue-routing!`.
 
-Single routing session:: All routing goes through the single `sroute/session-id` session. Parallel regions within the routing chart handle multiple independent routing areas -- do not create multiple routing sessions.
+Single routing session:: All routing goes through the single `sroute/session-id` session.
+Parallel regions within the routing chart handle multiple independent routing areas -- do not create multiple routing sessions.
 
-State ID derivation:: Both `rstate` and `istate` derive their `:id` from `:route/target`. Passing an explicit `:id` throws an exception. This ensures state IDs and route targets are always consistent.
+State ID derivation:: Both `rstate` and `istate` derive their `:id` from `:route/target`.
+Passing an explicit `:id` throws an exception.
+This ensures state IDs and route targets are always consistent.
 
 === Common Gotchas and Troubleshooting
 
@@ -2072,7 +2166,8 @@ Check whether the route is being denied by a busy guard.
 Call `(sroute/route-denied? app)` to verify.
 If the route is denied, either clear the busy condition or use `force-continue-routing!`.
 
-Also ensure the target is reachable: for targets inside a child chart, the parent's `istate` must have reachable targets (auto-derived from `sfro/statechart` or explicitly declared via `:route/reachable`). Use `(sroute/reachable-targets chart)` to inspect what targets are visible.
+Also ensure the target is reachable: for targets inside a child chart, the parent's `istate` must have reachable targets (auto-derived from `sfro/statechart` or explicitly declared via `:route/reachable`).
+Use `(sroute/reachable-targets chart)` to inspect what targets are visible.
 
 ==== URL does not update after navigation
 
@@ -2170,24 +2265,18 @@ Thus, a common test setup will look like this:
 
 = Visualization and Simulation
 
-The `com.fulcrologic.statecharts.visualization` namespace provides tools for visualizing and
-interactively simulating statecharts. The visualizer renders your chart as a UML-style state
-diagram and, when connected to a running application, lets you observe live session state in
-real time.
+The `com.fulcrologic.statecharts.visualization` namespace provides tools for visualizing and interactively simulating statecharts.
+The visualizer renders your chart as a UML-style state diagram and, when connected to a running application, lets you observe live session state in real time.
 
 There are two main components:
 
-- **Simulator** — A pure CLJ/CLJS API for stepping through a statechart interactively at the
-  REPL or in a browser UI, using the real processor but with a mock execution model.
-- **Visualization Server** — A standalone Ring server (or embeddable Pathom resolvers) that
-  exposes chart definitions and live session state to the browser visualizer.
+- **Simulator** — A pure CLJ/CLJS API for stepping through a statechart interactively at the REPL or in a browser UI, using the real processor but with a mock execution model.
+- **Visualization Server** — A standalone Ring server (or embeddable Pathom resolvers) that exposes chart definitions and live session state to the browser visualizer.
 
 == The Simulator API
 
-The simulator (`com.fulcrologic.statecharts.visualization.simulator`) runs your chart using the
-real processor but with a custom execution model: guard predicates become user-toggleable
-booleans, and all other executable content (scripts, assigns, sends) is a noop. This lets you
-step through the chart's control flow without any real side-effects.
+The simulator (`com.fulcrologic.statecharts.visualization.simulator`) runs your chart using the real processor but with a custom execution model: guard predicates become user-toggleable booleans, and all other executable content (scripts, assigns, sends) is a noop.
+This lets you step through the chart's control flow without any real side-effects.
 
 Key functions:
 
@@ -2235,8 +2324,8 @@ The simulator state map returned by `start-simulation!` contains:
 
 == Diagram Labels
 
-By default the visualizer uses element IDs and transition event names as labels. You can
-override these with two metadata keys on your chart elements:
+By default the visualizer uses element IDs and transition event names as labels.
+You can override these with two metadata keys on your chart elements:
 
 - `:diagram/label` on a `script` element — displayed in the state's entry/exit activity compartment
 - `:diagram/condition` on a `transition` — used as the guard label on the transition arrow
@@ -2275,16 +2364,14 @@ as entry activities, `stop-spinner` as an exit activity, and the transition to `
 
 == Standalone Visualization Server
 
-The easiest way to visualize a chart is to run the standalone server. It serves the browser UI
-and exposes the Pathom API in one step.
+The easiest way to visualize a chart is to run the standalone server.
+It serves the browser UI and exposes the Pathom API in one step.
 
 The server supports three modes:
 
 1. **Static mode** — renders a chart definition passed on the command line; no live session data.
-2. **Connected/REPL mode** — connects to a running nREPL server and pulls chart definitions and
-   session state from your live application.
-3. **Proxy mode** — forwards Pathom queries to a remote server that already has the resolvers
-   installed.
+2. **Connected/REPL mode** — connects to a running nREPL server and pulls chart definitions and session state from your live application.
+3. **Proxy mode** — forwards Pathom queries to a remote server that already has the resolvers installed.
 
 A typical `deps.edn` alias for the standalone server:
 
@@ -2312,8 +2399,7 @@ The browser UI will open (or print its URL) once the server is ready.
 
 == Embedding in Your Own Server
 
-If you already have a Ring + Pathom server you can add the visualization resolvers directly,
-giving the browser UI access to your live chart registry and working memory store.
+If you already have a Ring + Pathom server you can add the visualization resolvers directly, giving the browser UI access to your live chart registry and working memory store.
 
 [source,clojure]
 ----
@@ -2345,9 +2431,8 @@ The four resolvers in `viz-resolvers/resolvers` cover:
 
 == Live Session Monitoring
 
-When the server has a working memory store available, the browser UI can display which states
-are currently active in any running session. The `search-for-sessions` multimethod lets you
-plug in your own session-discovery logic.
+When the server has a working memory store available, the browser UI can display which states are currently active in any running session.
+The `search-for-sessions` multimethod lets you plug in your own session-discovery logic.
 
 [source,clojure]
 ----
@@ -2365,15 +2450,14 @@ plug in your own session-discovery logic.
     :session/label  "admin@example.com"}])
 ----
 
-The `search-string` argument comes from the browser's session search box. You can filter by
-user name, session ID prefix, or any application-specific criterion. The default implementation
-logs a warning and returns an empty vector.
+The `search-string` argument comes from the browser's session search box.
+You can filter by user name, session ID prefix, or any application-specific criterion.
+The default implementation logs a warning and returns an empty vector.
 
 == POST API for External Tools
 
-The resolvers expose a `send-event` Pathom mutation that lets external tools trigger state
-transitions without a UI. This is useful for scripted testing or integration from non-Clojure
-environments.
+The resolvers expose a `send-event` Pathom mutation that lets external tools trigger state transitions without a UI.
+This is useful for scripted testing or integration from non-Clojure environments.
 
 [source,shell]
 ----
@@ -2405,7 +2489,8 @@ From a Babashka script you can use `babashka.http-client`:
 ----
 
 NOTE: The `send-event` mutation requires the Pathom environment to have `::sc/working-memory-store`
-and `::sc/processor` available. Static-mode standalone servers do not support this mutation.
+and `::sc/processor` available.
+Static-mode standalone servers do not support this mutation.
 
 = Relationship to SCXML
 

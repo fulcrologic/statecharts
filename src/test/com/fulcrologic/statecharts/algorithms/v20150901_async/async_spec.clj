@@ -263,18 +263,14 @@
 
     (testing/start! env)
 
+    ;; W3C SCXML §4.4: a rejected promise from executable content queues
+    ;; error.execution on the INTERNAL queue, which is drained during the
+    ;; same macrostep. The chart should already be in :error-state after start.
     (assertions
-      "State is entered despite promise rejection"
-      (testing/in? env :normal) => true)
-
-    ;; The error.execution event should be sent automatically by the processor
-    ;; Note: This may require running the event in the next turn, depending on
-    ;; how the async event queue works
-    (testing/run-events! env :error.execution)
-
-    (assertions
-      "error.execution event triggers transition to error handler state"
-      (testing/in? env :error-state) => true)))
+      "error.execution from rejected promise routed via internal queue, transition fired"
+      (testing/in? env :error-state) => true
+      "no longer in :normal"
+      (testing/in? env :normal) => false)))
 
 ;; =============================================================================
 ;; Test 8: Async script on transition

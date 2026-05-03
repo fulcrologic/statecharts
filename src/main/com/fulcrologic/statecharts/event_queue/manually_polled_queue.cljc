@@ -35,7 +35,8 @@
 
 (defrecord ManuallyPolledQueue [session-queues]
   sp/EventQueue
-  (send! [_ _env {:keys [event data type target source-session-id send-id invoke-id delay]}]
+  (send! [_ _env {:keys [event data type target source-session-id send-id invoke-id delay
+                          origin origintype]}]
     (if (and (supported-type? type) (or target source-session-id))
       (let [target (or target source-session-id)
             now    (now-ms)
@@ -46,6 +47,12 @@
                                               :target target
                                               :data   (or data {})}
                                        source-session-id (assoc ::sc/source-session-id source-session-id)
+                                       ;; W3C §5.10.1: :origin is a routable target identifying the sender;
+                                       ;; for chart-to-chart sends we use the source session id.
+                                       (or origin source-session-id) (assoc :origin (or origin source-session-id))
+                                       ;; W3C §5.10.1: :origintype is the IO Processor type that delivered
+                                       ;; the event. For internal SCXML chart sends we surface ::sc/chart.
+                                       true (assoc :origintype (or origintype type ::sc/chart))
                                        send-id (assoc :sendid send-id ::sc/send-id send-id)
                                        invoke-id (assoc :invokeid invoke-id)))
                      {::delivery-time tm})]

@@ -83,23 +83,24 @@
       namelist)
     {}))
 
-(defn- run-expression! [{::sc/keys [event-queue execution-model] :as env} expr]
+;; Forward declarations for symbols defined later in this file.
+(declare raise run-many! execute! add-descendant-states-to-enter!)
+
+(defn- run-expression! [{::sc/keys [execution-model] :as env} expr]
   (try
     (log/debug "Running expression" expr)
     (log/spy :debug
       (sp/run-expression! execution-model env expr))
-    ;; W3C SCXML Section 4.4: errors in executable content MUST generate error.execution
-    ;; events rather than crashing the state machine. Broad catch is intentional.
+    ;; W3C SCXML §4.4: errors in executable content MUST generate error.execution
+    ;; events on the INTERNAL queue rather than crashing the state machine.
     (catch #?(:clj Throwable :cljs :default) e
       (log/error e "Expression failure")
-      (let [session-id (env/session-id env)]
-        (log/debug "Sending event" :error.execution "for exception" (ex-message e))
-        (sp/send! event-queue env {:event             :error.execution
-                                   :send-id           session-id
-                                   :data              {:error e}
-                                   :source-session-id session-id})
-        ; Expression failed to run
-        nil))))
+      (raise env (evts/new-event {:name :error.execution
+                                  :data {:error e :expression expr}}))
+      ;; Strict mode (W3C §4.4 conformance) propagates the error so the surrounding
+      ;; block can abort. Default mode swallows it (legacy behavior).
+      (when (::sc/errors-abort-siblings? env) (throw e))
+      nil)))
 
 (>defn condition-match
   [{::sc/keys [statechart] :as env} element-or-id]
@@ -107,10 +108,15 @@
   (let [{:keys [cond]} (chart/element statechart element-or-id)]
     (if (nil? cond)
       true
-      (do
+      ;; Per W3C §3.13, a cond expression that errors disables the transition AND
+      ;; queues error.execution. `run-expression!` already queues the event; here we
+      ;; just need to catch any (strict-mode) rethrow so transition selection can
+      ;; continue evaluating other transitions.
+      (try
         (log/debug "evaluating condition" cond)
         (log/spy :debug
-          (boolean (run-expression! (assoc env ::sc/raw-result? true) cond)))))))
+          (boolean (run-expression! (assoc env ::sc/raw-result? true) cond)))
+        (catch #?(:clj Throwable :cljs :default) _ false)))))
 
 (>defn session-id
   "Returns the unique session id from an initialized `env`."
@@ -131,8 +137,6 @@
                                                             (fn [s] (in-final-state? env s))
                                                             (chart/child-states statechart non-atomic-state))
       :else false)))
-
-(declare add-descendant-states-to-enter!)
 
 (>defn raise
   "Add an event to the internal (working memory) event queue."
@@ -261,8 +265,6 @@
         :else (sp/update! data-model env {:ops (ops/set-map-ops {})})))
     nil))
 
-(declare execute!)
-
 (defmulti execute-element-content!
   "Multimethod. Extensible mechanism for running the content of elements on the state machine. Dispatch by :node-type
    of the element itself."
@@ -314,30 +316,41 @@
                         targetexpr
                         type
                         typeexpr] :as _send-element}]
-          (let [event-name        (!? env event eventexpr)
-                id                (if idlocation (genid "send") id)
-                target            (!? env target targetexpr)
-                target-is-parent? (= target (env/parent-session-id env))
-                data              (log/spy :debug
-                                    "Computed send event data"
-                                    (merge
-                                      (named-data env namelist)
-                                      (!? env nil content)))]
+          (let [event-name (!? env event eventexpr)
+                id         (if idlocation (genid "send") id)
+                raw-target (!? env target targetexpr)
+                resolved   (env/resolve-send-target env raw-target)
+                data       (log/spy :debug
+                             "Computed send event data"
+                             (merge
+                               (named-data env namelist)
+                               (!? env nil content)))]
             (when idlocation (sp/update! data-model env {:ops [(ops/assign idlocation id)]}))
-            (sp/send! event-queue env (cond-> {:send-id           id
-                                               :source-session-id (env/session-id env)
-                                               :event             event-name
-                                               :data              data
-                                               :target            target
-                                               :type              (or (!? env type typeexpr) ::sc/chart)
-                                               :delay             (or (!? env delay delayexpr) 0)}
-                                        target-is-parent? (assoc :invoke-id (env/invoke-id env))))))]
+            (if (= :internal resolved)
+              (do
+                (env/raise env (evts/new-event (cond-> {:name event-name :data data}
+                                                 id (assoc :sendid id ::sc/send-id id))))
+                true)
+              (let [resolved-target   (second resolved)
+                    parent-sid        (env/parent-session-id env)
+                    target-is-parent? (and (some? parent-sid)
+                                           (= resolved-target parent-sid))]
+                (sp/send! event-queue env (cond-> {:send-id           id
+                                                   :source-session-id (env/session-id env)
+                                                   :event             event-name
+                                                   :data              data
+                                                   :target            resolved-target
+                                                   :type              (or (!? env type typeexpr) ::sc/chart)
+                                                   :delay             (or (!? env delay delayexpr) 0)}
+                                            target-is-parent? (assoc :invoke-id (env/invoke-id env))))))))]
   (defmethod execute-element-content! :send [env element]
     (log/debug "Send event" element)
     (when-not (send! env element)
       (raise env (evts/new-event {:name :error.execution
-                                  :data {:type    :send
-                                         :element element}})))))
+                                  :data {:type :send :element element}}))
+      ;; W3C §4.4: in strict mode, the rest of the surrounding block must be skipped.
+      (when (::sc/errors-abort-siblings? env)
+        (throw (ex-info "send dispatch failed" {:type :send :element element}))))))
 
 (defmethod execute-element-content! :cancel [{::sc/keys [event-queue] :as env}
                                              {:keys [sendid sendidexpr] :as element}]
@@ -399,29 +412,67 @@
 (defmethod execute-element-content! :for-each [{::sc/keys [data-model statechart] :as env}
                                                 {:keys [array item index children] :as element}]
   (log/debug "Executing for-each" element)
-  (let [coll (run-expression! (assoc env ::sc/raw-result? true) array)]
-    (doseq [[idx value] (map-indexed vector coll)]
-      (when item
-        (sp/update! data-model env {:ops [(ops/assign item value)]}))
-      (when index
-        (sp/update! data-model env {:ops [(ops/assign index idx)]}))
-      (doseq [child-id children]
-        (execute-element-content! env (chart/element statechart child-id))))))
+  (let [coll    (run-expression! (assoc env ::sc/raw-result? true) array)
+        strict? (::sc/errors-abort-siblings? env)]
+    (cond
+      (or (nil? coll) (and (not (coll? coll)) (not (string? coll))))
+      ;; W3C §4.6: array expression that does not yield an iterable must raise error.execution.
+      (do
+        (raise env (evts/new-event {:name :error.execution
+                                    :data {:type :foreach :reason :not-iterable
+                                           :array coll :element element}}))
+        ;; W3C §4.4: in strict mode, abort the surrounding block.
+        (when strict?
+          (throw (ex-info "foreach over non-iterable" {:type :foreach :array coll}))))
+
+      :else
+      (loop [pairs (seq (map-indexed vector coll))]
+        (when pairs
+          (let [[idx value] (first pairs)]
+            (when item  (sp/update! data-model env {:ops [(ops/assign item value)]}))
+            (when index (sp/update! data-model env {:ops [(ops/assign index idx)]}))
+            (let [child-aborted?
+                  (loop [cs (seq children)]
+                    (if (nil? cs)
+                      false
+                      (let [n (first cs)
+                            aborted? (try
+                                       (execute-element-content! env (chart/element statechart n))
+                                       false
+                                       (catch #?(:clj Throwable :cljs :default) e
+                                         (raise env (evts/new-event {:name :error.execution
+                                                                     :data {:type :foreach :node n :exception e}}))
+                                         (log/error e "Error inside <foreach>")
+                                         strict?))]
+                        (if aborted? true (recur (next cs))))))]
+              (when-not child-aborted?
+                (recur (next pairs))))))))))
 
 (>defn execute!
-  "Run the executable content (immediate children) of s."
+  "Run the executable content (immediate children) of s.
+
+   Errors raised by any child queue an `:error.execution` event on the internal queue.
+   When `(::sc/errors-abort-siblings? env)` is true, also abort the rest of the block
+   (W3C SCXML §4.4); otherwise the remaining children still execute."
   [{::sc/keys [statechart] :as env} s]
   [::sc/processing-env ::sc/element-or-id => nil?]
   (log/debug "Execute content of" s)
-  (let [{:keys [children]} (chart/element statechart s)]
-    (doseq [n children]
-      (try
-        (let [ele (chart/element statechart n)]
-          (execute-element-content! env ele))
-        ;; W3C SCXML Section 4.4: executable content errors must not crash the machine.
-        ;; Broad catch is intentional to match spec behavior.
-        (catch #?(:clj Throwable :cljs :default) t
-          (log/error t "Unexpected exception in content")))))
+  (let [{:keys [children]} (chart/element statechart s)
+        strict?            (::sc/errors-abort-siblings? env)]
+    (loop [remaining (seq children)]
+      (when remaining
+        (let [n        (first remaining)
+              aborted? (try
+                         (let [ele (chart/element statechart n)]
+                           (execute-element-content! env ele))
+                         false
+                         ;; W3C SCXML §4.4: executable content errors must not crash the machine.
+                         (catch #?(:clj Throwable :cljs :default) t
+                           (raise env (evts/new-event {:name :error.execution
+                                                       :data {:element s :node n :exception t}}))
+                           (log/error t "Unexpected exception in content")
+                           strict?))]
+          (when-not aborted? (recur (next remaining)))))))
   nil)
 
 (>defn compute-done-data! [{::sc/keys [statechart] :as env} final-state]
@@ -457,8 +508,11 @@
         (when-let [t (and (contains? states-for-default-entry s)
                        (some->> s (chart/initial-element statechart) (chart/transition-element statechart)))]
           (execute! env t))
+        ;; W3C SCXML enterStates: execute defaultHistoryContent for the parent state
+        ;; on first entry only (it is populated only when no recorded history existed).
+        ;; The stored value is a list of executable-content children; run them in order.
         (when-let [content (get default-history-content (chart/element-id statechart s))]
-          (execute-element-content! env (chart/element statechart content)))
+          (run-many! env content))
         (when (log/spy :debug (chart/final-state? statechart s))
           (if (= :ROOT (chart/get-parent statechart s))
             (vswap! vwmem assoc ::sc/running? false)
@@ -633,17 +687,27 @@
     nil))
 
 (>defn run-many!
-  "Run the code associated with the given nodes. Does NOT set context id of the nodes run."
+  "Run the code associated with the given nodes. Does NOT set context id of the nodes run.
+
+   Errors raised by any element queue an `:error.execution` event on the internal queue
+   in either mode. When `(::sc/errors-abort-siblings? env)` is true, also abort the rest
+   of the block (W3C SCXML §4.4); otherwise the remaining nodes still execute."
   [{::sc/keys [statechart] :as env} nodes]
   [::sc/processing-env [:sequential ::sc/element-or-id] => nil?]
-  (doseq [n nodes]
-    (try
-      (execute-element-content! env (chart/element statechart n))
-      (catch #?(:clj Throwable :cljs :default) e
-        (raise env (evts/new-event {:name :error.execution
-                                    :data {:node      n
-                                           :exception e}}))
-        (log/error e "Unexpected execution error"))))
+  (let [strict? (::sc/errors-abort-siblings? env)]
+    (loop [remaining (seq nodes)]
+      (when remaining
+        (let [n        (first remaining)
+              aborted? (try
+                         (execute-element-content! env (chart/element statechart n))
+                         false
+                         (catch #?(:clj Throwable :cljs :default) e
+                           (raise env (evts/new-event {:name :error.execution
+                                                       :data {:node      n
+                                                              :exception e}}))
+                           (log/error e "Unexpected execution error")
+                           strict?))]
+          (when-not aborted? (recur (next remaining)))))))
   nil)
 
 (letfn [(stop-invocation!
