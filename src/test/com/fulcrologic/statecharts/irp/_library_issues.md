@@ -271,3 +271,112 @@ the exception, so the transition to `:pass` (Var1 = 1) never fires.
 - `v20150901_impl.cljc:399` — wrap the inner `doseq` in a try/catch; on
   exception, place `error.execution` on the internal queue and `return` (break
   out of the foreach entirely). This is the same fix family as Tests 159 / 312.
+
+## Test 554 — `<invoke>` argument-evaluation error not handled; invocation not cancelled
+
+- Source: https://www.w3.org/Voice/2013/scxml-irp/554/test554.txml
+- Test file: `src/test/com/fulcrologic/statecharts/irp/test_554.cljc`
+
+### Expected (W3C SCXML §6.4)
+
+When evaluation of any of an `<invoke>`'s argument expressions (`namelist`,
+`<param>`/`:params`, `srcexpr`, `typeexpr`) raises an error, the processor MUST:
+1. Cancel the invocation (do NOT start it; do NOT emit `done.invoke`).
+2. Place `error.execution` on the internal queue.
+3. Continue running normally so subsequent transitions / events still fire.
+
+The IRP test verifies (1) by sending a 1-tick timer and watching for `done.invoke`
+arriving from the (incorrectly) started child invocation. If no `done.invoke`
+arrives the timer fires and we route to `:pass`.
+
+### Actual
+
+Two related deviations:
+
+1. `v20150901_impl.cljc:678-687` (`run-invocations!`) iterates and calls
+   `start-invocation!` directly with no try/catch. A throwing `:params` /
+   `:srcexpr` / `:typeexpr` propagates out of `start-invocation!`, out of
+   `run-invocations!`, out of `before-event!`, and aborts `start!` entirely —
+   the chart never even reaches a stable configuration. Running `test_554` today
+   surfaces an uncaught `ExceptionInfo` from `lambda.cljc:16` (the execution
+   model's `run-expression!`).
+2. `v20150901_impl.cljc:71-84` (`named-data`) silently drops any namelist entry
+   whose source location returns `nil` rather than raising `error.execution`,
+   so a strictly "invalid namelist" cannot be modelled directly. (The W3C test
+   uses `conf:invalidNamelist` — a namelist referring to an undeclared variable,
+   which strict ECMAScript would throw on. Translating it to a throwing `:params`
+   exposes deviation #1 instead.)
+
+### Suspected fix sites
+
+- `v20150901_impl.cljc:635-676` (`start-invocation!` letfn) — wrap the param-map
+  evaluation and the call to `sp/start-invocation!` in try/catch. On exception,
+  do NOT call `sp/start-invocation!`, place `error.execution` on the internal
+  queue (same fix family as Tests 159 / 312 / 152 / 156), and return. The
+  invocation is thereby cancelled per §6.4.
+- `v20150901_impl.cljc:625-633` (`invocation-details`) — the `srcexpr` / `typeexpr`
+  evaluation here is also unguarded. Either wrap there too, or move that
+  evaluation inside the same try/catch in `start-invocation!`.
+- `v20150901_impl.cljc:71-84` (`named-data`) — consider raising `error.execution`
+  when a namelist entry references an unbound location, to match strict
+  ECMAScript semantics. (Optional / lower priority — this library's data model
+  is intentionally permissive.)
+
+### Runner gap
+
+The IRP runner registers exactly one chart (the chart under test) and exposes no
+way to register additional helper charts. Test 554 needs a "trivially-completing"
+child chart so that, if the bug above were absent, the invocation could
+demonstrably emit `done.invoke`. The current test uses a non-existent registry
+key (`:irp/child-554`); even if the param-eval bug is fixed, exercising the
+positive path (`done.invoke → :fail`) will require either:
+- extending the runner to accept extra registrations, OR
+- registering a child chart from inside the parent's on-entry (hacky — relies on
+  reaching env at expression time).
+
+This was deferred per the porting briefing ("STOP if you would need to extend
+the runner — document the gap and report back").
+
+## Test 402 — error.execution emitted twice when an executable expression throws in strict mode
+
+- Source: https://www.w3.org/Voice/2013/scxml-irp/402/test402.txml
+- Test file: `src/test/com/fulcrologic/statecharts/irp/test_402.cljc`
+
+### Expected (W3C SCXML §4.4)
+
+An executable element that fails (e.g. `<assign>` with an illegal expression) must
+queue exactly ONE `error.execution` event on the internal queue. Test 402 relies on
+a precise queue ordering: after `s01` onentry runs `<raise event="event1"/>` then a
+failing `<assign>`, the internal queue must be `[event1, error.execution]`. The
+chart then transitions s01→s02 on `event1` (which raises `event2`), s02→s03 on the
+prefix `error` (matching `error.execution`), and finally s03→pass on `event2`.
+
+### Actual
+
+`error.execution` is queued twice when a single expression throws.
+
+1. `run-expression!` at `v20150901_impl.cljc:96-102` catches the throw, raises
+   `error.execution`, and (in strict mode) rethrows.
+2. The rethrown exception is caught again by `execute!` at
+   `v20150901_impl.cljc:465-474`, which raises a SECOND `error.execution` and then
+   honours the strict-mode abort.
+
+So the actual queue is `[event1, error.execution, error.execution, …]`. After
+event1 → s02 (which raises event2) the queue becomes
+`[error.execution, error.execution, event2]`. s02 consumes the first
+error.execution → s03; s03 then sees the second error.execution before event2,
+matches the wildcard transition, and goes to `fail`.
+
+The same async-impl pattern at `v20150901_async_impl.cljc:152` and `:567` exhibits
+the same double-emit.
+
+### Suspected fix sites
+
+- `v20150901_impl.cljc:465-474` (and the async equivalent at
+  `v20150901_async_impl.cljc:560-575`) — the outer `execute!` catch should NOT
+  re-raise `error.execution` if the inner code already did. Either tag the rethrown
+  exception (e.g. `(ex-info ... {::already-reported? true})`) and check for that
+  flag here, or only raise `error.execution` here for exceptions that escape paths
+  other than `run-expression!`.
+- Alternatively, have `run-expression!` rethrow a sentinel exception type that
+  `execute!` recognises as "error already reported, just abort".

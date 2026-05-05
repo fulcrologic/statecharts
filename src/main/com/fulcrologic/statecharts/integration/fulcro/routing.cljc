@@ -105,8 +105,8 @@
   "Checks for route targets whose simple name (used in URL matching) collides.
    Returns a sequence of issue maps, empty if no duplicates."
   [chart]
-  (let [targets  (find-all-route-targets chart)
-        by-name  (group-by (fn [{:route/keys [target]}] (name target)) targets)]
+  (let [targets (find-all-route-targets chart)
+        by-name (group-by (fn [{:route/keys [target]}] (name target)) targets)]
     (into []
       (comp
         (filter (fn [[_ entries]] (> (count entries) 1)))
@@ -115,17 +115,17 @@
                 :leaf-name   leaf-name
                 :targets     (mapv :route/target entries)
                 :message     (str "Duplicate route leaf name \"" leaf-name
-                              "\" — URL matching will be ambiguous. Targets: "
-                              (mapv :route/target entries))})))
+                               "\" — URL matching will be ambiguous. Targets: "
+                               (mapv :route/target entries))})))
       by-name)))
 
 (defn validate-reachable-collisions
   "Checks for `:route/reachable` targets that share a simple name with a direct route target.
    Returns a sequence of issue maps, empty if no collisions."
   [chart]
-  (let [direct-targets  (find-all-route-targets chart)
-        direct-by-name  (into {} (map (fn [{:route/keys [target]}] [(name target) target])) direct-targets)
-        reachable       (find-all-reachable-targets chart)]
+  (let [direct-targets (find-all-route-targets chart)
+        direct-by-name (into {} (map (fn [{:route/keys [target]}] [(name target) target])) direct-targets)
+        reachable      (find-all-reachable-targets chart)]
     (into []
       (comp
         (filter (fn [{:keys [target]}]
@@ -202,8 +202,8 @@
                 :chain       chain
                 :state-ids   (mapv :id entries)
                 :message     (str "Duplicate URL segment chain " (pr-str chain)
-                              " — URL matching will be ambiguous. States: "
-                              (mapv :id entries))})))
+                               " — URL matching will be ambiguous. States: "
+                               (mapv :id entries))})))
       by-chain)))
 
 (defn- has-invoke-child?
@@ -222,9 +222,9 @@
   (loop [id (:parent (get elements-by-id state-id))]
     (let [el (get elements-by-id id)]
       (cond
-        (nil? el)                       nil
-        (contains? el :routing/root)    id
-        :else                           (recur (:parent el))))))
+        (nil? el) nil
+        (contains? el :routing/root) id
+        :else (recur (:parent el))))))
 
 (defn- initial-chain-leaf
   "Walks the initial chain from `start-id` (a compound state) by following the
@@ -269,14 +269,14 @@
                          :state-id    state-id
                          :reason      reason
                          :message     (str "State " state-id " has :route/segment \"\" but " reason
-                                       ". The empty-segment marker is only valid on a leaf rstate "
-                                       "that lies on the initial chain of its enclosing routes node.")})]
+                                        ". The empty-segment marker is only valid on a leaf rstate "
+                                        "that lies on the initial chain of its enclosing routes node.")})]
     (into []
       (keep
         (fn [state-id]
-          (let [el          (get elements-by-id state-id)
-                routes-id   (enclosing-routes-node-id elements-by-id state-id)
-                chain-leaf  (when routes-id (initial-chain-leaf elements-by-id routes-id))
+          (let [el           (get elements-by-id state-id)
+                routes-id    (enclosing-routes-node-id elements-by-id state-id)
+                chain-leaf   (when routes-id (initial-chain-leaf elements-by-id routes-id))
                 child-route? (some
                                (fn [cid]
                                  (and (not= cid state-id)
@@ -362,9 +362,9 @@
   [app Parent parent-ident join-key Target target-ident]
   (if (and (not parent-ident) (rc/has-ident? Parent))
     (log/error "Skipping join rewrite — parent has no ident. Route will have no props."
-      {:parent     (rc/component-name Parent)
-       :target     (rc/component-name Target)
-       :join-key   join-key})
+      {:parent   (rc/component-name Parent)
+       :target   (rc/component-name Target)
+       :join-key join-key})
     (let [{:com.fulcrologic.fulcro.application/keys [state-atom]} app
           state-map @state-atom
           old-query (rc/get-query Parent state-map)
@@ -519,8 +519,8 @@
         reachable-segments (cond
                              reachable-map?
                              (not-empty (into {}
-                                         (map (fn [[kw seg]] [(coerce-to-keyword kw) seg]))
-                                         reachable-input))
+                                          (map (fn [[kw seg]] [(coerce-to-keyword kw) seg]))
+                                          reachable-input))
 
                              (and reachable (not reachable-input))
                              nil
@@ -555,7 +555,7 @@
                            [(ops/assign [:route/idents target-key] ident)]))})
         (script {:expr (fn [env data & _] (update-parent-query! env data id))}))
       (ele/invoke (cond-> {:params      (merge
-                                          {:fulcro/actors         (fn [env data & _]
+                                          {:fulcro/actors        (fn [env data & _]
                                                                    (let [Target (rc/registry-key->class target-key)
                                                                          ident  (get-in data [:route/idents target-key] (when (rc/has-ident? Target) (rc/get-ident Target {})))
                                                                          actors (merge {:actor/component (scf/actor Target ident)} (?! (rc/component-options Target sfro/actors) env data))]
@@ -1024,6 +1024,40 @@
   [app-ish]
   (boolean (url-sync-provider app-ish)))
 
+(defn- url-sync-codec [app]
+  (or (get-in (url-sync-state app) [:codecs session-id])
+    (get-in (url-sync-state app) [:codec])))
+
+(defn replace-route-params!
+  "Updates the `:route/params` for the given currently-active route `target` and,
+   if URL sync is installed, replaces the current browser URL using the history
+   provider's `-replace-url!` method (no new history entry, no rstate re-entry).
+
+   This is the equivalent of the original UISM RAD library's URL replacement
+   signal: components/statecharts can call this when their internal
+   URL-relevant state changes (e.g. report sort/page/selection or control
+   parameter values) so the URL stays bookmarkable without re-running route
+   entry actions.
+
+   No-op when URL sync is not installed, which makes it safe to call
+   unconditionally from app code."
+  [app-ish target params]
+  (when (url-sync-installed? app-ish)
+    (let [app        (rc/any->app app-ish)
+          target-key (coerce-to-keyword target)
+          provider   (url-sync-provider app)
+          codec      (url-sync-codec app)
+          state-atom (:com.fulcrologic.fulcro.application/state-atom app)]
+      (when (and provider codec state-atom)
+        (swap! state-atom assoc-in
+          (scf/local-data-path session-id :routing/parameters target-key)
+          (or params {}))
+        (let [registry (-> app runtime-atom deref ::sc/env ::sc/statechart-registry)
+              new-url  (ruc/deep-configuration->url
+                         (rapp/current-state app) registry session-id scf/local-data-path codec)]
+          (when new-url
+            (ruh/-replace-url! provider new-url)))))))
+
 (defn- find-root-session
   "Walks the `::sc/parent-session-id` chain in `state-map` to find a registered root session.
    Returns the root session-id or nil."
@@ -1090,8 +1124,8 @@
         leaf-id)
       ;; Codec didn't match directly — try reachable targets via deep search
       ;; (needed for cross-chart :route/reachable targets not in this chart's elements)
-      (let [segments    (ruh/current-url-path href)
-            leaf-name   (peek segments)
+      (let [segments     (ruh/current-url-path href)
+            leaf-name    (peek segments)
             route-params (when-let [params (:params decoded)]
                            (reduce-kv (fn [acc _state-id state-params]
                                         (merge acc state-params))
@@ -1142,7 +1176,7 @@
         ;; not destroyed.
         settling?                               (atom false)
         debounce-timer #?(:cljs (atom nil) :clj nil)
-        safety-timer #?(:cljs (atom nil) :clj nil)
+        safety-timer #?(:cljs (atom nil) :clj   nil)
 
         ;; Outstanding browser-initiated navigations counter. Increments on each
         ;; popstate that passes the debounce filter, decrements on each root save
@@ -1235,13 +1269,13 @@
                                                               ;; Last nav resolved — check acceptance/denial
                                                               (zero? remaining)
                                                               (if (and new-url
-                                                                      (or (= new-url browser-url)
-                                                                        ;; Prefix match: root URL matches but child chart
-                                                                        ;; hasn't initialized yet, so deep-url is shorter.
-                                                                        ;; Accept if browser URL starts with root path.
-                                                                        (and root-url
-                                                                          (not= new-url root-url)
-                                                                          (cstr/starts-with? browser-url root-url))))
+                                                                    (or (= new-url browser-url)
+                                                                      ;; Prefix match: root URL matches but child chart
+                                                                      ;; hasn't initialized yet, so deep-url is shorter.
+                                                                      ;; Accept if browser URL starts with root path.
+                                                                      (and root-url
+                                                                        (not= new-url root-url)
+                                                                        (cstr/starts-with? browser-url root-url))))
                                                                 ;; ACCEPTED
                                                                 (do
                                                                   (cancel-safety-timer!)
