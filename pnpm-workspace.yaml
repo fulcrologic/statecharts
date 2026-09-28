@@ -2,3 +2,4 @@ saveExact: true
 minimumReleaseAge: 10080   # minutes = 7 days
 allowBuilds:
   fsevents: false
+shamefullyHoist: true   # shadow-cljs needs hoisted node polyfills (e.g. "process" for react 19)
