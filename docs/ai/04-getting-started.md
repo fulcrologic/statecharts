@@ -18,7 +18,7 @@ Enable in Chrome DevTools settings:
 ### Required Tools
 - **Java SE Development Kit**: Version 8 recommended (OpenJDK or official)
 - **Clojure CLI Tools**: For dependency management
-- **Node.js and npm**: For ClojureScript compilation
+- **Node.js and pnpm**: For ClojureScript compilation
 - **Editor**: IntelliJ CE + Cursive (recommended) or Emacs/Spacemacs
 
 ## Project Setup
@@ -27,8 +27,8 @@ Enable in Chrome DevTools settings:
 ```bash
 mkdir app && cd app
 mkdir -p src/main src/dev resources/public
-npm init
-npm install shadow-cljs react react-dom --save
+pnpm init
+pnpm add shadow-cljs react react-dom
 ```
 
 ### Dependencies (`deps.edn`)
@@ -115,7 +115,7 @@ npm install shadow-cljs react react-dom --save
 
 ### Start Shadow-cljs Server
 ```bash
-npx shadow-cljs server
+pnpm exec shadow-cljs server
 ```
 
 ### Build Process

@@ -151,8 +151,8 @@ All demo files require `routing.core :as sroute` — update to `routing :as srou
 ## Verification
 
 1. **CLJ tests**: Run all CLJ tests via REPL with Kaocha (see `docs/ai/running-tests.md`) — all must pass
-2. **CLJS tests**: `npx shadow-cljs compile test && npx karma start --single-run` — all must pass
-3. **CLJS demo build**: `npx shadow-cljs compile routing-demo2` — compiles without warnings
+2. **CLJS tests**: `pnpm exec shadow-cljs compile test && pnpm exec karma start --single-run` — all must pass
+3. **CLJS demo build**: `pnpm exec shadow-cljs compile routing-demo2` — compiles without warnings
 4. **Grep audit**: `uro/` references should be zero outside deprecated `ui_routes.cljc` and `ui_routes_options.cljc`
 5. **Grep audit**: `routing.core` requires should only exist in the deprecated delegation ns `routing/core.cljc`
 6. **Grep audit**: No remaining `routing\.core` in Guide.adoc or demo docstrings

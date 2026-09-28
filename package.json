@@ -2,13 +2,17 @@
   "name": "statecharts",
   "version": "1.0.0",
   "description": "State Charts with SCXML implementation",
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "preinstall": "npx only-allow@1.2.2 pnpm"
+  },
   "main": "index.js",
   "directories": {},
   "dependencies": {
     "@js-joda/core": "3.2.0",
     "@js-joda/timezone": "2.8.0",
     "big.js": "6.1.1",
-    "elkjs": "^0.11.0"
+    "elkjs": "0.11.0"
   },
   "devDependencies": {
     "karma": "6.3.17",
