@@ -813,6 +813,103 @@
          "and the session's waiting event is processed before that processing returns"
          (edit-handled-in* a) => :b))))
 
+(def ^:private restore-token-key :com.fulcrologic.statecharts.integration.fulcro.routing/restore-token)
+(def ^:private routing-session-id :com.fulcrologic.statecharts.integration.fulcro.routing/session)
+
+(defn- restored-token
+  "The restore token that the session `sid` of `a` noted in its local data."
+  [a sid]
+  (get-in (app/current-state a) [::sc/local-data sid :com.fulcrologic.statecharts.integration.fulcro.routing/restored-token]))
+
+(specification "Processing an event that carries a deferred URL restore's token"
+  (let [a       (app/fulcro-app {})
+        token   #uuid "00000000-0000-0000-0000-000000000001"
+        dropped #uuid "00000000-0000-0000-0000-000000000002"
+        saves   (atom [])]
+    (scf/install-fulcro-statecharts! a {:event-loop? :immediate
+                                        :on-save     (fn [sid _] (swap! saves conj sid))})
+    (scf/register-statechart! a ::counter counter-chart)
+    (scf/start! a {:machine ::counter :session-id :s})
+    ;; stands in for the routing session
+    (scf/start! a {:machine ::counter :session-id routing-session-id})
+    (reset! saves [])
+    (scf/send! a :s :bump {restore-token-key token})
+    (assertions
+      "notes the token in its session's local data when the session dequeues it, whatever transition takes it"
+      (restored-token a :s) => token
+      (bumps a :s) => 1
+      "and only that session saves"
+      @saves => [:s])
+    (reset! saves [])
+    (scf/send! a :ghost :bump {restore-token-key dropped})
+    (assertions
+      "for a session that isn't running, hands the token to the routing session in an event of its own, which no transition takes: the routing session notes it and saves"
+      (restored-token a routing-session-id) => dropped
+      @saves => [routing-session-id]
+      (bumps a routing-session-id) => nil
+      "(no local data appears for the session that isn't running)"
+      (get-in (app/current-state a) [::sc/local-data :ghost]) => nil)))
+
+(specification "A step that took a deferred URL restore's token and fails (its save throws)"
+  (let [failing  (atom #{})
+        attempts (atom [])
+        a        (app/fulcro-app {})
+        token    #uuid "00000000-0000-0000-0000-000000000005"
+        own      #uuid "00000000-0000-0000-0000-000000000006"]
+    (scf/install-fulcro-statecharts! a {:event-loop? :immediate
+                                        :on-save     (fn [sid _]
+                                                       (swap! attempts conj sid)
+                                                       (when (contains? @failing sid) (throw (ex-info "save failed" {}))))})
+    (scf/register-statechart! a ::counter counter-chart)
+    (scf/start! a {:machine ::counter :session-id :s})
+    ;; stands in for the routing session
+    (scf/start! a {:machine ::counter :session-id routing-session-id})
+    (reset! failing #{:s})
+    (reset! attempts [])
+    (scf/send! a :s :bump {restore-token-key token})
+    (assertions
+      "hands the token to the routing session: the routing session notes it and saves"
+      (restored-token a routing-session-id) => token
+      @attempts => [:s routing-session-id])
+    (reset! failing #{routing-session-id})
+    (reset! attempts [])
+    (scf/send! a routing-session-id :bump {restore-token-key own})
+    (assertions
+      "keeps it when the step is the routing session's own: its next save ends the deferral"
+      (restored-token a routing-session-id) => own
+      @attempts => [routing-session-id])))
+
+#?(:clj
+   (specification "An :async? step that took a deferred URL restore's token"
+     (component "superseded by a restart before it saves"
+       (let [saves (atom [])
+             a     (slow-step-app :immediate {:on-save (fn [sid _] (swap! saves conj sid))})
+             token #uuid "00000000-0000-0000-0000-000000000003"]
+         (scf/start! a {:machine ::counter :session-id routing-session-id})
+         (scf/start! a {:machine ::slow-step :session-id :s})
+         (scf/send! a :s :go {restore-token-key token})
+         (scf/start! a {:machine ::slow-step :session-id :s})
+         (reset! saves [])
+         (open-gate!)
+         (assertions
+           "hands the token to the routing session when the step ends: the routing session notes it and saves"
+           (restored-token a routing-session-id) => token
+           @saves => [routing-session-id])))
+     (component "that settles while it is current"
+       (let [saves (atom [])
+             a     (slow-step-app :immediate {:on-save (fn [sid _] (swap! saves conj sid))})
+             token #uuid "00000000-0000-0000-0000-000000000004"]
+         (scf/start! a {:machine ::counter :session-id routing-session-id})
+         (scf/start! a {:machine ::slow-step :session-id :s})
+         (scf/send! a :s :go {restore-token-key token})
+         (reset! saves [])
+         (open-gate!)
+         (assertions
+           "keeps it: its own session has it, and saves"
+           (restored-token a :s) => token
+           @saves => [:s]
+           (restored-token a routing-session-id) => nil)))))
+
 ;; ===== The continuation of a superseded or stopped step, restarts, and the hold race =====
 
 (defn- open-if! [k] (when-let [f (get @gates k)] (f true)))
