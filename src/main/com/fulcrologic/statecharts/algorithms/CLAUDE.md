@@ -16,6 +16,14 @@ Uses **volatiles internally** for direct comparison with W3C pseudocode appendix
 - `enter-states!` / `exit-states!` — Entry/exit with history recording, invocation lifecycle
 - `compute-entry-set!` — History resolution, parallel child activation, initial transitions
 
+## Invocation ids
+An `invoke` with no `:id` and no `:idlocation` generates `<state-id>.<uuid>` (SCXML); working memory keeps it at
+`::sc/invocation-ids` (element id -> generated id) while it runs, and `invocation-id` resolves stop, autoforward and
+finalize by it (fallback: the element id, for wmem saved before). Both impls have the same private helpers. Before,
+stop used the element id: every exit leaked the child session. `:idlocation` still reads the data model location.
+The key is the element id, which is generated (gensym) for an element without `:id`: not stable across processes, so
+durably saved wmem resumed elsewhere can't find the child (documented: give `invoke` an `:id`).
+
 ## Known Issues
 - `::sc/raw-result?` flag needed when expression results should not be treated as operations (see commit ffe30fb)
 - Catches `Throwable` (CLJ) / `:default` (CLJS) broadly — may hide serious JVM errors

@@ -199,3 +199,9 @@ Update subdirectory CLAUDEs when discovering gotchas. Keep them under 50 lines. 
 - `org.clojure/core.async` - Event loops
 - `org.eclipse.elk/*` - Graph layout for visualization
 - `com.fulcrologic/fulcro` (optional, dev only) - Framework integration
+
+## Commit Messages
+
+- Format: a single-sentence summary line, a blank line, then a concise bullet list of what was done.
+- No AI attribution: no `Co-Authored-By: Claude ...` trailer, no "with Claude" / "Generated with Claude Code".
+- Squash work-in-progress commits so each unit of work lands as one commit.

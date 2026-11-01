@@ -11,7 +11,10 @@
 (defn apply-action
   "Returns an operation that will `(apply f state-map args)` against the Fulcro app state map,
    as if performing an optimistic mutation action. The function `f` receives the current
-   state-map as its first argument, followed by any additional `args`."
+   state-map as its first argument, followed by any additional `args`.
+
+   Like the other state ops it is applied at once, in the order of the expression's op vector (whatever the tx
+   processing, even inside a running transaction), so later ops and later expressions see its result."
   [f & args]
   {:op :fulcro/apply-action :f f :args args})
 
