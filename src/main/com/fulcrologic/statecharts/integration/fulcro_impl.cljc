@@ -7,7 +7,7 @@
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.inspect.devtool-api :as dapi]
-    [com.fulcrologic.fulcro.inspect.inspect-client :refer [app-uuid app-uuid-key]]
+    [com.fulcrologic.fulcro.inspect.inspect-client :as inspect :refer [app-uuid app-uuid-key]]
     [com.fulcrologic.fulcro.inspect.target-impl :as timpl]
     [com.fulcrologic.fulcro.inspect.tools :as fit]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
@@ -328,18 +328,22 @@
         local-data   (get-in state-map (local-data-path session-id))
         {::sc/keys [ok-event ok-data error-event error-data target-alias]} options
         event-queue  (::sc/event-queue processing-env)
+        ;; The load's result is an event to the session id, like a remote mutation's: it goes out even when a restart
+        ;; of the session superseded the step that issued the load while that step still runs (the queue drops such a
+        ;; step's own sends, see `scf/with-superseded-check`).
+        result-env   (dissoc processing-env :com.fulcrologic.statecharts.integration.fulcro/superseded?)
+        send-result! (fn [event data]
+                       (sp/send! event-queue result-env {:event  event
+                                                         :data   (or data {})
+                                                         :target session-id}))
         ok-action    (when ok-event
                        (fn [{:keys [load-params] :as env}]
                          (df/finish-load! env (dissoc load-params :ok-action))
-                         (sp/send! event-queue processing-env {:event  ok-event
-                                                               :data   (or ok-data {})
-                                                               :target session-id})))
+                         (send-result! ok-event ok-data)))
         error-action (when error-event
                        (fn [{:keys [load-params] :as env}]
                          (df/load-failed! env (dissoc load-params :error-action))
-                         (sp/send! event-queue processing-env {:event  error-event
-                                                               :data   (or error-data {})
-                                                               :target session-id})))
+                         (send-result! error-event error-data)))
         component    (if-let [component-name (and
                                                (keyword? component-or-actor)
                                                (get-in local-data [:fulcro/actors component-or-actor :component]))]
@@ -353,15 +357,33 @@
     (df/load! app query-root component params)))
 
 
-(defmutation do-apply-action [{:keys [f args]}]
-  (action [{:keys [state]}]
-    (try
-      (swap! state (fn [s] (apply f s args)))
-      (catch #?(:cljs :default :clj Throwable) t
-        (log/error "Apply action failed:" {:f f :args args})))))
+(defn- apply-action!
+  "Swaps `(apply f state-map args)` into the Fulcro `state-atom`. When `f` throws, logs an error and leaves the
+   state alone."
+  [state-atom f args]
+  (try
+    (swap! state-atom (fn [s] (apply f s args)))
+    (catch #?(:cljs :default :clj Throwable) t
+      (log/error t "Apply action failed:" {:f f :args args}))))
 
+(defmutation do-apply-action
+  "Applies `(apply f state-map args)` to the app state. The `:fulcro/apply-action` op does the same without a
+   transaction, and reports itself to Fulcro Inspect as this mutation."
+  [{:keys [f args]}]
+  (action [{:keys [state]}]
+    (apply-action! state f args)))
+
+;; Applied directly (not via `transact!!`) so the op lands in op-vector order in every tx processing mode: synchronous
+;; tx processing queues a transaction submitted inside a running one until that one ends, i.e. after the expression's
+;; later ops. `update!` schedules the render. Inspect still gets a `do-apply-action` transaction entry.
 (defmethod run-fulcro-data-op! :fulcro/apply-action [app _processing-env {:keys [f args]}]
-  (rc/transact!! app [(do-apply-action {:f f :args args})]))
+  (let [state-id-before (inspect/current-history-id app)]
+    (apply-action! (state-atom app) f args)
+    (inspect/ido
+      (inspect/optimistic-action-finished! app {} {:tx-id           (str (tempid/uuid) "-0")
+                                                   :tx              (list `do-apply-action {:f f :args args})
+                                                   :state-id-before state-id-before
+                                                   :sends           #{}}))))
 
 (def master-chart-id :com.fulcrologic.fulcro/master-statechart)
 
@@ -369,7 +391,8 @@
   (chart/statechart {:initial :state/initial}
     (ele/state {:id :state/initial}
       (ele/transition {:event :done.invoke.*}
-        (ele/script {:expr (fn [_env {:keys [_event]}]
+        ;; Fulcro's execution model explodes the event (4 args). `& _` keeps this working in CLJ.
+        (ele/script {:expr (fn [_env {:keys [_event]} & _]
                              (let [{::sc/keys [source-session-id]} _event]
                                [(op/delete [:fulcro/state-map ::sc/session-id source-session-id])
                                 (op/delete [:fulcro/state-map ::sc/local-data source-session-id])]))})))))

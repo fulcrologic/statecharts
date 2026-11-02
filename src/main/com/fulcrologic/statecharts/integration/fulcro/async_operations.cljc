@@ -121,7 +121,7 @@
 
    Example:
    ```clojure
-   (fn [env data]
+   (fn [env data & _]
      [(ops/assign :loading? true)
       (afop/load :items Item {::sc/ok-event :items-loaded})])
    ```"
@@ -149,7 +149,7 @@
 
    Example:
    ```clojure
-   (fn [env data]
+   (fn [env data & _]
      [(ops/assign :saving? true)
       (afop/invoke-remote `[(save-item ~params)] {:ok-event :saved})])
    ```"

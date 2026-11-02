@@ -570,6 +570,10 @@ Invocations can forward events to the target invocation, and can receive events 
 An incoming event will be pre-processed by `finalize` elements and can update the data model before the event is further propagated through the chart.
 See the SCXML standard for a full description of how invocations work.
 
+An `invoke` without `:id` (and without `:idlocation`) gets a generated id (`<state-id>.<uuid>`) each time it starts, and working memory keeps it at `::sc/invocation-ids`, keyed by the invoke element's id, while the invocation runs: stopping the invocation, `finalize` and `:autoforward` find it there.
+An element without an `:id` gets a generated one when the chart is defined, so it differs from one process (or chart definition) to the next.
+If you save working memory durably and resume it in another process, give each `invoke` an `:id`: an id-less invoke's generated id can't be found then, so leaving its state doesn't stop the session it started.
+
 === Passing Invocation Data
 
 The `invoke` element has both a `:namelist` and `:params` argument.
@@ -1220,6 +1224,42 @@ With async operations (`afop/load`), the transition is atomic:
 -----
 
 NOTE: The existing `fop/load` and `fop/invoke-remote` operations remain unchanged and continue to work with both sync and async execution engines.
+
+==== Event Processing While a Promise Is Pending
+
+A session whose working memory isn't saved yet holds back only its own events.
+`scf/start!` saves a new session when its initial entry is done (so does an invocation that starts a child session), and event processing saves a session when the step is done; with an entry or a step that awaits (e.g. `afop/await-load`), that is when the promise settles.
+Until then the session's events (for example the ok-event of a load its entry issued, or a user's next click) wait in the event queue, in order, and other sessions' events are processed as usual.
+A delayed event that falls due meanwhile (e.g. a `send-after` timeout) waits too, so when the step leaves the state that scheduled it, its `cancel` still removes it.
+So a session's next event always sees the result of the step before it.
+The waiting events are processed once the session is saved: at once with `:event-loop? :immediate`, on the next tick of the event loop, or by the next `scf/process-events!` with `:event-loop? false`.
+Only a promise that the step itself returns holds the session: an `:on-save` that returns a promise doesn't.
+
+This has consequences for steps whose promise doesn't settle:
+
+* A step whose promise never settles (e.g. a remote that never answers, without a timeout of its own) freezes its session: its events, timeouts and `send-after` events wait, and they pile up.
+* A step that awaits an event of its own session deadlocks: that event waits for the step.
+* Two sessions whose steps await each other's events deadlock in the same way.
+
+Give awaited work its own timeout (e.g. reject the promise after a while), and don't await events of a session that is itself awaiting.
+To get a frozen session going again, restart it (`scf/start!` with its session id) or stop it (exit the state that invoked it): either drops its holds, so its new events are processed.
+A restart also drops the events the old session sent itself that are still queued (e.g. its `send-after` timeouts), so they don't reach the new session.
+There is a narrow window: an old self-sent event that the queue has already taken off for delivery when the restart lands still reaches the new session.
+After a synchronous restart it is delivered at once; an async restart's hold sends it back to the queue, and it is delivered once the new start settles.
+The events that others sent to the session id (e.g. the user's clicks while it was frozen, or a load's ok-event) stay queued and are delivered to the new session, as events sent to a session id always are.
+A restart doesn't stop the sessions the old session invoked: they keep running (stop the old session first, by exiting the state that invoked it, when that matters).
+
+When the old step's promise settles later (or that of a superseded start), its continuation still runs, but it is contained:
+
+* its result isn't saved;
+* the sends and cancels it makes with its step's env until its promise settles are dropped, so it can't, for example, cancel the new session's timeout (which has the same send id);
+* it can't start, stop or forward events to invocations with that env.
+
+The results of loads it issued (`fop/load`'s ok- and error-events) are events to the session id, so the new session gets them, as it gets a remote mutation's.
+So does a send made with a step's env once that step is over (e.g. by a callback that kept the env).
+
+Its expressions still run, though, and their operations that write data still apply. KNOWN LIMITATION: these writes go straight to the session's local data and to Fulcro's state, so a superseded step's `assign` overwrites the new session's value of that location (the execution model works on the data model directly, not on a copy).
+Likewise, only what goes through the step's env is contained: an expression that sends or routes with the app (`scf/send!`, `scr/route-to!`) still sends and routes.
 
 == Useful Helpers
 

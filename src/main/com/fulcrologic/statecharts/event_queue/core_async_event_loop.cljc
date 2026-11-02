@@ -32,14 +32,16 @@
 
    Returns an atom containing a boolean that is what keeps the event loop running. If you swap that atom to `false` then
    the event loop will exit."
-  [{::sc/keys [processor working-memory-store event-queue] :as env} resolution-ms]
+  [{::sc/keys [event-queue] :as env} resolution-ms]
   (log/debug "Event loop started")
   (let [running? (atom true)]
     (async/go-loop []
       (async/<! (async/timeout resolution-ms))
       (try
         (sp/receive-events! event-queue env
-          (fn [env {:keys [target] :as event}]
+          ;; Uses the processor and store of the env it is given (a queue may pass one of its own, e.g. the Fulcro
+          ;; integration's, which skips a superseded step's save).
+          (fn [{::sc/keys [processor working-memory-store] :as env} {:keys [target] :as event}]
             (log/trace "Received event" event)
             (if-not target
               (log/warn "Event did not have a session target. This queue only supports events to charts." event)
@@ -49,7 +51,9 @@
                     save-fn    (fn [next-mem]
                                  (if next-mem
                                    (sp/save-working-memory! working-memory-store env session-id next-mem)
-                                   (log/debug "Session had no working memory. Event could not be sent to session" {:event event :id session-id})))]
+                                   (log/debug "Session had no working memory. Event could not be sent to session" {:event event :id session-id}))
+                                 ;; The handler returns a promise only when the processor did, never the save's value.
+                                 nil)]
                 (if (p/promise? result)
                   (p/then result save-fn)
                   (save-fn result)))))

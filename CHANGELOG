@@ -1,3 +1,76 @@
+Unreleased
+----------
+
+Fulcro event processing (fixes found by fulcro-rad-statecharts):
+
+* A `process-events!` nested inside event processing (or a loop tick during one) returns at once; its events wait.
+  BEHAVIOR CHANGE (it used to process them against working memory the step in progress then overwrote).
+* With `:async? true`, a session whose step returns a promise is held until the promise settles and the step's result
+  is saved: its later events, including delayed events that fall due (e.g. `send-after` timeouts), wait in the queue,
+  in order, and a `cancel` still reaches them. Other sessions' events are processed meanwhile. BEHAVIOR CHANGE (they
+  were processed against the old working memory, and the step's save then overwrote their result). Consequences:
+  a step whose promise never settles freezes its session (its events, timeouts and `send-after`s wait, and pile up);
+  a step that awaits an event of its own session deadlocks, as do two sessions whose steps await each other's
+  events. The escape hatch: restart the session (`start!` with its id) or stop it (exit the state that invoked it),
+  which drops its holds (a restart doesn't stop the sessions the old one invoked). The continuation of a superseded
+  step (or start) still runs when its promise settles, but it is contained: it skips its save, and the sends, cancels
+  and invocation starts, stops and forwards it makes with its step's env until its promise settles are dropped (so it
+  can't cancel the new session's same-id timeout, or start a child no running session invoked). Results of loads it
+  issued, and sends made with a step's env once that step is over (e.g. by a callback that kept it), still go to the
+  session id. KNOWN LIMITATION: its data operations (`assign`, Fulcro state ops) still apply, to the local data and
+  Fulcro state the new session shares, and what it sends or routes with the app (`scf/send!`, `scr/route-to!`) still
+  goes out. Only the processor's promise holds a session: an
+  `:on-save` that returns a promise doesn't. A step holds its session only when nothing else does: an event the queue
+  handed out just as a restart on another thread held its session goes back to the queue, in order, and is delivered
+  to the restarted session (a step of the old session used to join the restart's hold and could overwrite it).
+* `start!` holds back the new session's events until it is saved, so the events its initial entry causes find it
+  (with `:event-loop? :immediate` a synchronous load's ok-event was lost). BEHAVIOR CHANGE. Only that session's
+  events wait: with `:async? true` and an initial entry that awaits (e.g. `afop/await-load`), other sessions' events
+  are processed meanwhile. An invoked session is held the same way while it starts, so an event its async initial
+  entry sends itself before it awaits is no longer dropped. A `start!` that throws, or whose promise rejects, holds
+  nothing back. A later `start!` of the same session id drops the holds of a start or step that hasn't settled, so
+  the new session's events are processed, and the superseded start skips its save when it settles.
+* An invoked session stopped (its invoking state exited) while its `:async? true` step is pending stays stopped: the
+  step's save no longer brings it back when its promise settles.
+* Restarting a session id (`start!` of a running session's id, or an invocation that reuses its `:id`) drops the queued
+  events that the old session sent itself, due or not (e.g. its `send-after` timeouts), so they don't reach the new
+  session. BEHAVIOR CHANGE. Events that others sent to the session id stay queued and are delivered to the new session,
+  as before. KNOWN LIMITATION: an old self-sent event that the queue has already taken off for delivery when the
+  restart lands still reaches the new session (at once after a synchronous restart; an async restart requeues it, and
+  it is delivered once the new start settles).
+* `manually-polled-queue`: `receive-events!` takes each event off the queue just before it is handled, so an event
+  cancelled while an earlier one is handled (in the same call) is no longer delivered (e.g. a `send-after` timeout
+  that falls due together with the event whose transition leaves its state). BEHAVIOR CHANGE (a cancel during an
+  earlier event's handler now wins). Option `::mpq/session-held?` (`(fn [session-id])`) keeps a session's due events
+  queued while it is true (checked before each event); `has-due-events?` takes it as a third argument. A handler that
+  returns `::mpq/requeue` puts its event back at its place, and its session's other events wait for a later call too.
+  `cancel-self-sent-events!` removes the queued events a session sent itself.
+* `manually-polled-queue` internals: a session's events in `@(:session-queues q)` are no longer a vector but a
+  `PersistentQueue`, or a set sorted by send order once an event came off elsewhere than the head (a seq of either
+  lists them in send order; `nth` and `=` with a vector no longer work on the sorted set), and a session with no
+  queued events has no entry. So taking an event off is O(1) at the head and O(log n) elsewhere, and polling a held
+  session no longer walks its events (draining 10k events took about 0.5 s with the per-event take-off above, and
+  takes a few ms again).
+* `core-async-event-loop/run-event-loop!` processes each event with the processor and working memory store of the env
+  its queue hands the handler (it used the loop's own), and its handler returns the processor's promise (or nil),
+  not the save's value. BEHAVIOR CHANGE for custom queues: the handler now reads `::sc/processor` and
+  `::sc/working-memory-store` from the env the queue's `receive-events!` passes it, so that env must have them.
+* With `:event-loop? :immediate`, processing stops once no queued event is due. A pending delayed event (e.g.
+  `send-after`) made every `send!` poll the queue 100 more times; it is still delivered by the first processing at or
+  after its delivery time.
+* `manually-polled-queue/has-due-events?`: true when the queue holds an event `receive-events!` would deliver now.
+* An `invoke` with neither `:id` nor `:idlocation` now stops the session it started when its state is exited (it
+  stopped the element's id instead, so every exit left a session running), and its `finalize` and `:autoforward` use
+  the id it generated too (both were silently skipped). BEHAVIOR CHANGE: such children are now stopped on exit, and
+  their `finalize` and `:autoforward` now run, so a child that answers every event it gets with an event to its
+  parent now ping-pongs with an `:autoforward` parent. Working memory keeps the generated ids at
+  `::sc/invocation-ids` while they run, keyed by the invoke element's id. Sync and async processors. An element
+  without an `:id` gets a generated one when the chart is defined, which differs between processes: apps that save
+  working memory durably and resume it elsewhere should give each `invoke` an `:id` (an id-less invoke's child isn't
+  found then, so it isn't stopped).
+* Fulcro integration: the entries of `::sc/invocation-processors` (including those an app adds in `:extra-env`) are
+  wrapped, so a type or identity check on them no longer matches (`instance?`, `identical?`, a record's fields).
+
 1.1.6
 -----
 
