@@ -25,6 +25,7 @@
     [com.fulcrologic.statecharts.integration.fulcro.routing.url-codec :as ruc]
     [com.fulcrologic.statecharts.integration.fulcro.routing.url-codec-transit :as ruct]
     [com.fulcrologic.statecharts.protocols :as scp]
+    [com.fulcrologic.statecharts.util :refer [new-uuid]]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]
     #?@(:cljs [[com.fulcrologic.statecharts.integration.fulcro.routing.browser-history :as bh]])))
@@ -238,6 +239,7 @@
       (let [el      (get elements-by-id id)
             initial (:initial el)
             target  (cond
+                      (::initial-route el) (::initial-route el)
                       (keyword? initial) initial
                       (and (vector? initial) (= 1 (count initial))) (first initial)
                       :else nil)]
@@ -312,6 +314,25 @@
       (report-issue! mode warning-key message (dissoc issue :message :warning-key)))
     chart))
 
+(defn- routing-key? [k] (and (keyword? k) (= (namespace k) (namespace ::session))))
+
+(defn state-route-params
+  "Returns the route params the route event's `event-data` gives the route state `state-id`. A URL restore's event
+   carries each state's own (allowed) params at `::params-by-state`: then this is that state's entry (`{}` when it
+   has none), plus every top-level param of `event-data` that the restore didn't put there with that value
+   (`::restored-params`), so a replayed restore event with a changed or added param gives the route that value.
+   Such a param goes to every state, whatever the state declares: what a state stores is still only its declared
+   `:route/params` (`establish-route-params-node`), but `initialize-route!` uses all of it (a form's `:id`, or a
+   component's initial-state params). Otherwise it is `event-data` itself."
+  [event-data state-id]
+  (let [by-state (get event-data ::params-by-state)]
+    (if (map? by-state)
+      (let [restored (get event-data ::restored-params {})]
+        (into (get by-state state-id {})
+          (remove (fn [[k v]] (or (routing-key? k) (and (contains? restored k) (= v (get restored k))))))
+          event-data))
+      event-data)))
+
 (defn initialize-route!
   "Logic that the statechart will run to initialize the target route component's state in the Fulcro database.
    This is controlled primarily by two options:
@@ -323,11 +344,14 @@
    for sfro/initialize will be :once. If the ident isn't a constant, then you must make sure the the initial-props or initial-state
    will lead to data that can be used with `(get-ident Class data)` to get a valid ident.
 
+   Without `sfro/initial-props`, a form's `:id`, or a non-form's initial-state params, come from the route event's
+   data for this state (`state-route-params`): on a URL restore, only the state's own params.
+
    Returns the ident of the initialized component."
   [{:fulcro/keys [app] :as env} {::keys [target] :as data}]
   (when app
     (let [state-map     (rapp/current-state app)
-          event-data    (get-in data [:_event :data])
+          event-data    (state-route-params (get-in data [:_event :data]) target)
           Target        (rc/registry-key->class target)
           form?         (form? Target)
           report?       (rad-report? Target)
@@ -418,13 +442,18 @@
 
 (defn establish-route-params-node
   "A custom statechart node that reads route parameters from event data and assigns them
-   to `[:routing/parameters id]` in the data model."
+   to `[:routing/parameters id]` in the data model: the event data's keys that are in `:route/params` (never
+   `:route/url-params`, which therefore stay out of the URL).
+
+   When the event restores a URL (it has `::params-by-state`), the state takes only its own entry there, so states
+   that declare the same keys (e.g. in parallel regions) each get their own values, and a state with no params in
+   the URL gets none."
   [{:keys       [id]
     :route/keys [params]}]
   (script
     {:expr
      (fn [env _dm _e event-data]
-       (let [actual-params (select-keys (or event-data {}) (or params #{}))]
+       (let [actual-params (select-keys (or (state-route-params event-data id) {}) (or params #{}))]
          [(ops/assign [:routing/parameters id] actual-params)]))}))
 
 (defn rstate
@@ -441,7 +470,14 @@
      defaults to the simple name of the target (e.g. `\"UserList\"`).
    * `:route/params` — (optional) A set of keywords that are route parameters.
      When seen as data in a routing event, params are stored in
-     `[:routing/parameters <state-id>]` in the data model.
+     `[:routing/parameters <state-id>]` in the data model, and URL sync writes them to the URL.
+   * `:route/url-params` — (optional) A set of keywords that a URL restore (bookmark, back/forward,
+     `route-sync-from-url!`) also accepts for this state, in addition to `:route/params`. URL params are untrusted, so
+     a restore passes on only these two sets. These keys reach the route event like route params do (the state's
+     entry at `::params-by-state`, and the event's top level for the restored path), but they are never stored in
+     `[:routing/parameters <state-id>]`, so URL sync never writes them to the URL. For a state that reads its own
+     params from a URL it is opened from, without tracking them in the URL. Keys of this namespace are always
+     dropped.
    * `:parallel?` — (optional) When true, this node is a parallel state."
   [{:keys       [id parallel?]
     :route/keys [target segment params] :as props} & children]
@@ -476,10 +512,13 @@
 
    * `:route/target` — The component registry key with a co-located statechart (or statechart-id).
    * `:route/segment` — (optional) Custom URL path segment string. Defaults to `(name target)`.
+   * `:route/params`, `:route/url-params` — (optional) As on `rstate`.
    * `:route/reachable` — A set of route target keywords reachable through the child chart,
      or a map of `{target-keyword \"segment\"}` when child targets use custom `:route/segment` values.
      When a map is provided, the keys become the reachable set and the values are stored as
-     `:route/reachable-segments` for URL restoration.
+     `:route/reachable-segments` for URL restoration. When omitted, it is derived from the target's
+     `sfro/statechart` (a chart map). A chart given by keyword (`sfro/statechart-id` or `statechart-id`) can't be
+     walked when the chart is built, so then the istate has no reachable routes (logged at debug): list them here.
    * `invoke-params` — A map merged into the invoke `params`.
    * `namelist`, `finalize`, `autoforward` — Same as `invoke` element options.
    * `on-done` — `(fn [env data & rest] ops)` run if the child chart hits a final state.
@@ -502,12 +541,19 @@
                                  (throw (ex-info (str "istate: component " target-key " is not registered. "
                                                    "Either require the component namespace or provide explicit :route/reachable.")
                                           {:route/target target-key})))
-                               (let [child-chart (rc/component-options cls sfro/statechart)]
-                                 (when (nil? child-chart)
+                               (let [child-chart (rc/component-options cls sfro/statechart)
+                                     chart-id    (or statechart-id (rc/component-options cls sfro/statechart-id))]
+                                 (cond
+                                   child-chart (not-empty (reachable-targets child-chart))
+                                   ;; A keyword chart can't be walked at chart-build time (it may not be registered yet)
+                                   chart-id (do
+                                              (log/debug "istate:" target-key "invokes the chart" chart-id
+                                                "and has no :route/reachable, so it has no reachable routes.")
+                                              nil)
+                                   :else
                                    (throw (ex-info (str "istate: component " target-key " has no sfro/statechart option. "
                                                      "Either co-locate the chart on the component or provide explicit :route/reachable.")
-                                            {:route/target target-key})))
-                                 (not-empty (reachable-targets child-chart)))))
+                                            {:route/target target-key}))))))
         reachable-map?     (and reachable-input (map? reachable-input))
         reachable          (cond
                              (nil? reachable-input) nil
@@ -541,8 +587,9 @@
         state-props        (cond-> state-props
                              reachable (assoc :route/reachable reachable)
                              reachable-segments (assoc :route/reachable-segments reachable-segments))]
-    (apply state (-> (assoc state-props :id id :route/target target-key)
-                   (dissoc :invoke-params :finalize :autoforward :namelist :on-done :exit-target :statechart-id))
+    (apply state (cond-> (-> (assoc state-props :id id :route/target target-key)
+                           (dissoc :invoke-params :finalize :autoforward :namelist :on-done :exit-target :statechart-id))
+                   statechart-id (assoc ::statechart-id statechart-id))
       (on-exit {}
         (script-fn [& _]
           [(ops/delete [:route/idents target-key])
@@ -585,62 +632,222 @@
         (ele/script {:expr (or on-done (constantly nil))}))
       children)))
 
+(defn- component-busy?
+  "True when the component `Target` is busy at `ident`: its `sfro/busy?` (called with `app` and its props there) is
+   true, or, without one, it is a form whose props are `fs/dirty?`. The props are built only for a component that has
+   one of those checks."
+  [app state-map Target ident]
+  (let [busy-fn (or (sfro/busy? (rc/component-options Target))
+                  ;; Default: dirty forms are busy
+                  (when (form? Target)
+                    (fn [_app form-props] (and form-props (fs/dirty? form-props)))))]
+    (boolean
+      (when busy-fn
+        (busy-fn app (when ident (fns/ui->props state-map Target ident)))))))
+
 (defn- check-component-busy?
   "Check a single route target component for busy conditions (dirty form, custom sfro/busy? fn).
    Returns true if the component is busy, false otherwise.
    Pre-resolves props for the target component and passes (app, props) to the busy-fn."
   [app state-map local-data target-key]
-  (when-let [Target (rc/registry-key->class target-key)]
-    (let [target-ident (get-in local-data [:route/idents target-key]
-                         (when (rc/has-ident? Target) (rc/get-ident Target {})))
-          props        (when target-ident (fns/ui->props state-map Target target-ident))
-          is-form?     (form? Target)
-          opts         (some-> Target rc/component-options)
-          busy-fn      (sfro/busy? opts)
-          ;; Default: dirty forms are busy
-          busy-fn      (if (and is-form? (not busy-fn))
-                         (fn [_app form-props] (and form-props (fs/dirty? form-props)))
-                         busy-fn)]
-      (if busy-fn
-        (boolean (busy-fn app props))
-        false))))
+  (if-let [Target (rc/registry-key->class target-key)]
+    (component-busy? app state-map Target
+      (get-in local-data [:route/idents target-key]
+        (when (rc/has-ident? Target) (rc/get-ident Target {}))))
+    false))
+
+(defn- actors-busy?
+  "True when one of the `:fulcro/actors` in a session's `local-data` is a busy component (see `component-busy?`)."
+  [app state-map local-data]
+  (boolean
+    (some (fn [[_ {:keys [component ident]}]]
+            (when-let [Target (and component ident (rc/registry-key->class component))]
+              (component-busy? app state-map Target ident)))
+      (:fulcro/actors local-data))))
+
+(defn- child-sessions
+  "Returns `{session-id [child-session-id ...]}`: the ids of the running sessions each session in `state-map` invoked
+   (every session whose parent it is; stopping an invocation deletes the child's working memory, so these are all
+   invocations of active states, routed or not). Built once per busy check: scanning every session for each one
+   visited made the check quadratic in the number of sessions."
+  [state-map]
+  (reduce-kv
+    (fn [acc sid wmem]
+      (if-let [parent (::sc/parent-session-id wmem)]
+        (update acc parent (fnil conj []) sid)
+        acc))
+    {}
+    (::sc/session-id state-map)))
 
 (defn- deep-busy?
   "Recursively checks busy conditions through invoked child charts.
-   Walks the invocation tree via Fulcro state and the statechart registry.
-   `seen` is a set of already-visited session IDs to prevent infinite recursion."
-  [app registry state-map session-id seen]
+   A session is busy when an active route state's target is busy, or (for an invoked session) when one of its
+   actors is, or when a session it invoked is: every child invocation of an active state is walked, routed
+   (an istate's child chart, at `[:invocation/id target]`) or not (e.g. an editor a host's chart invokes: any
+   running session whose parent is this one).
+   `children` is `(child-sessions state-map)`. `seen` is a set of already-visited session IDs to prevent infinite
+   recursion."
+  ([app registry state-map session-id seen]
+   (deep-busy? app registry state-map (child-sessions state-map) session-id seen))
+  ([app registry state-map children session-id seen]
+   (when-not (contains? seen session-id)
+     (let [wmem           (get-in state-map [::sc/session-id session-id])
+           configuration  (::sc/configuration wmem)
+           statechart-src (::sc/statechart-src wmem)]
+       (when (and configuration statechart-src)
+         (let [chart          (scp/get-statechart registry statechart-src)
+               elements-by-id (::sc/elements-by-id chart)
+               local-data     (get-in state-map (scf/local-data-path session-id))
+               invoked?       (seq seen)
+               seen           (conj seen session-id)]
+           (or
+             (some (fn [state-id]
+                     (when-let [target-key (get-in elements-by-id [state-id :route/target])]
+                       (check-component-busy? app state-map local-data target-key)))
+               configuration)
+             ;; The guarding session's own actors aren't left by its route change; an invoked session's are.
+             (when invoked?
+               (actors-busy? app state-map local-data))
+             (some (fn [child-sid] (deep-busy? app registry state-map children child-sid seen))
+               (distinct
+                 (concat
+                   ;; Routed: the istates' recorded invocations
+                   (keep (fn [state-id]
+                           (when-let [target-key (get-in elements-by-id [state-id :route/target])]
+                             (get-in local-data [:invocation/id target-key])))
+                     configuration)
+                   ;; Every other running child invocation
+                   (get children session-id)))))))))))
+
+(defn- proper-ancestors
+  "The ids of the proper ancestors of element `id` in `elements-by-id`, nearest first (not the chart root, `:ROOT`)."
+  [elements-by-id id]
+  (loop [acc [] pid (:parent (get elements-by-id id))]
+    (if (contains? elements-by-id pid)
+      (recur (conj acc pid) (:parent (get elements-by-id pid)))
+      acc)))
+
+(defn- route-transitions-for
+  "The `routes` route transitions (`::route-kind` `:direct`, `:enter-owner` or `:forward`) that the route event
+   `event-name` takes in `configuration` of the chart with `elements-by-id`: for each active atomic state, the first
+   applicable one on it or an ancestor (nearest first, then in document order), as SCXML selects them. The busy
+   guard is skipped: these are what it guards."
+  [elements-by-id configuration event-name]
+  (let [parents (into #{} (map #(:parent (get elements-by-id %))) configuration)
+        atomic  (remove parents configuration)]
+    (into #{}
+      (keep (fn [atomic-id]
+              (some (fn [state-id]
+                      (some (fn [child-id]
+                              (let [{::keys [route-kind route-owner] :keys [event] :as t} (get elements-by-id child-id)]
+                                (when (and route-kind (= event-name event)
+                                        (case route-kind
+                                          :direct true
+                                          :enter-owner (not (contains? configuration route-owner))
+                                          :forward (contains? configuration route-owner)
+                                          false))
+                                  t)))
+                        (:children (get elements-by-id state-id))))
+                (cons atomic-id (proper-ancestors elements-by-id atomic-id)))))
+      atomic)))
+
+(defn- exited-states
+  "The states of `configuration` that the route transition `t` (see `route-transitions-for`) exits, by SCXML's
+   transition domain: a direct route transition is external and its target is under its routes node, so it exits
+   everything under the routes node's nearest compound ancestor (the routes node too); entering an owner istate is
+   internal, so it exits what is under the routes node; forwarding to the owner's child session exits nothing in this
+   session."
+  [elements-by-id configuration {::keys [route-kind] :keys [parent]}]
+  (let [domain (case route-kind
+                 :direct (or (some (fn [id] (when (= :state (:node-type (get elements-by-id id))) id))
+                               (proper-ancestors elements-by-id parent))
+                           :ROOT)
+                 :enter-owner parent
+                 nil)]
+    (cond
+      (nil? domain) #{}
+      (= :ROOT domain) (set configuration)
+      :else (into #{} (filter #(some #{domain} (proper-ancestors elements-by-id %))) configuration))))
+
+(defn- generated-invoker
+  "The id string of the state that invoked the session `child-session-id` when that is an id the invocation generated
+   (`<state id>.<uuid>`, for an invoke with no `:id`), else nil."
+  [child-session-id]
+  (when (string? child-session-id)
+    (let [n (count child-session-id)]
+      (when (and (> n 37) (= \. (nth child-session-id (- n 37))))
+        (subs child-session-id 0 (- n 37))))))
+
+(defn- kept-invocation?
+  "Returns a predicate of child session ids: true for a session that an invoke of a state of `configuration` that
+   isn't in `exited` started: by its explicit `:id`, or by the id the invoke generated (with or without an
+   `:idlocation`, see `generated-invoker`). Those sessions stay when the route change runs."
+  [elements-by-id configuration exited]
+  (let [invokes (for [state-id (remove exited configuration)
+                      child-id (:children (get elements-by-id state-id))
+                      :let [{:keys [node-type explicit-id? id]} (get elements-by-id child-id)]
+                      :when (= :invoke node-type)]
+                  {:state-id state-id :id (when explicit-id? id)})
+        ids     (into #{} (keep :id) invokes)
+        states  (into #{} (map (comp str :state-id)) invokes)]
+    (fn [sid] (boolean (or (contains? ids sid) (contains? states (generated-invoker sid)))))))
+
+(defn- route-change-busy?
+  "True when the route event `event-name` would exit something busy in the session `session-id` (or below it).
+   Only what the route change exits is checked (see `exited-states`): the route targets of the exited states, and
+   every session invoked by an exited state (all of it, see `deep-busy?`: such a session stops). When the event is
+   forwarded to an active owner istate's child session, the route change it makes there is checked the same way.
+   The session's own actors aren't checked, nor what an active state that stays invoked. `children` is
+   `(child-sessions state-map)`; `seen` is a set of already-visited session IDs."
+  [app registry state-map children session-id event-name seen]
   (when-not (contains? seen session-id)
     (let [wmem           (get-in state-map [::sc/session-id session-id])
           configuration  (::sc/configuration wmem)
           statechart-src (::sc/statechart-src wmem)]
       (when (and configuration statechart-src)
-        (let [chart          (scp/get-statechart registry statechart-src)
-              elements-by-id (::sc/elements-by-id chart)
+        (let [elements-by-id (::sc/elements-by-id (scp/get-statechart registry statechart-src))
               local-data     (get-in state-map (scf/local-data-path session-id))
-              seen           (conj seen session-id)]
-          (some (fn [state-id]
-                  (let [target-key (get-in elements-by-id [state-id :route/target])]
-                    (or
-                      (when target-key
-                        (check-component-busy? app state-map local-data target-key))
-                      (when-let [child-session-id (and target-key
-                                                    (get-in local-data [:invocation/id target-key]))]
-                        (deep-busy? app registry state-map child-session-id seen)))))
-            configuration))))))
+              seen           (conj seen session-id)
+              transitions    (route-transitions-for elements-by-id configuration event-name)
+              exited         (into #{} (mapcat #(exited-states elements-by-id configuration %)) transitions)
+              owners         (into [] (keep #(when (= :forward (::route-kind %)) (::route-owner %))) transitions)
+              kept?          (kept-invocation? elements-by-id configuration exited)]
+          (boolean
+            (or
+              (some (fn [state-id]
+                      (when-let [target-key (get-in elements-by-id [state-id :route/target])]
+                        (check-component-busy? app state-map local-data target-key)))
+                exited)
+              (some (fn [child-sid] (deep-busy? app registry state-map children child-sid seen))
+                (remove kept? (get children session-id)))
+              (some (fn [owner-id]
+                      (when-let [child-sid (get-in local-data [:invocation/id owner-id])]
+                        (route-change-busy? app registry state-map children child-sid event-name seen)))
+                owners))))))))
+
+(defn- route-event? [event-name]
+  (and (keyword? event-name) (some-> (namespace event-name) (cstr/starts-with? "route-to."))))
 
 (defn busy?
-  "Returns true if any active route state is busy (dirty form, etc.) at any depth
-   in the invocation tree. Used as the sole guard condition on route transitions."
+  "Returns true when the current route change would exit something busy: a dirty form or a component whose
+   `sfro/busy?` is true, as a route target, or as an actor of a session it would stop, at any depth (see
+   `route-change-busy?`). What stays active when the route changes (e.g. an editor that a state beside the routes
+   invokes, or an owner istate whose child chart gets the route) isn't checked. For an event that isn't a route event,
+   true when anything active is busy at any depth (see `deep-busy?`). Used as the sole guard condition on route
+   transitions."
   [{:fulcro/keys [app] :as env} {:keys [_event] :as data} & args]
   (if-not app
     false
     (if (-> _event :data ::force?)
       false
-      (let [registry  (::sc/statechart-registry env)
-            state-map (rapp/current-state app)
-            session   (senv/session-id env)]
-        (boolean (deep-busy? app registry state-map session #{}))))))
+      (let [registry   (::sc/statechart-registry env)
+            state-map  (rapp/current-state app)
+            session    (senv/session-id env)
+            event-name (:name _event)]
+        (boolean
+          (if (route-event? event-name)
+            (route-change-busy? app registry state-map (child-sessions state-map) session event-name #{})
+            (deep-busy? app registry state-map session #{})))))))
 
 (defn record-failed-route!
   "Stores the failed route event so it can be retried via force-continue-routing!."
@@ -686,6 +893,25 @@
             id))
     route-states))
 
+(defn- restore-forwarded-ops
+  "The ops of a route transition that forwards the route event (`event-data`) to a module's session: when it is a
+   deferred URL restore's (`route-sync-from-url!`, see `install-url-sync!`'s `:defer-restore?`), one that clears the
+   `::restored-token` this session noted when it dequeued the event. The module's session notes the token when it
+   dequeues the forwarded event, so the deferral ends at that session's save instead (once it routes), not at this
+   one's. When the module can't save it (it was stopped before it dequeued the event, or its step is superseded or
+   fails), the event processing hands the token to the routing session (`::restore-dropped`), whose save ends it."
+  [event-data]
+  (when (contains? event-data ::restore-token)
+    [(ops/assign ::restored-token nil)]))
+
+(defn- routes-state-id
+  "The id of the routes node `routes-id`'s generated state `kind` (`\"routes-initial\"`, `\"routes-pending\"`; see
+   `routes`): in the namespace `<this ns>.<kind>`, followed by `.<namespace of routes-id>` when it has one, with the
+   name of `routes-id`. Distinct routes ids give distinct ids (`:a.b/c` and `:a/b.c` too), readable as EDN."
+  [kind routes-id]
+  (keyword (str (namespace ::session) "." kind (some->> (namespace routes-id) (str ".")))
+    (name routes-id)))
+
 (defn routes
   "Emits a state that represents the region containing all of the routes.
    Generates transitions for direct navigation to any substate that has a routing target.
@@ -694,10 +920,25 @@
    on `istate` children. These transitions target the declaring `istate` and store a
    `::pending-child-route` in the data model so the child chart can self-route on startup.
 
+   When a chart starts with a pending child route (it is an istate's child chart and the route event was for one of
+   its routes), the routes node enters that route directly: its initial route is entered only when there is no
+   pending route (or the pending route is denied). To do that, the routes node's initial state is a transient state
+   (id `...routing.routes-initial[.<id's namespace>]/<id's name>`) whose eventless transitions go on at once: to a
+   waiting state (`...routing.routes-pending...`) when the routes node raised a pending route on entry, else to the initial route
+   (`:initial`, else the first route state). The raised route event's transition leaves the waiting state. A routes
+   node with an explicit `initial` element child keeps that element instead.
+
+   The generated transitions carry `::route-kind` (`:direct`; `:enter-owner` and `:forward` for a reachable target of
+   an istate that isn't, or is, active) and, on the cross-chart ones, `::route-owner` (the istate's id), which the busy
+   guard (`busy?`) uses. A direct route transition is external (SCXML's default): it exits and re-enters everything
+   under this node's nearest compound ancestor, this node and the regions beside it in a parallel state included. So
+   an `invoke` that must survive route changes (e.g. an editor) belongs on a state above this node (above its parallel
+   state, if it is in one), not on this node, a route state, or a sibling region.
+
    The :routing/root must be a component with a constant ident (or the app root itself),
    and a query."
   [{:routing/keys [root]
-    :keys         [id] :as props} & route-states]
+    :keys         [id]   :as props} & route-states]
   (let [find-targets       (fn find-targets* [targets]
                              (mapcat
                                (fn [{:keys [route/target children]}]
@@ -710,11 +951,32 @@
                              route-states)
         ;; Remove any reachable targets that are also direct targets (direct wins)
         reachable-only     (into #{} (remove (set all-direct-targets)) all-reachable)
+        handled-events     (into #{} (map route-to-event-name) (concat all-direct-targets reachable-only))
+        child-states       (filterv #(#{:state :parallel :final} (:node-type %)) route-states)
+        initial-route      (or (:initial props) (:id (first child-states)))
+        dispatch-id        (when (and id initial-route (not-any? :initial? child-states))
+                             (routes-state-id "routes-initial" id))
+        waiting-id         (when dispatch-id (routes-state-id "routes-pending" id))
+        raised-path        [::raised-pending-route id]
+        clear-raised       (ops/assign raised-path nil)
+        dispatch-states    (when dispatch-id
+                             ;; The unconditional transition comes last, so a chart whose conds don't run (e.g. the
+                             ;; testing env's unmocked conds) still enters its initial route.
+                             [(state {:id dispatch-id ::initial-route initial-route}
+                                (transition {:cond   (fn [_env data & _] (boolean (get-in data raised-path)))
+                                             :target waiting-id})
+                                (transition {:target initial-route}))
+                              ;; Waits for the raised pending route; goes on to the initial route if it was denied.
+                              (state {:id waiting-id ::initial-route initial-route}
+                                (transition {:cond   (fn [_env data & _] (not (get-in data raised-path)))
+                                             :target initial-route}))])
         direct-transitions (mapv
                              (fn [t]
-                               (transition {:event  (route-to-event-name t)
-                                            :target t}
-                                 (ele/raise {:event :event.routing-info/close})))
+                               (transition {:event       (route-to-event-name t)
+                                            :target      t
+                                            ::route-kind :direct}
+                                 (ele/raise {:event :event.routing-info/close})
+                                 (script {:expr (fn [& _] [clear-raised])})))
                              all-direct-targets)
         cross-transitions  (mapcat
                              (fn [reachable-target]
@@ -722,34 +984,45 @@
                                  [;; Transition 1: When NOT already in owner-id — enter it and store pending route
                                   ;; :type :internal prevents re-entering the routes state, which would
                                   ;; clear pending-child-route before the invoke can read it.
-                                  (transition {:event  (route-to-event-name reachable-target)
-                                               :type   :internal
-                                               :target owner-id
-                                               :cond   (fn [env _data & _]
-                                                         (not (contains? (senv/current-configuration env) owner-id)))}
+                                  (transition {:event        (route-to-event-name reachable-target)
+                                               :type         :internal
+                                               :target       owner-id
+                                               ::route-kind  :enter-owner
+                                               ::route-owner owner-id
+                                               :cond         (fn [env _data & _]
+                                                               (not (contains? (senv/current-configuration env) owner-id)))}
                                     (ele/raise {:event :event.routing-info/close})
                                     (script {:expr (fn [_env _data _event-name event-data]
-                                                     [(ops/assign ::pending-child-route
+                                                     [clear-raised
+                                                      (ops/assign ::pending-child-route
                                                         {:event (route-to-event-name reachable-target)
                                                          :data  event-data})])}))
-                                  ;; Transition 2: When ALREADY in owner-id — forward to child chart's session
-                                  (transition {:event (route-to-event-name reachable-target)
-                                               :type  :internal
-                                               :cond  (fn [env _data & _]
-                                                        (contains? (senv/current-configuration env) owner-id))}
+                                  ;; Transition 2: When ALREADY in owner-id — forward to child chart's session.
+                                  ;; If the owner was entered in this macrostep its invocation hasn't started yet:
+                                  ;; then the route becomes its pending route.
+                                  (transition {:event        (route-to-event-name reachable-target)
+                                               :type         :internal
+                                               ::route-kind  :forward
+                                               ::route-owner owner-id
+                                               :cond         (fn [env _data & _]
+                                                               (contains? (senv/current-configuration env) owner-id))}
                                     (ele/raise {:event :event.routing-info/close})
                                     (script {:expr (fn [env data _event-name event-data]
                                                      (let [child-session-id (get-in data [:invocation/id owner-id])
-                                                           {::sc/keys [event-queue]} env]
-                                                       (when child-session-id
-                                                         (scp/send! event-queue env
-                                                           {:target            child-session-id
-                                                            :source-session-id (senv/session-id env)
-                                                            :event             (route-to-event-name reachable-target)
-                                                            :data              (or event-data {})})))
-                                                     nil)}))]))
+                                                           {::sc/keys [event-queue]} env
+                                                           event            (route-to-event-name reachable-target)]
+                                                       (if child-session-id
+                                                         (do
+                                                           (scp/send! event-queue env
+                                                             {:target            child-session-id
+                                                              :source-session-id (senv/session-id env)
+                                                              :event             event
+                                                              :data              (or event-data {})})
+                                                           (restore-forwarded-ops event-data))
+                                                         [(ops/assign ::pending-child-route {:event event
+                                                                                             :data  event-data})])))}))]))
                              reachable-only)]
-    (apply state props
+    (apply state (cond-> props dispatch-id (assoc :initial dispatch-id))
       (remove nil?
         (concat
           [(on-entry {}
@@ -758,10 +1031,11 @@
                                     Root          (rc/registry-key->class root-key)
                                     root-ident    (when (and Root (rc/has-ident? Root)) (rc/get-ident Root {}))
                                     pending-route (get data ::pending-child-route)
+                                    handled?      (contains? handled-events (:event pending-route))
                                     assign-ops    (cond
                                                     (and (vector? root-ident) (nil? (second root-ident)))
                                                     (do (log/error "The routing root of all routes MUST have a constant ident (or be the absolute root of the app)")
-                                                        nil)
+                                                      nil)
 
                                                     (vector? root-ident)
                                                     [(ops/assign [:route/idents root-key] root-ident)]
@@ -770,15 +1044,19 @@
                                 (when pending-route
                                   (log/debug "Routes received pending child route, raising" (:event pending-route))
                                   (senv/raise env (:event pending-route) (or (:data pending-route) {})))
-                                ;; Clear pending-child-route after use
-                                (cond-> assign-ops
-                                  pending-route (conj (ops/assign ::pending-child-route nil)))))}))]
+                                ;; Clear pending-child-route after use. When this node routes the raised event, its
+                                ;; transient initial state waits for it (every route transition clears the mark).
+                                (cond-> (vec assign-ops)
+                                  pending-route (conj (ops/assign ::pending-child-route nil))
+                                  (and pending-route handled?) (conj (ops/assign raised-path true)))))}))]
           [(transition {:event :route-to.*
                         :cond  busy?}
              (script {:expr record-failed-route!})
+             (script {:expr (fn [& _] [clear-raised])})
              (ele/raise {:event :event.routing-info/show}))]
           direct-transitions
           cross-transitions
+          dispatch-states
           route-states)))))
 
 (defn routing-regions
@@ -929,19 +1207,21 @@
 
 (defn- find-invocation-session-id
   "Walks up the component parent chain to find the nearest ancestor whose registry key
-   has an invocation session ID in the routing session's local-data. Returns the child
-   session ID, or nil if none found."
+   has an invocation session ID in the routing session's local-data, and whose session is running (has a
+   configuration). The routing session keeps an `:invocation/id` entry after its route exits, so an ended session's
+   id is skipped and the walk goes on up. Returns the child session ID, or nil if none found."
   [this state-map]
   (loop [c this]
     (when c
       (let [key (rc/class->registry-key (rc/component-type c))
             sid (get-in state-map [::sc/local-data session-id :invocation/id key])]
-        (if sid
+        (if (and sid (seq (get-in state-map [::sc/session-id sid ::sc/configuration])))
           sid
           (recur (rc/isoget-in c [:props :fulcro$parent])))))))
 
 (defn send-to-self!
-  "Send an event to the nearest invoked statechart co-located on `this` or an ancestor."
+  "Send an event to the nearest running invoked statechart co-located on `this` or an ancestor (a route that was left
+   keeps its invocation id in the routing session; its ended session is skipped)."
   ([this event-name] (send-to-self! this event-name {}))
   ([this event-name event-data]
    (let [state-map        (rapp/current-state this)
@@ -1011,6 +1291,31 @@
 (defn- url-sync-state [app] (-> app runtime-atom deref ::url-sync))
 (defn- swap-url-sync! [app f & args] (apply swap! (runtime-atom app) update ::url-sync f args))
 
+(defn- prev-url
+  "The URL url-sync last wrote or accepted for the routing session, or nil before its first save."
+  [app]
+  (get-in (url-sync-state app) [:prev-urls session-id]))
+
+(defn- set-prev-url! [app url] (swap-url-sync! app assoc-in [:prev-urls session-id] url))
+
+(defn- restore-deferred?
+  "True while URL sync was installed with `:defer-restore?` and the restore of `route-sync-from-url!` hasn't been
+   processed yet. The value at `[:restore-deferred session-id]` is `true` until `route-sync-from-url!` runs, then
+   `{:token t}` until the save of the session that took its route event (see `restore-processed?`)."
+  [app]
+  (boolean (get-in (url-sync-state app) [:restore-deferred session-id])))
+
+(defn- restore-processed?
+  "True when the session `saving-sid` (the routing session or one of its modules, local data in `state-map`) took the
+   route event of the deferred restore that `route-sync-from-url!` started: the event processing noted the restore's
+   token at `::restored-token` in its local data when the session dequeued the event, whichever transition took it,
+   if any (a session that forwards the event to a module's session clears it, see `restore-forwarded-ops`). The
+   routing session also notes it when it dequeues a `::restore-dropped` event: one that hands it the token of a route
+   event whose session can't save it."
+  [app state-map saving-sid]
+  (let [{:keys [token]} (get-in (url-sync-state app) [:restore-deferred session-id])]
+    (boolean (and token (= token (get-in state-map (scf/local-data-path saving-sid ::restored-token)))))))
+
 (defn url-sync-provider
   "Returns the installed URL history provider for the routing session, or nil when URL sync is not installed."
   [app-ish]
@@ -1028,10 +1333,26 @@
   (or (get-in (url-sync-state app) [:codecs session-id])
     (get-in (url-sync-state app) [:codec])))
 
+(defn- route-session-id
+  "The id of the routing session in `state-map` that has the active route `target-key`: the routing session, or a
+   session an istate invoked below it, at any depth (depth first, the routing session's own routes first). A route
+   is active from its state's entry, which records its ident at `[:route/idents target-key]` in that session's local
+   data, until its exit. Nil when no session has it."
+  [state-map target-key]
+  (letfn [(find-in [sid seen]
+            (when-not (contains? seen sid)
+              (let [local (get-in state-map (scf/local-data-path sid))]
+                (if (contains? (:route/idents local) target-key)
+                  sid
+                  (some #(find-in % (conj seen sid)) (vals (:invocation/id local)))))))]
+    (find-in session-id #{})))
+
 (defn replace-route-params!
   "Updates the `:route/params` for the given currently-active route `target` and,
    if URL sync is installed, replaces the current browser URL using the history
    provider's `-replace-url!` method (no new history entry, no rstate re-entry).
+   The params are written in the routing session that has the route (`route-session-id`), so a route in a routing
+   module (an istate's child chart, at any depth) works too; for a route no session has, in the routing session.
 
    This is the equivalent of the original UISM RAD library's URL replacement
    signal: components/statecharts can call this when their internal
@@ -1040,7 +1361,11 @@
    entry actions.
 
    No-op when URL sync is not installed, which makes it safe to call
-   unconditionally from app code."
+   unconditionally from app code. While the initial restore is deferred (`install-url-sync!`'s `:defer-restore?`)
+   only the params are updated.
+
+   Url-sync records the replaced URL as the one it last wrote, so the next save with an unchanged route pushes
+   nothing."
   [app-ish target params]
   (when (url-sync-installed? app-ish)
     (let [app        (rc/any->app app-ish)
@@ -1050,13 +1375,15 @@
           state-atom (:com.fulcrologic.fulcro.application/state-atom app)]
       (when (and provider codec state-atom)
         (swap! state-atom assoc-in
-          (scf/local-data-path session-id :routing/parameters target-key)
+          (scf/local-data-path (or (route-session-id @state-atom target-key) session-id) :routing/parameters target-key)
           (or params {}))
         (let [registry (-> app runtime-atom deref ::sc/env ::sc/statechart-registry)
               new-url  (ruc/deep-configuration->url
                          (rapp/current-state app) registry session-id scf/local-data-path codec)]
-          (when new-url
-            (ruh/-replace-url! provider new-url)))))))
+          (when (and new-url (not (restore-deferred? app)))
+            (ruh/-replace-url! provider new-url)
+            ;; So the next save with an unchanged route sees no change (no duplicate push).
+            (set-prev-url! app new-url)))))))
 
 (defn- find-root-session
   "Walks the `::sc/parent-session-id` chain in `state-map` to find a registered root session.
@@ -1106,35 +1433,106 @@
         (when-let [handler (and root-sid (get handlers root-sid))]
           (handler root-sid wmem saving-session-id))))))
 
+(defn- invoked-chart
+  "Returns the chart an istate `element` invokes (its `:statechart-id` override, else the target's
+   `sfro/statechart-id` or `sfro/statechart`), or nil when it can't be found."
+  [app element]
+  (let [cls (rc/registry-key->class (:route/target element))
+        id  (or (::statechart-id element) (some-> cls (rc/component-options sfro/statechart-id)))]
+    (or (when id (scf/lookup-statechart app id))
+      (some-> cls (rc/component-options sfro/statechart)))))
+
+(defn- nearest-route-ancestor
+  "The id of the nearest ancestor of `state-id` in `elements-by-id` that has a `:route/target`, or nil."
+  [elements-by-id state-id]
+  (loop [id (:parent (get elements-by-id state-id))]
+    (when-let [el (get elements-by-id id)]
+      (if (:route/target el) id (recur (:parent el))))))
+
+(defn- route-state-index
+  "Returns `{state-id {:url-keys accepted-keys :up state-id}}` for every route state of the chart with
+   `elements-by-id` and of the charts its istates invoke (as far as they can be found). `:url-keys` is the set of
+   param keys a URL restore may pass to the state: its `:route/params` and `:route/url-params`. `:up` is the nearest
+   route state above (the invoking istate for a child chart's top route states), or nil at the root."
+  ([app elements-by-id] (route-state-index app elements-by-id nil #{}))
+  ([app elements-by-id owner seen]
+   (reduce-kv
+     (fn [acc id {:route/keys [target params url-params] :as el}]
+       (if-not target
+         acc
+         (let [acc   (assoc acc id {:url-keys (into (set params) url-params)
+                                    :up       (or (nearest-route-ancestor elements-by-id id) owner)})
+               child (when (and (has-invoke-child? elements-by-id id) (not (contains? seen target)))
+                       (invoked-chart app el))]
+           (if child
+             (merge (route-state-index app (::sc/elements-by-id child) id (conj seen target)) acc)
+             acc))))
+     {}
+     elements-by-id)))
+
+(defn- allowed-url-params
+  "Returns the URL-decoded `params-by-state` (route state id -> params) with, for each state, only the keys it
+   declares in `:route/params` or `:route/url-params`, never a key of this namespace (routing control keys such as
+   `::force?`). States that aren't in `index` (see `route-state-index`) and states left with no params are dropped."
+  [index params-by-state]
+  (reduce-kv
+    (fn [acc state-id params]
+      (if-let [{:keys [url-keys]} (get index state-id)]
+        (let [kept (when (map? params)
+                     (into {} (filter (fn [[k _]] (and (contains? url-keys k) (not (routing-key? k))))) params))]
+          (cond-> acc (seq kept) (assoc state-id kept)))
+        (do
+          (log/warn "URL sync: ignoring URL params of" state-id "(not a known route state)")
+          acc)))
+    {}
+    (if (map? params-by-state) params-by-state {})))
+
+(defn- url-route-event-data
+  "Returns the data of the route event that restores a URL whose decoded params are `params-by-state`, for the route
+   state `leaf-id`: the allowed params (`allowed-url-params`) of `leaf-id` and the route states above it (deeper
+   states win), plus every state's own allowed params at `::params-by-state` and a copy of those top-level params at
+   `::restored-params` (see `state-route-params`)."
+  [index leaf-id params-by-state]
+  (let [allowed (allowed-url-params index params-by-state)
+        path    (loop [id leaf-id path () seen #{}]
+                  (if (or (nil? id) (contains? seen id))
+                    path
+                    (recur (get-in index [id :up]) (cons id path) (conj seen id))))
+        params  (into {} (map #(get allowed %)) path)]
+    (assoc params
+      ::params-by-state allowed
+      ::restored-params params)))
+
 (defn- resolve-route-and-navigate!
   "Parses the current URL from `provider`, finds the matching route target, and sends
    a route-to event. Used by both popstate handling and initial URL restoration.
    Uses the codec for decoding, with fallback to `find-target-by-leaf-name-deep` for
-   cross-chart `:route/reachable` targets."
-  [app elements-by-id provider codec]
-  (let [href    (ruh/current-href provider)
-        decoded (ruc/decode-url codec href elements-by-id)]
-    (if-let [leaf-id (:leaf-id decoded)]
-      (let [{:keys [params]} decoded
-            route-params (when params
-                           (reduce-kv (fn [acc _state-id state-params]
-                                        (merge acc state-params))
-                             {} params))]
-        (route-to! app leaf-id (or route-params {}))
-        leaf-id)
-      ;; Codec didn't match directly — try reachable targets via deep search
-      ;; (needed for cross-chart :route/reachable targets not in this chart's elements)
-      (let [segments     (ruh/current-url-path href)
-            leaf-name    (peek segments)
-            route-params (when-let [params (:params decoded)]
-                           (reduce-kv (fn [acc _state-id state-params]
-                                        (merge acc state-params))
-                             {} params))]
-        (when leaf-name
-          (when-let [{:keys [target-key child?]} (ruh/find-target-by-leaf-name-deep elements-by-id leaf-name)]
-            (when child?
-              (route-to! app target-key (or route-params {}))
-              target-key)))))))
+   cross-chart `:route/reachable` targets.
+
+   URL params are untrusted: the route event gets only the params each route state declares in `:route/params` or
+   `:route/url-params` (see `url-route-event-data`). `extra-data` (the routing namespace's own keys) is added to it.
+   Returns the routed target, or nil when the URL matches no route (nothing is sent then)."
+  ([app elements-by-id provider codec] (resolve-route-and-navigate! app elements-by-id provider codec {}))
+  ([app elements-by-id provider codec extra-data]
+   (let [href    (ruh/current-href provider)
+         decoded (ruc/decode-url codec href elements-by-id)
+         index   (delay (route-state-index app elements-by-id))]
+     (if-let [leaf-id (:leaf-id decoded)]
+       (do
+         (route-to! app leaf-id (merge (url-route-event-data @index leaf-id (:params decoded)) extra-data))
+         leaf-id)
+       ;; Codec didn't match directly — try reachable targets via deep search
+       ;; (needed for cross-chart :route/reachable targets not in this chart's elements)
+       (let [segments  (ruh/current-url-path href)
+             leaf-name (peek segments)]
+         (when leaf-name
+           (when-let [{:keys [target-key child? owner-id]} (ruh/find-target-by-leaf-name-deep elements-by-id leaf-name)]
+             (when child?
+               (route-to! app target-key (merge (url-route-event-data @index
+                                                  (if (contains? @index target-key) target-key owner-id)
+                                                  (:params decoded))
+                                           extra-data))
+               target-key))))))))
 
 (defn install-url-sync!
   "Installs bidirectional URL synchronization for the routing statechart session.
@@ -1155,19 +1553,41 @@
    * `:url-codec` — A `URLCodec` instance for encoding/decoding URLs. Defaults to
      `(ruct/transit-base64-codec)`. Pass `(ruct/transit-base64-codec \"/app\")` to
      deploy under a sub-path prefix.
-   * `:on-route-denied` — `(fn [url])` called when back/forward navigation is denied by the busy guard"
-  [app & [{:keys [on-route-denied provider url-codec routing/checks]
+   * `:prefix` — A shorthand for that: the default codec with this path prefix (e.g. `\"/app\"`). Ignored, with a
+     warning, when a `:url-codec` is given too.
+   * `:on-route-denied` — `(fn [url])` called when back/forward navigation is denied by the busy guard
+   * `:defer-restore?` — When true, don't restore the current URL now (e.g. until the app knows whether the user is
+     logged in). Until the app calls `route-sync-from-url!`, URL sync writes no URL (so the bookmarked entry is kept,
+     whatever the chart routes to meanwhile) and ignores back/forward. `route-sync-from-url!` then routes to the
+     current URL, on that same history entry, and URL sync goes on as usual from the save of the session that takes
+     its route event: the routing session's first save after it dequeued the event, whichever of its transitions took
+     it, if any (a route transition, a gate state's own `route-to.*` transition, the busy guard, or none at all, e.g.
+     while the chart waits outside its routes). When the routing session forwards the event to an active module
+     (a reachable route of an istate that is already active), it is that module's save. Also when it's called from a
+     step, of any session: that step's own save writes no URL. A route event that no route transition takes still
+     ends the deferral, and URL sync writes the chart's current route on the bookmarked entry (at that save, or at
+     the first one with a route). When the session that should take the event can't save it (a module stopped
+     before it dequeues the forwarded event, or whose step that took it is superseded, e.g. stopped while its promise
+     is pending, or fails), the event processing hands the token to the routing session in an event of its own
+     (`::restore-dropped`, which no transition takes), and the deferral ends at the routing session's save of it:
+     URL sync writes the current route on the bookmarked entry then, without waiting for another route."
+  [app & [{:keys [on-route-denied provider url-codec prefix routing/checks defer-restore?]
            :or   {checks :warn}}]]
+  (when (and prefix url-codec)
+    (log/warn "install-url-sync! got both :prefix and :url-codec. :url-codec wins; :prefix" (pr-str prefix) "is ignored."))
   (let [statechart-id                           (or (session-statechart-id app)
                                                   (throw (ex-info "install-url-sync! called but no routing session found. Call start! first." {})))
-        url-codec                               (or url-codec (ruct/transit-base64-codec))
+        url-codec                               (or url-codec
+                                                  (if prefix (ruct/transit-base64-codec prefix) (ruct/transit-base64-codec)))
         provider                                (or provider
                                                   #?(:cljs (bh/browser-url-history)
                                                      :clj  (throw (ex-info "install-url-sync! requires a :provider on CLJ (e.g. simulated-url-history)" {}))))
         chart                                   (scf/lookup-statechart app statechart-id)
         _                                       (validate-route-configuration chart checks)
         elements-by-id                          (::sc/elements-by-id chart)
-        prev-url                                (atom nil)
+        ;; The URL url-sync last wrote (or accepted), kept in the app's url-sync runtime state so that
+        ;; `replace-route-params!` can update it too.
+        _                                       (set-prev-url! app nil)
         nav-state                               (atom nil)
         restoring?                              (atom false)
         ;; True briefly after a browser-initiated nav is accepted. While true,
@@ -1212,12 +1632,16 @@
         settled-index                           (atom 0)
 
         do-popstate                             (fn [popped-index]
-                                                  (if @restoring?
+                                                  (cond
+                                                    ;; Not synced until the deferred restore
+                                                    (restore-deferred? app) nil
+                                                    @restoring?
                                                     (reset! restoring? false) ;; consume restoration popstate silently
+                                                    :else
                                                     (do
                                                       (reset! settling? false)
                                                       (swap! outstanding-navs inc)
-                                                      (let [pre-nav-url   @prev-url
+                                                      (let [pre-nav-url   (prev-url app)
                                                             pre-nav-index @settled-index]
                                                         (reset! nav-state {:browser-initiated? true
                                                                            :pre-nav-index      pre-nav-index
@@ -1237,109 +1661,114 @@
                        :clj                     do-popstate)
 
         on-save-handler
-                                                (fn [_root-sid _wmem saving-sid]
-                                                  (let [root-save?    (= saving-sid session-id)
-                                                        state-map     (rapp/current-state app)
-                                                        root-wmem     (get-in state-map [::sc/session-id session-id])
-                                                        configuration (::sc/configuration root-wmem)]
-                                                    (when configuration
-                                                      (let [registry    (-> (rc/any->app app) :com.fulcrologic.fulcro.application/runtime-atom
-                                                                          deref ::sc/env ::sc/statechart-registry)
-                                                            new-url     (ruc/deep-configuration->url
-                                                                          state-map registry session-id scf/local-data-path url-codec)
+        (fn [_root-sid _wmem saving-sid]
+          (let [root-save?    (= saving-sid session-id)
+                state-map     (rapp/current-state app)
+                root-wmem     (get-in state-map [::sc/session-id session-id])
+                configuration (::sc/configuration root-wmem)]
+            ;; A deferred restore ends at the save of the session that took its route event (the routing session, or
+            ;; a module's that the event was forwarded to), so saves before it (e.g. of the step that called
+            ;; `route-sync-from-url!`) write no URL, and this one writes the restored route's on the bookmarked entry.
+            (when (restore-processed? app state-map saving-sid)
+              (swap-url-sync! app update :restore-deferred dissoc session-id))
+            (when (and configuration (not (restore-deferred? app)))
+              (let [registry    (-> (rc/any->app app) :com.fulcrologic.fulcro.application/runtime-atom
+                                  deref ::sc/env ::sc/statechart-registry)
+                    new-url     (ruc/deep-configuration->url
+                                  state-map registry session-id scf/local-data-path url-codec)
                                                             ;; Root-only URL (no child chart segments). Used for
                                                             ;; acceptance checks where the child hasn't initialized yet.
-                                                            root-url    (let [chart          (scp/get-statechart registry statechart-id)
-                                                                              elements-by-id (::sc/elements-by-id chart)
-                                                                              local-data     (get-in state-map (scf/local-data-path session-id))]
-                                                                          (ruc/configuration->url elements-by-id configuration local-data url-codec))
-                                                            old-url     @prev-url
-                                                            nav         @nav-state
-                                                            browser-url (ruh/current-href provider)]
-                                                        (cond
+                    root-url    (let [chart          (scp/get-statechart registry statechart-id)
+                                      elements-by-id (::sc/elements-by-id chart)
+                                      local-data     (get-in state-map (scf/local-data-path session-id))]
+                                  (ruc/configuration->url elements-by-id configuration local-data url-codec))
+                    old-url     (prev-url app)
+                    nav         @nav-state
+                    browser-url (ruh/current-href provider)]
+                (cond
                                                           ;; === BROWSER-INITIATED: only resolve on root save ===
 
                                                           ;; Root save + browser-initiated → resolve acceptance/denial
-                                                          (and root-save? (:browser-initiated? nav))
-                                                          (let [remaining (swap! outstanding-navs dec)]
-                                                            (cond
+                  (and root-save? (:browser-initiated? nav))
+                  (let [remaining (swap! outstanding-navs dec)]
+                    (cond
                                                               ;; More navs pending — skip (superseded by later popstate)
-                                                              (pos? remaining) nil
+                      (pos? remaining) nil
 
                                                               ;; Last nav resolved — check acceptance/denial
-                                                              (zero? remaining)
-                                                              (if (and new-url
-                                                                    (or (= new-url browser-url)
+                      (zero? remaining)
+                      (if (and new-url
+                            (or (= new-url browser-url)
                                                                       ;; Prefix match: root URL matches but child chart
                                                                       ;; hasn't initialized yet, so deep-url is shorter.
                                                                       ;; Accept if browser URL starts with root path.
-                                                                      (and root-url
-                                                                        (not= new-url root-url)
-                                                                        (cstr/starts-with? browser-url root-url))))
+                              (and root-url
+                                (not= new-url root-url)
+                                (cstr/starts-with? browser-url root-url))))
                                                                 ;; ACCEPTED
-                                                                (do
-                                                                  (cancel-safety-timer!)
-                                                                  (log/debug "URL sync: browser nav accepted" browser-url)
-                                                                  (reset! nav-state nil)
+                        (do
+                          (cancel-safety-timer!)
+                          (log/debug "URL sync: browser nav accepted" browser-url)
+                          (reset! nav-state nil)
                                                                   ;; Use browser-url (not new-url) as prev-url so that
                                                                   ;; child chart saves that refine the deep URL see a
                                                                   ;; change and can replaceState correctly.
-                                                                  (reset! prev-url browser-url)
-                                                                  (reset! settled-index (:popped-index nav))
+                          (set-prev-url! app browser-url)
+                          (reset! settled-index (:popped-index nav))
                                                                   ;; Child chart invocations may fire saves that change the
                                                                   ;; deep URL (e.g. istate initializes a child). These must
                                                                   ;; use replaceState, not pushState, to preserve forward
                                                                   ;; history entries.
-                                                                  (reset! settling? true)
+                          (reset! settling? true)
                                                                   ;; Auto-clear after current processing cycle completes.
                                                                   ;; setTimeout(0) fires after all microtasks (promises)
                                                                   ;; from the current event processing resolve.
-                                                                  #?(:cljs (js/setTimeout #(reset! settling? false) 0)))
+                          #?(:cljs (js/setTimeout #(reset! settling? false) 0)))
                                                                 ;; DENIED
-                                                                (let [{:keys [popped-index pre-nav-index pre-nav-url]} nav]
-                                                                  (cancel-safety-timer!)
-                                                                  (log/debug "URL sync: route denied, undoing browser nav" browser-url "→" pre-nav-url)
-                                                                  (reset! nav-state nil)
-                                                                  (reset! restoring? true)
-                                                                  (if (< popped-index pre-nav-index)
-                                                                    (ruh/go-forward! provider)
-                                                                    (ruh/go-back! provider))
-                                                                  (reset! prev-url pre-nav-url)
-                                                                  (when on-route-denied
-                                                                    (on-route-denied browser-url))))
+                        (let [{:keys [popped-index pre-nav-index pre-nav-url]} nav]
+                          (cancel-safety-timer!)
+                          (log/debug "URL sync: route denied, undoing browser nav" browser-url "→" pre-nav-url)
+                          (reset! nav-state nil)
+                          (reset! restoring? true)
+                          (if (< popped-index pre-nav-index)
+                            (ruh/go-forward! provider)
+                            (ruh/go-back! provider))
+                          (set-prev-url! app pre-nav-url)
+                          (when on-route-denied
+                            (on-route-denied browser-url))))
 
                                                               ;; Negative = spurious root save, clamp
-                                                              :else (reset! outstanding-navs 0)))
+                      :else (reset! outstanding-navs 0)))
 
                                                           ;; Child save + browser-initiated → skip (wait for root save)
-                                                          (:browser-initiated? nav) nil
+                  (:browser-initiated? nav) nil
 
                                                           ;; === PROGRAMMATIC NAVIGATION (no nav-state) ===
 
                                                           ;; Branch 3: Initial load (old-url is nil)
-                                                          (and new-url (nil? old-url))
-                                                          (do
-                                                            (log/debug "URL sync: initial URL" new-url)
-                                                            (ruh/-replace-url! provider new-url)
-                                                            (reset! prev-url new-url)
-                                                            (reset! settled-index (ruh/current-index provider)))
+                  (and new-url (nil? old-url))
+                  (do
+                    (log/debug "URL sync: initial URL" new-url)
+                    (ruh/-replace-url! provider new-url)
+                    (set-prev-url! app new-url)
+                    (reset! settled-index (ruh/current-index provider)))
 
                                                           ;; Branch 4: Programmatic navigation (no nav-state, URL changed)
-                                                          (and new-url (not= new-url old-url))
-                                                          (if (and @settling? (not root-save?))
+                  (and new-url (not= new-url old-url))
+                  (if (and @settling? (not root-save?))
                                                             ;; Post-acceptance settle: child chart init changed the deep
                                                             ;; URL. Replace (not push) to preserve forward history.
-                                                            (do
-                                                              (log/debug "URL sync: settling (replace)" new-url)
-                                                              (ruh/-replace-url! provider new-url)
-                                                              (reset! prev-url new-url))
+                    (do
+                      (log/debug "URL sync: settling (replace)" new-url)
+                      (ruh/-replace-url! provider new-url)
+                      (set-prev-url! app new-url))
                                                             ;; Normal programmatic nav: push a new history entry
-                                                            (do
-                                                              (reset! settling? false)
-                                                              (log/debug "URL sync: pushing" new-url)
-                                                              (ruh/-push-url! provider new-url)
-                                                              (reset! prev-url new-url)
-                                                              (reset! settled-index (ruh/current-index provider)))))))))]
+                    (do
+                      (reset! settling? false)
+                      (log/debug "URL sync: pushing" new-url)
+                      (ruh/-push-url! provider new-url)
+                      (set-prev-url! app new-url)
+                      (reset! settled-index (ruh/current-index provider)))))))))]
 
     ;; Register the on-save handler, provider, and codec in the app's runtime atom
     (swap-url-sync! app update :handlers assoc session-id on-save-handler)
@@ -1351,13 +1780,19 @@
     (ruh/set-popstate-listener! provider popstate-fn)
 
     ;; Initial URL restoration: check if the current URL maps to a route
-    (resolve-route-and-navigate! app elements-by-id provider url-codec)
+    (if defer-restore?
+      (swap-url-sync! app assoc-in [:restore-deferred session-id] true)
+      (do
+        (swap-url-sync! app update :restore-deferred dissoc session-id)
+        (resolve-route-and-navigate! app elements-by-id provider url-codec)))
 
     ;; Return cleanup function
     (fn url-sync-cleanup! []
       (swap-url-sync! app update :handlers dissoc session-id)
       (swap-url-sync! app update :providers dissoc session-id)
       (swap-url-sync! app update :codecs dissoc session-id)
+      (swap-url-sync! app update :prev-urls dissoc session-id)
+      (swap-url-sync! app update :restore-deferred dissoc session-id)
       ;; Clear any child→root cache entries pointing to this root
       (swap-url-sync! app update :child-to-root
         (fn [m] (into {} (remove (fn [[_ root]] (= root session-id))) m)))
@@ -1379,15 +1814,31 @@
 
 (defn route-sync-from-url!
   "Parses the current URL from the installed provider and routes the statechart to match.
-   Returns the routed target keyword, or nil when no provider/session/URL target is available."
+   Returns the routed target keyword, or nil when no provider/session/URL target is available.
+
+   This is also the deferred initial restore (`install-url-sync!`'s `:defer-restore?`): it ends the deferral at the
+   save of the session that takes its route event (the routing session's first save after it dequeued the event,
+   whichever transition took it, if any; a module's when the routing session forwarded the event to it; the routing
+   session's again when that module can't save it), so URL sync writes URLs again from then on. Saves before that
+   (e.g. of the step that calls it, in any session) write no URL, so the restore stays on the bookmarked entry. When
+   the URL matches no route, the deferral ends at once."
   [app-ish]
   (when-let [app (rc/any->app app-ish)]
     (when-let [provider (url-sync-provider app)]
-      (when-let [statechart-id (session-statechart-id app)]
-        (when-let [chart (scf/lookup-statechart app statechart-id)]
-          (let [codec (or (get-in (url-sync-state app) [:codecs session-id])
-                        (ruct/transit-base64-codec))]
-            (resolve-route-and-navigate! app (::sc/elements-by-id chart) provider codec)))))))
+      (let [statechart-id (session-statechart-id app)
+            chart         (some->> statechart-id (scf/lookup-statechart app))
+            codec         (or (get-in (url-sync-state app) [:codecs session-id])
+                            (ruct/transit-base64-codec))
+            routed        (when chart
+                            (if (restore-deferred? app)
+                              (let [token (new-uuid)]
+                                (swap-url-sync! app assoc-in [:restore-deferred session-id] {:token token})
+                                (resolve-route-and-navigate! app (::sc/elements-by-id chart) provider codec
+                                  {::restore-token token}))
+                              (resolve-route-and-navigate! app (::sc/elements-by-id chart) provider codec)))]
+        (when-not routed
+          (swap-url-sync! app update :restore-deferred dissoc session-id))
+        routed))))
 
 (defn route-back!
   "Navigates back through the installed URL sync provider.

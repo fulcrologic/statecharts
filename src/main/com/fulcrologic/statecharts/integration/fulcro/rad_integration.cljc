@@ -1,5 +1,9 @@
 (ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.rad-integration
-  "DEPRECATED. Better RAD integration coming soon."
+  "DEPRECATED. UISM-based (it requires upstream RAD `form`/`report`) and built on the deprecated `ui-routes`.
+
+   Use `com.fulcrologic/fulcro-rad-statecharts` instead: RAD forms, reports and containers on statecharts and on
+   `com.fulcrologic.statecharts.integration.fulcro.routing` (`form-route-state`, `report-route-state`,
+   `container-route-state`)."
   (:require
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
@@ -29,7 +33,7 @@
 
    See `rstate` for generate options for a routed state."
   [{:route/keys  [target path]
-    :report/keys [param-keys] :as props}]
+    :report/keys [param-keys]  :as props}]
   (uir/rstate (merge {} props)
     (entry-fn [{:fulcro/keys [app]} data _ event-data]
       (log/debug "Starting report")

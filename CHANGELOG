@@ -1,8 +1,49 @@
 Unreleased
 ----------
 
-Fulcro event processing (fixes found by fulcro-rad-statecharts):
+Fulcro routing and event processing (fixes found by fulcro-rad-statecharts):
 
+* URL restores (bookmark, back/forward, `route-sync-from-url!`) are treated as untrusted: the route event carries only
+  each route state's declared `:route/params` and never a key of the `routing` namespace (e.g. `::force?`, which
+  bypassed the busy guard). Undeclared keys and unknown states are dropped. BEHAVIOR CHANGE. To keep accepting a URL
+  param a state doesn't declare in `:route/params`, declare it in `:route/url-params` (below).
+* `rstate`/`istate` option `:route/url-params`: keys a URL restore also accepts for the state, beyond `:route/params`.
+  They reach the route event like route params, but are never stored in `[:routing/parameters]`, so URL sync never
+  writes them to the URL (for states that read params from a URL they are opened from without tracking them).
+* URL restores give each route state its own params (`::params-by-state` in the event), so states with the same param
+  keys (parallel regions) restore independently. BEHAVIOR CHANGE: the event's top-level data is now the params of the
+  restored route's path only, not every state's merged, and the event also carries `::params-by-state` and
+  `::restored-params` (a copy of those top-level params). Sending such an event again keeps per-state params, but a
+  top-level param that differs from `::restored-params` (changed or added, e.g. `(assoc restored :t 2)`) goes to every
+  state of the route, whatever the state declares: each state still stores only its declared `:route/params`, while a
+  form's `:id` or a component's initial-state params (route initialization) see the param too.
+* `replace-route-params!` updates url-sync's last-written URL, so the next save of an unchanged route no longer pushes
+  a duplicate history entry.
+* `replace-route-params!` writes the params in the session that has the route: for a route in a routing module (an
+  istate's child chart, any depth) that is the module's session, so its URL now changes (it wrote the routing session's
+  local data, which the URL doesn't read for that route). A route no session has is still written in the routing
+  session.
+* A routing module (istate child chart) started for a pending route enters that route directly; its initial route is
+  no longer entered (and its on-entry run) first. `routes` nodes get two generated states for this
+  (`...routing.routes-initial.<ns of the routes id>/<name>` and `...routing.routes-pending...`). BEHAVIOR CHANGE.
+  A `routes` node with an explicit `initial` element child gets no generated states and keeps the old order (its
+  initial route, then the pending one).
+* A route event reaches routes any number of istates deep (two-hop `:route/reachable` lost the event data).
+* `send-to-self!`/`current-invocation-configuration` skip the ended session of a route that was left.
+* The route transitions that `routes` generates carry `::scr/route-kind` (`:direct`; `:enter-owner` and `:forward`
+  for a reachable target of an istate that isn't, or is, active) and, on the cross-chart ones, `::scr/route-owner`
+  (the istate's id). The busy guard uses them. Route transitions stay external (SCXML's default): a direct one exits
+  and re-enters everything under its `routes` node's nearest compound ancestor, the `routes` node and its sibling
+  regions too. So an `invoke` that must survive route changes (e.g. an editor) belongs on a state above the `routes`
+  node (or above the parallel state of its regions), not on the `routes` node, a route state, or a sibling region.
+* The busy guard checks what the route change exits: the route targets of the exited states, and every session an
+  exited state invoked (not only istate child charts); an invoked session is busy when one of its actors is a busy
+  component (dirty form or `sfro/busy?`). BEHAVIOR CHANGE. What stays active isn't checked, so a dirty editor that a
+  state above the routes invokes no longer denies a route change, and a route to a reachable target of an istate that
+  is already active doesn't check that istate's component (only what its child chart's route change exits). A
+  non-route event that uses `busy?` as a cond still checks everything active. The check builds a component's props
+  only when it has a busy check, and indexes the invoked sessions once, so its cost grows linearly with the number of
+  sessions (500 invoked sessions: about 13 ms per check before, under 1 ms now).
 * A `process-events!` nested inside event processing (or a loop tick during one) returns at once; its events wait.
   BEHAVIOR CHANGE (it used to process them against working memory the step in progress then overwrote).
 * With `:async? true`, a session whose step returns a promise is held until the promise settles and the step's result
@@ -58,6 +99,19 @@ Fulcro event processing (fixes found by fulcro-rad-statecharts):
 * With `:event-loop? :immediate`, processing stops once no queued event is due. A pending delayed event (e.g.
   `send-after`) made every `send!` poll the queue 100 more times; it is still delivered by the first processing at or
   after its delivery time.
+* `install-url-sync!` option `:defer-restore?`: keep the bookmarked URL (no writes) until `route-sync-from-url!` has
+  restored it, also when that is called from a step (the routing session processes the restore's route first). The
+  deferral ends at the routing session's first save after it dequeued the restore's route event, whatever transition
+  took it, if any (a route, the busy guard, a gate's own `route-to.*` transition, or none, e.g. while the chart waits
+  outside its routes); for a route of a module that is already active, at the module's save once it routed. When the
+  module can't save it (it is stopped before it dequeues the forwarded event, or the step that took it is superseded,
+  e.g. stopped while its promise is pending, or fails), the event processing hands the token to the routing session
+  in an event of its own (`::scr/restore-dropped`, which no transition takes), and the deferral ends at the routing
+  session's save of it: URL sync writes the current route on the bookmarked entry, without waiting for another route.
+  The restore's route event carries `::scr/restore-token`, and the session that took it has the token at
+  `::scr/restored-token` in its local data.
+* `install-url-sync!` option `:prefix`: the default codec under a path prefix (`(ruct/transit-base64-codec prefix)`).
+  Ignored, with a warning, when `:url-codec` is given too.
 * `manually-polled-queue/has-due-events?`: true when the queue holds an event `receive-events!` would deliver now.
 * An `invoke` with neither `:id` nor `:idlocation` now stops the session it started when its state is exited (it
   stopped the element's id instead, so every exit left a session running), and its `finalize` and `:autoforward` use
@@ -70,6 +124,9 @@ Fulcro event processing (fixes found by fulcro-rad-statecharts):
   found then, so it isn't stopped).
 * Fulcro integration: the entries of `::sc/invocation-processors` (including those an app adds in `:extra-env`) are
   wrapped, so a type or identity check on them no longer matches (`instance?`, `identical?`, a record's fields).
+* `istate` on a target with only a keyword chart (`sfro/statechart-id`) and no `:route/reachable` no longer throws;
+  it has no reachable routes.
+* `rad-integration` docstring points to `com.fulcrologic/fulcro-rad-statecharts`.
 
 1.1.6
 -----

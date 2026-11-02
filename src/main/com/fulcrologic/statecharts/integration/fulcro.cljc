@@ -298,6 +298,49 @@ Returns the new session-id of the statechart (a promise of it when the initial e
         (log/debug "Not forwarding to invocation" (:invokeid data) "for a step or start that a restart or stop superseded.")
         (sp/forward-event! processor env data)))))
 
+(def ^:private restore-token-key
+  "The key of a deferred URL restore's token in its route event's data (`routing/route-sync-from-url!`)."
+  :com.fulcrologic.statecharts.integration.fulcro.routing/restore-token)
+
+(def ^:private restored-token-key
+  "Where a session's local data notes the restore token of the route event it dequeued (routing's URL sync reads it)."
+  :com.fulcrologic.statecharts.integration.fulcro.routing/restored-token)
+
+(def ^:private routing-session-id
+  "The session id of the routing statechart (`routing/session-id`)."
+  :com.fulcrologic.statecharts.integration.fulcro.routing/session)
+
+(def ^:private restore-dropped-event
+  "The event that hands a deferred URL restore's token to the routing session (`hand-restore-to-routing!`). No
+   transition takes it: the routing session notes the token when it dequeues it, like a route event's."
+  :com.fulcrologic.statecharts.integration.fulcro.routing/restore-dropped)
+
+(defn- restore-token
+  "The token of the deferred URL restore (`routing/route-sync-from-url!`) whose route event `event` is, or nil."
+  [event]
+  (when (map? event) (get-in event [:data restore-token-key])))
+
+(defn- note-restore-token!
+  "Notes the restore `token` in the local data of `session-id` when that session is running, before it processes the
+   restore's route event. Routing's URL sync ends the deferral at that session's next save, whichever transition takes
+   the event, if any. Returns true when it noted the token."
+  [{::sc/keys [working-memory-store] :fulcro/keys [app] :as env} session-id token]
+  (when (and app (some? session-id) (sp/get-working-memory working-memory-store env session-id))
+    (swap! (impl/state-atom app) assoc-in (impl/local-data-path session-id restored-token-key) token)
+    true))
+
+(defn- hand-restore-to-routing!
+  "Sends the restore `token` to the routing session in an event of its own (`restore-dropped-event`), for a restore
+   whose route event no running session will save: its target wasn't running when it dequeued the event (a module
+   stopped before that), or the step that took it was superseded (a restart, or a stop while its promise was pending),
+   which skips its save, or failed. The routing session is never stopped, so the deferral ends at its save of this
+   event (at once with `:event-loop? :immediate`, at the loop's next tick, or at the next `process-events!`). Not
+   used for the routing session's own events: its next save ends the deferral (a failing step would loop)."
+  [{::sc/keys [event-queue] :as env} token]
+  (sp/send! event-queue env {:target routing-session-id
+                             :event  restore-dropped-event
+                             :data   {restore-token-key token}}))
+
 (>defn install-fulcro-statecharts!
   "Create a statecharts environment that is set up to work with the given Fulcro app.
 
@@ -424,12 +467,27 @@ Returns the new session-id of the statechart (a promise of it when the initial e
                                                                             session-id #(current? session-id generation)))
                                                                       (with-superseded-check
                                                                         (superseded-check session-id generation running))))
-                                              result   (try
-                                                         (handler step-env event)
-                                                         ;; W3C SCXML: event handler errors must not crash the event loop.
-                                                         (catch #?(:clj Throwable :cljs :default) e
-                                                           (log/error e "Event handler threw an exception")
-                                                           nil))]
+                                              ;; A deferred URL restore's route event: its session notes the token, and
+                                              ;; URL sync ends the deferral at that session's save. When the session
+                                              ;; can't save it (it isn't running, or this step is superseded or fails),
+                                              ;; the routing session gets the token instead (it is never stopped).
+                                              token    (restore-token event)
+                                              handoff? (and (some? token) (not= routing-session-id session-id))
+                                              noted?   (when token (note-restore-token! env session-id token))
+                                              _        (when (and handoff? (not noted?)) (hand-restore-to-routing! env token))
+                                              ;; The step is over. Called before the release, after which a current
+                                              ;; step would look superseded.
+                                              ended!   (fn [failed?]
+                                                         (let [unsaved? (and handoff? noted?
+                                                                          (or failed? (not (current? session-id generation))))]
+                                                           (reset! running false)
+                                                           (when unsaved? (hand-restore-to-routing! env token))))
+                                              [result failed?] (try
+                                                                 [(handler step-env event) false]
+                                                                 ;; W3C SCXML: event handler errors must not crash the event loop.
+                                                                 (catch #?(:clj Throwable :cljs :default) e
+                                                                   (log/error e "Event handler threw an exception")
+                                                                   [nil true]))]
                                           ;; An async step saves the session's working memory when its promise
                                           ;; settles: until then the session's events wait (they would see the working
                                           ;; memory the step is about to overwrite).
@@ -437,16 +495,16 @@ Returns the new session-id of the statechart (a promise of it when the initial e
                                             (if (p/promise? result)
                                               (-> result
                                                 (p/then (fn [_]
-                                                          (reset! running false)
+                                                          (ended! false)
                                                           (release-and-process! session-id generation)
                                                           nil))
                                                 (p/catch (fn [e]
                                                            (log/error e "Processing an event failed" {:session-id session-id})
-                                                           (reset! running false)
+                                                           (ended! true)
                                                            (release-and-process! session-id generation)
                                                            nil)))
                                               (do
-                                                (reset! running false)
+                                                (ended! failed?)
                                                 (release! session-id generation))))
                                           (inspect/ilet [session-id (:target event)
                                                          {::sc/keys [configuration] :as wmem} (sp/get-working-memory working-memory-store env session-id)]

@@ -4,8 +4,8 @@ Connects statecharts to Fulcro UI framework. This is the most complex subsystem 
 
 ## File Map
 - `fulcro.cljc` main API (`start!`, actors, event queue/holds); `fulcro_impl.cljc` data model, WM store
-- `fulcro/hooks.cljc` React hooks; `fulcro/operations.cljc` load/remote ops; `fulcro/routing.cljc` the routing API,
-  `routing_options.cljc`, `routing/url_codec*.cljc`, `routing/url_history.cljc`
+- `fulcro/hooks.cljc` React hooks; `fulcro/operations.cljc` load/remote ops; `fulcro/routing.cljc` the routing API
+  (notes: `fulcro/CLAUDE.md`), `routing_options.cljc`, `routing/url_codec*.cljc`, `routing/url_history.cljc`
 - Deprecated: `fulcro/rad_integration.cljc` (successor `com.fulcrologic/fulcro-rad-statecharts`),
   `route_history.cljc`, `ui_routes.cljc` (`ui_routes_options.cljc` is shared)
 

@@ -1382,6 +1382,9 @@ NOTE: The legacy `com.fulcrologic.statecharts.integration.fulcro.ui-routes` name
 All examples below use the new `routing` namespace.
 The old namespace remains available for backward compatibility but does not include URL sync, cross-chart routing, or configuration validation.
 
+NOTE: For Fulcro RAD, use `com.fulcrologic/fulcro-rad-statecharts`: it builds RAD forms, reports and containers on this routing system (`form-route-state`, `report-route-state`, `container-route-state`).
+The UISM-based `com.fulcrologic.statecharts.integration.fulcro.rad-integration` namespace is deprecated.
+
 === Why Statechart-Driven Routing?
 
 Routing in a web application is fundamentally a state machine problem.
@@ -1587,6 +1590,10 @@ When absent, defaults to the simple name of the target (e.g. `ProjectDetail`).
 Used by the default URLCodec, which is customizable.
 `:route/params`:: (Optional) A set of keywords.
 When present in the routing event data, these keys are extracted and stored at `[:routing/parameters <state-id>]` in the data model.
+URL sync writes them to the URL.
+`:route/url-params`:: (Optional) A set of keywords that a URL restore also accepts for this state, in addition to `:route/params`.
+They reach the route event but are never stored in `[:routing/parameters <state-id>]`, so they are never written to the URL.
+See <<RouteParameters>>.
 `:parallel?`:: (Optional) When true, this node is a parallel state.
 
 You can nest `rstate` nodes to create hierarchical routes:
@@ -1673,6 +1680,7 @@ URL outcomes:
 
 If you put `:route/segment ""` on the parent `istate`, registration fails with `:routing/invalid-empty-segment` — the parent must always contribute a real segment because it is the bridge into the child's URL.
 
+[[RouteParameters]]
 ==== Route Parameters
 
 In the default URL encoding route parameters are **not** encoded in URL path segments.
@@ -1693,6 +1701,25 @@ To declare which keys should be extracted from event data:
 -----
 
 Parameters are then available in the data model at `[:routing/parameters <state-id>]`, where `<state-id>` is the keyword derived from the `:route/target`.
+
+Params restored from a URL (a bookmark, back/forward, `route-sync-from-url!`) are untrusted input, since anyone can craft a link.
+The route event of a URL restore carries only the keys each state declares in `:route/params`, never a routing control key (any key in the `routing` namespace, such as `::sroute/force?`), and nothing for a state the chart doesn't have.
+Each state gets its own params (they travel in the event at `::sroute/params-by-state`), so two states that declare the same key, such as two reports in parallel regions, restore independently, and a state with nothing in the URL gets nothing.
+The event's own data is the params of the restored route's path (the URL's leaf state and the route states above it), for code that reads the event directly.
+A restore event that the app sends again (for example after a login) gives each state its own params as before, except for a top-level param the app changed or added (e.g. `(sroute/route-to! app ui/Target (assoc restored-event-data :t 2))`): that value goes to every state of the route, whatever the state declares.
+Each state still stores only the keys it declares in `:route/params`, but route initialization (a form's `:id`, a component's initial-state params) sees the param as given.
+
+A state that reads params from a URL it is opened from, but doesn't keep them in the URL, declares them in `:route/url-params` (an `rstate` or `istate` option):
+
+[source,clojure]
+-----
+;; Opening /Report?_p=... can set the report's sort and page, but the URL never tracks them.
+(sroute/rstate {:route/target `ui/Report :route/url-params #{:sort :page}})
+-----
+
+A URL restore passes those keys on to the route event in the same way (the state's entry at `::sroute/params-by-state`, and the event's own data for the restored path), and still drops undeclared keys and routing control keys.
+They are never stored in `[:routing/parameters <state-id>]`, so URL sync never writes them to a URL it pushes or replaces.
+Keys in both sets act as `:route/params`.
 
 You can install an alternate `URLCodec` to customize this behavior.
 
@@ -1858,8 +1885,9 @@ You do not need to declare `:route/reachable` at all:
 
 This works because `istate` calls `reachable-targets` on the co-located child chart at chart construction time, collecting all `:route/target` values transitively (including nested child charts).
 
-NOTE: Auto-derivation requires `sfro/statechart` on the target component (not `sfro/statechart-id`).
-If neither an explicit `:route/reachable` nor a resolvable `sfro/statechart` is found, `istate` throws an error at chart construction time.
+NOTE: Auto-derivation requires `sfro/statechart` on the target component.
+A chart given by keyword (`sfro/statechart-id`, or the istate's `statechart-id`) can't be walked when the parent chart is built, so then the istate has no reachable targets unless you list them in `:route/reachable`.
+A target with no chart at all (and no `:route/reachable`) throws at chart construction time.
 
 **Manual override:** You can still provide an explicit `:route/reachable` set, which takes precedence over auto-derivation.
 This is useful when you want to do code splitting and don't have the component available at initial base load.
@@ -1878,7 +1906,8 @@ With reachable targets (whether auto-derived or explicit), `sroute/route-to!` ca
 Two mechanisms handle this:
 
 1. **Not yet in the owner istate**: The parent transitions into the istate and stores the desired route as `::pending-child-route`.
-When the child chart starts, its `routes` on-entry handler detects the pending route and raises it as an event.
+When the child chart starts, its `routes` on-entry handler detects the pending route and raises it as an event, and the child chart enters that route directly: its initial route is entered only when there is no pending route.
+This works through any number of istates: a target two charts deep is reachable from the root when each istate on the way lists it, and the route event's data reaches it.
 
 2. **Already in the owner istate**: The parent sends the route event directly to the child session via `scp/send!`.
 The child chart transitions internally without re-entering the `istate`.
@@ -1929,7 +1958,7 @@ When a component has a co-located child statechart (via `istate`), it can send e
 (sroute/send-to-self! this :event/save {:some "data"})
 -----
 
-This walks up the Fulcro component parent chain starting from `this` to find the nearest ancestor whose registry key has an invocation session ID.
+This walks up the Fulcro component parent chain starting from `this` to find the nearest ancestor whose registry key has a running invocation session (the routing session keeps the id of an ended route's session; that one is skipped).
 This means you can call `send-to-self!` from a child component rendered inside a route target — it will find the route target's co-located chart automatically.
 
 ==== Inspecting Child State
@@ -2020,6 +2049,19 @@ The bookmark is stored as a data model assignment (`ops/assign`) and cleared aft
     [(ops/assign ::bookmark nil)]))
 -----
 
+==== Deferring the Initial URL Restore
+
+When the app learns whether the user is logged in outside the routing chart (for example, from a session check it runs at start), install URL sync with `:defer-restore? true`.
+The bookmarked URL then stays the current history entry: URL sync writes no URL and ignores back/forward until the app calls `(sroute/route-sync-from-url! app)`, which routes to the URL on that same entry.
+It can be called from a step (for example the routing chart's transition on the login result, or a login chart's): URL sync starts writing again only once the routing session has processed the restore's route event, so the step's own save doesn't replace the bookmark first.
+That is the routing session's first save after it dequeued the event, whatever transition took it: a route transition, the busy guard, a login gate's own `route-to.*` transition, or none at all (for example while the chart still waits in a state outside its routes).
+When the URL is a route of a module that is already active, the routing session forwards the event to the module, and URL sync starts writing again at the module's save, once it has routed.
+If the module can't save the event, the event processing hands the restore to the routing session, which is never stopped.
+That covers a module stopped before it dequeues the forwarded event (e.g. the app routes elsewhere while the module's step is pending, or in the same step that called `route-sync-from-url!`), and a step that took the event but is stopped while its promise is pending, or fails.
+URL sync then starts writing again at the routing session's save of it (in the same processing with `:event-loop? :immediate`, at the loop's next tick, or at the next `scf/process-events!`): it writes the current route on the bookmarked entry, without waiting for another route.
+If no route transition took the event, URL sync then writes the chart's current route on the bookmarked entry (at that save, or at its first save with a route).
+A reload before then (e.g. while a login dialog shows) keeps the bookmark, and Back after the restore leaves the app instead of returning to a landing page.
+
 === Pluggable URL Codec
 
 URL encoding and decoding is handled by the `URLCodec` protocol defined in `routing.url-codec`:
@@ -2041,6 +2083,9 @@ The default implementation (`routing.url-codec-transit`) encodes route parameter
 URL shape: `/Seg1/Seg2?_p=<base64-encoded-transit>`.
 
 This is created automatically by `install-url-sync!` if you do not pass a `:url-codec` option.
+To deploy under a sub-path, pass `:prefix "/app"` to `install-url-sync!`: a shorthand for `:url-codec (ruct/transit-base64-codec "/app")`.
+URLs are then written as `/app/Seg1/Seg2?_p=...`, and the prefix is stripped when a URL is restored.
+`:prefix` is ignored (with a warning) when you pass a `:url-codec` too.
 
 ==== Custom Codec
 
@@ -2082,11 +2127,18 @@ Busy guards prevent navigation away from a route when work would be lost -- for 
 When `routes` generates transitions for each route target, it also generates a **catch-all** `route-to.*` transition with `sroute/busy?` as its guard condition.
 Because statecharts evaluate transitions in document order, this catch-all fires *before* the specific target transitions when the guard returns true.
 
-The `sroute/busy?` function performs a **deep recursive check**:
+The `sroute/busy?` function performs a **deep recursive check** of what the route change would exit:
 
-1. For each active route state, it checks if the target component has a `sfro/busy?` predicate or is a dirty Fulcro form.
-2. If the route state has an invoked child chart, it recursively checks the child chart's active states.
-3. If any component at any depth returns busy, the route change is denied.
+1. For each route state the route change exits, it checks if the target component has a `sfro/busy?` predicate or is a dirty Fulcro form.
+2. It checks every session that an exited state invoked, all of it (the session stops): an istate's child chart, and any other child invocation (for example an editor chart that a host's state invokes).
+An invoked session is also busy when one of its actors (`:fulcro/actors`) is a busy component by the same rules, so an embedded, non-routed form keeps its host's route.
+3. When the route goes to a reachable target of an istate that is already active, nothing in this chart exits (not even the istate): the route change that the istate's child chart makes is checked instead, the same way.
+4. If any component at any depth returns busy, the route change is denied.
+
+What stays active isn't checked: the session's own actors, an editor that a state above the routes invokes (for example a host chart's top state, beside its routing regions), and an active module's own component when the route stays inside the module.
+A route transition is external, so it exits and re-enters everything under its `routes` node's nearest compound ancestor (normally `:state/route-root`), including the `routes` node itself: an `invoke` on a `routes` node, or on a route state, restarts on every route change there, so a busy one denies it.
+The same goes for a region beside the `routes` node in a parallel state (the nearest compound ancestor is above the parallel state).
+To keep an invoked session, such as an editor, running across route changes, invoke it from a state above the `routes` node (above its parallel state, if it is in one), not from the `routes` node, a route state, or a sibling region.
 
 ==== Adding a Busy Predicate
 
@@ -2267,7 +2319,7 @@ See `url_sync_headless_spec.cljc` in the test suite for comprehensive examples c
 | `sroute/start! [app chart]` | Registers chart and starts routing session.
 | `sroute/start! [app chart opts]` | Same, with `:routing/checks` option.
 | `sroute/install-url-sync! [app]` | Installs URL sync with defaults. Returns cleanup fn.
-| `sroute/install-url-sync! [app opts]` | With `:provider`, `:url-codec`, `:prefix`, `:on-route-denied`, `:routing/checks`.
+| `sroute/install-url-sync! [app opts]` | With `:provider`, `:url-codec`, `:prefix`, `:on-route-denied`, `:routing/checks`, `:defer-restore?`.
 |===
 
 ==== Navigation
@@ -2329,7 +2381,8 @@ See `url_sync_headless_spec.cljc` in the test suite for comprehensive examples c
 | `sroute/url-sync-installed? [app-ish]` | True if URL sync is active.
 | `sroute/route-current-url [app-ish]` | Current URL from provider.
 | `sroute/route-history-index [app-ish]` | Current history index from provider.
-| `sroute/route-sync-from-url! [app-ish]` | Re-parse current URL and route to match.
+| `sroute/route-sync-from-url! [app-ish]` | Re-parse current URL and route to match. Also ends a deferred initial restore (`:defer-restore?`).
+| `sroute/replace-route-params! [app-ish target params]` | Update a route's params (in the session that has the route, also inside a routing module) and replace the current URL (no new history entry); the next save of an unchanged route pushes nothing.
 |===
 
 ==== Constants
