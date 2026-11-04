@@ -1,5 +1,6 @@
 (ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.rad-integration
-  "DEPRECATED. Better RAD integration coming soon."
+  "DEPRECATED. Use `com.fulcrologic/fulcro-rad-statecharts`, which runs RAD forms, reports and containers on
+   statecharts and on `com.fulcrologic.statecharts.integration.fulcro.routing`."
   (:require
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]

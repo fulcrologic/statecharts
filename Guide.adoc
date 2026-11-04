@@ -1547,6 +1547,7 @@ When absent, defaults to the simple name of the target (e.g. `ProjectDetail`).
 Used by the default URLCodec, which is customizable.
 `:route/params`:: (Optional) A set of keywords.
 When present in the routing event data, these keys are extracted and stored at `[:routing/parameters <state-id>]` in the data model.
+A URL restore gives each state its own params from the URL, so nested states can declare the same key.
 `:parallel?`:: (Optional) When true, this node is a parallel state.
 
 You can nest `rstate` nodes to create hierarchical routes:
@@ -1818,8 +1819,9 @@ You do not need to declare `:route/reachable` at all:
 
 This works because `istate` calls `reachable-targets` on the co-located child chart at chart construction time, collecting all `:route/target` values transitively (including nested child charts).
 
-NOTE: Auto-derivation requires `sfro/statechart` on the target component (not `sfro/statechart-id`).
-If neither an explicit `:route/reachable` nor a resolvable `sfro/statechart` is found, `istate` throws an error at chart construction time.
+NOTE: Auto-derivation requires `sfro/statechart` on the target component.
+With only a chart id (`sfro/statechart-id`, or the istate's `statechart-id`), the istate has no reachable targets unless you declare `:route/reachable`.
+With no chart at all and no `:route/reachable`, `istate` throws an error at chart construction time.
 
 **Manual override:** You can still provide an explicit `:route/reachable` set, which takes precedence over auto-derivation.
 This is useful when you want to do code splitting and don't have the component available at initial base load.
@@ -1839,6 +1841,7 @@ Two mechanisms handle this:
 
 1. **Not yet in the owner istate**: The parent transitions into the istate and stores the desired route as `::pending-child-route`.
 When the child chart starts, its `routes` on-entry handler detects the pending route and raises it as an event.
+The child chart then enters that route without entering its `routes` node's initial route first.
 
 2. **Already in the owner istate**: The parent sends the route event directly to the child session via `scp/send!`.
 The child chart transitions internally without re-entering the `istate`.
@@ -1889,7 +1892,7 @@ When a component has a co-located child statechart (via `istate`), it can send e
 (sroute/send-to-self! this :event/save {:some "data"})
 -----
 
-This walks up the Fulcro component parent chain starting from `this` to find the nearest ancestor whose registry key has an invocation session ID.
+This walks up the Fulcro component parent chain starting from `this` to find the nearest ancestor whose registry key has a running invocation session.
 This means you can call `send-to-self!` from a child component rendered inside a route target — it will find the route target's co-located chart automatically.
 
 ==== Inspecting Child State
@@ -2047,6 +2050,8 @@ The `sroute/busy?` function performs a **deep recursive check**:
 1. For each active route state, it checks if the target component has a `sfro/busy?` predicate or is a dirty Fulcro form.
 2. If the route state has an invoked child chart, it recursively checks the child chart's active states.
 3. If any component at any depth returns busy, the route change is denied.
+
+When the route event is forwarded to an istate that is already active, only the route change in its child chart is checked: the istate's own component stays, so it isn't.
 
 ==== Adding a Busy Predicate
 

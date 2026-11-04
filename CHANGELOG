@@ -1,3 +1,20 @@
+Unreleased
+----------
+
+Fulcro routing fixes:
+
+* A URL restore gives each route state its own params (in the event at `::scr/state-params`): states that declare the
+  same key no longer all get one merged value. The event's top level still has the merged params.
+* `replace-route-params!` updates URL sync's last-written URL, so the next save no longer pushes a duplicate entry.
+* A routing module started for a pending route no longer enters its initial route (and runs its on-entry) first, and
+  a route two istates deep is no longer dropped. `routes` nodes get generated `<id>.initial` and `<id>.pending` states.
+* The busy guard of a route forwarded to an active istate's child chart checks only the route change in that chart,
+  not the istate's own component or the parent's other routes.
+* `send-to-self!` and `current-invocation-configuration` skip the ended session of a route that was left.
+* `istate` no longer throws for a target whose chart is a registry key (`sfro/statechart-id` or `:statechart-id`)
+  without `:route/reachable`; it has no reachable targets.
+* The deprecated `rad-integration` namespace points to `com.fulcrologic/fulcro-rad-statecharts`.
+
 1.1.6
 -----
 

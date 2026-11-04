@@ -236,7 +236,7 @@
       (contains? seen id) nil
       :else
       (let [el      (get elements-by-id id)
-            initial (:initial el)
+            initial (or (::initial-route el) (:initial el))
             target  (cond
                       (keyword? initial) initial
                       (and (vector? initial) (= 1 (count initial))) (first initial)
@@ -312,6 +312,14 @@
       (report-issue! mode warning-key message (dissoc issue :message :warning-key)))
     chart))
 
+(defn- own-route-params
+  "Returns the route params that the route event's `event-data` gives the route state `id`: its own entry when the
+   event is a URL restore's (which carries each state's params at `::state-params`), else `event-data`."
+  [event-data id]
+  (if-let [by-state (::state-params event-data)]
+    (get by-state id {})
+    event-data))
+
 (defn initialize-route!
   "Logic that the statechart will run to initialize the target route component's state in the Fulcro database.
    This is controlled primarily by two options:
@@ -327,7 +335,7 @@
   [{:fulcro/keys [app] :as env} {::keys [target] :as data}]
   (when app
     (let [state-map     (rapp/current-state app)
-          event-data    (get-in data [:_event :data])
+          event-data    (own-route-params (get-in data [:_event :data]) target)
           Target        (rc/registry-key->class target)
           form?         (form? Target)
           report?       (rad-report? Target)
@@ -424,7 +432,7 @@
   (script
     {:expr
      (fn [env _dm _e event-data]
-       (let [actual-params (select-keys (or event-data {}) (or params #{}))]
+       (let [actual-params (select-keys (own-route-params (or event-data {}) id) (or params #{}))]
          [(ops/assign [:routing/parameters id] actual-params)]))}))
 
 (defn rstate
@@ -503,11 +511,14 @@
                                                    "Either require the component namespace or provide explicit :route/reachable.")
                                           {:route/target target-key})))
                                (let [child-chart (rc/component-options cls sfro/statechart)]
-                                 (when (nil? child-chart)
-                                   (throw (ex-info (str "istate: component " target-key " has no sfro/statechart option. "
+                                 (cond
+                                   child-chart (not-empty (reachable-targets child-chart))
+                                   (or statechart-id (rc/component-options cls sfro/statechart-id))
+                                   (log/debug "istate: the chart of" target-key "is a registry key, so it has no reachable routes")
+                                   :else
+                                   (throw (ex-info (str "istate: component " target-key " has no sfro/statechart or sfro/statechart-id option. "
                                                      "Either co-locate the chart on the component or provide explicit :route/reachable.")
-                                            {:route/target target-key})))
-                                 (not-empty (reachable-targets child-chart)))))
+                                            {:route/target target-key}))))))
         reachable-map?     (and reachable-input (map? reachable-input))
         reachable          (cond
                              (nil? reachable-input) nil
@@ -629,9 +640,27 @@
                         (deep-busy? app registry state-map child-session-id seen)))))
             configuration))))))
 
+(defn- route-change-busy?
+  "Like `deep-busy?`, for the event `event-name`. When the session forwards that route event to the child chart of an
+   active istate (see `routes`), only the route change there is checked: the istate, and the rest of this session,
+   stay active."
+  [app registry state-map session-id event-name seen]
+  (let [{::sc/keys [configuration statechart-src]} (get-in state-map [::sc/session-id session-id])
+        elements-by-id (some->> statechart-src (scp/get-statechart registry) ::sc/elements-by-id)
+        owner          (some (fn [state-id]
+                               (when (some #(and (= event-name (route-to-event-name %)) (not (contains? elements-by-id %)))
+                                       (get-in elements-by-id [state-id :route/reachable]))
+                                 state-id))
+                         configuration)
+        child          (when owner (get-in state-map (scf/local-data-path session-id :invocation/id owner)))]
+    (if (and child (not (contains? seen session-id)))
+      (route-change-busy? app registry state-map child event-name (conj seen session-id))
+      (deep-busy? app registry state-map session-id seen))))
+
 (defn busy?
   "Returns true if any active route state is busy (dirty form, etc.) at any depth
-   in the invocation tree. Used as the sole guard condition on route transitions."
+   in the invocation tree. For a route event that is forwarded to an active istate's child chart, only the route
+   change in that chart is checked. Used as the sole guard condition on route transitions."
   [{:fulcro/keys [app] :as env} {:keys [_event] :as data} & args]
   (if-not app
     false
@@ -640,7 +669,7 @@
       (let [registry  (::sc/statechart-registry env)
             state-map (rapp/current-state app)
             session   (senv/session-id env)]
-        (boolean (deep-busy? app registry state-map session #{}))))))
+        (boolean (route-change-busy? app registry state-map session (:name _event) #{}))))))
 
 (defn record-failed-route!
   "Stores the failed route event so it can be retried via force-continue-routing!."
@@ -693,6 +722,10 @@
    Also generates cross-chart transitions for targets declared in `:route/reachable` sets
    on `istate` children. These transitions target the declaring `istate` and store a
    `::pending-child-route` in the data model so the child chart can self-route on startup.
+
+   The routes node starts in a generated transient state (`<id>.initial`). When the node raises a pending child
+   route on entry, that state waits (in `<id>.pending`) for the route instead of entering the initial route first.
+   A routes node with an explicit `initial` element child gets neither.
 
    The :routing/root must be a component with a constant ident (or the app root itself),
    and a query."
@@ -748,8 +781,21 @@
                                                             :event             (route-to-event-name reachable-target)
                                                             :data              (or event-data {})})))
                                                      nil)}))]))
-                             reachable-only)]
-    (apply state props
+                             reachable-only)
+        initial-route      (or (:initial props)
+                             (some #(when (#{:state :parallel :final} (:node-type %)) (:id %)) route-states))
+        initial-states     (when (and (keyword? id) initial-route (not-any? :initial? route-states))
+                             (let [initial-id (keyword (namespace id) (str (name id) ".initial"))
+                                   pending-id (keyword (namespace id) (str (name id) ".pending"))]
+                               [(state {:id initial-id ::initial-route initial-route}
+                                  (transition {:cond   (fn [_env data & _] (get-in data [::raised-pending-route id]))
+                                               :target pending-id}
+                                    (script-fn [& _] [(ops/assign [::raised-pending-route id] nil)]))
+                                  (transition {:target initial-route}))
+                                (state {:id pending-id}
+                                  ;; The pending route went to no route of this node
+                                  (transition {:event ::pending-route-done :target initial-route}))]))]
+    (apply state (cond-> props initial-states (assoc :initial (:id (first initial-states))))
       (remove nil?
         (concat
           [(on-entry {}
@@ -769,17 +815,19 @@
                                                     :else nil)]
                                 (when pending-route
                                   (log/debug "Routes received pending child route, raising" (:event pending-route))
-                                  (senv/raise env (:event pending-route) (or (:data pending-route) {})))
+                                  (senv/raise env (:event pending-route) (or (:data pending-route) {}))
+                                  (senv/raise env ::pending-route-done {}))
                                 ;; Clear pending-child-route after use
                                 (cond-> assign-ops
-                                  pending-route (conj (ops/assign ::pending-child-route nil)))))}))]
+                                  pending-route (conj (ops/assign ::pending-child-route nil [::raised-pending-route id] true)))))}))]
           [(transition {:event :route-to.*
                         :cond  busy?}
              (script {:expr record-failed-route!})
              (ele/raise {:event :event.routing-info/show}))]
           direct-transitions
           cross-transitions
-          route-states)))))
+          route-states
+          initial-states)))))
 
 (defn routing-regions
   "Wraps the routes in a parallel state that includes management of the (optionally modal)
@@ -935,7 +983,9 @@
   (loop [c this]
     (when c
       (let [key (rc/class->registry-key (rc/component-type c))
-            sid (get-in state-map [::sc/local-data session-id :invocation/id key])]
+            sid (get-in state-map [::sc/local-data session-id :invocation/id key])
+            ;; A left route keeps its `:invocation/id` entry: only a running session counts
+            sid (when (seq (get-in state-map [::sc/session-id sid ::sc/configuration])) sid)]
         (if sid
           sid
           (recur (rc/isoget-in c [:props :fulcro$parent])))))))
@@ -1056,7 +1106,9 @@
               new-url  (ruc/deep-configuration->url
                          (rapp/current-state app) registry session-id scf/local-data-path codec)]
           (when new-url
-            (ruh/-replace-url! provider new-url)))))))
+            (ruh/-replace-url! provider new-url)
+            ;; So that URL sync's next save compares against the URL now in the browser
+            (some-> (get-in (url-sync-state app) [:prev-urls session-id]) (reset! new-url))))))))
 
 (defn- find-root-session
   "Walks the `::sc/parent-session-id` chain in `state-map` to find a registered root session.
@@ -1120,7 +1172,7 @@
                            (reduce-kv (fn [acc _state-id state-params]
                                         (merge acc state-params))
                              {} params))]
-        (route-to! app leaf-id (or route-params {}))
+        (route-to! app leaf-id (cond-> (or route-params {}) params (assoc ::state-params params)))
         leaf-id)
       ;; Codec didn't match directly — try reachable targets via deep search
       ;; (needed for cross-chart :route/reachable targets not in this chart's elements)
@@ -1133,7 +1185,8 @@
         (when leaf-name
           (when-let [{:keys [target-key child?]} (ruh/find-target-by-leaf-name-deep elements-by-id leaf-name)]
             (when child?
-              (route-to! app target-key (or route-params {}))
+              (route-to! app target-key
+                (cond-> (or route-params {}) (:params decoded) (assoc ::state-params (:params decoded))))
               target-key)))))))
 
 (defn install-url-sync!
@@ -1344,6 +1397,7 @@
     ;; Register the on-save handler, provider, and codec in the app's runtime atom
     (swap-url-sync! app update :handlers assoc session-id on-save-handler)
     (swap-url-sync! app update :providers assoc session-id provider)
+    (swap-url-sync! app update :prev-urls assoc session-id prev-url)
     (when url-codec
       (swap-url-sync! app update :codecs assoc session-id url-codec))
 
@@ -1357,6 +1411,7 @@
     (fn url-sync-cleanup! []
       (swap-url-sync! app update :handlers dissoc session-id)
       (swap-url-sync! app update :providers dissoc session-id)
+      (swap-url-sync! app update :prev-urls dissoc session-id)
       (swap-url-sync! app update :codecs dissoc session-id)
       ;; Clear any child→root cache entries pointing to this root
       (swap-url-sync! app update :child-to-root
