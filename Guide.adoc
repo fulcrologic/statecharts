@@ -1103,6 +1103,10 @@ The chart transitions atomically — it never observably rests in a "loading" st
 The point is to make async operations "park" (effectively block) the statechart execution until the promise is fulfilled or rejected.
 This allows you to write statecharts that do not need so many intermediate states for tracking if a promise is fulfilled.
 
+While a step is parked, its session processes no other events: they wait in the queue, in order, and are processed once the step's result is saved.
+Other sessions keep running.
+A step may stay parked as long as its promise takes, so a promise that never settles leaves its session's events waiting, and a step that awaits an event to its own session never finishes.
+
 To enable async operations, pass `:async? true` when installing statecharts:
 
 [source]

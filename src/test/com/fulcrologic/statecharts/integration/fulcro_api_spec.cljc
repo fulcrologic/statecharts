@@ -5,6 +5,7 @@
    - actor resolution
    - alias resolution
    - current-configuration"
+  (:refer-clojure :exclude [send])
   (:require
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
@@ -12,8 +13,9 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
-    [com.fulcrologic.statecharts.elements :refer [on-entry script state transition final]]
+    [com.fulcrologic.statecharts.elements :refer [on-entry script send state transition final]]
     [com.fulcrologic.statecharts.integration.fulcro :as scf]
+    [com.fulcrologic.statecharts.promise :as p]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.util :refer [new-uuid]]
     [fulcro-spec.core :refer [=> assertions behavior component specification]]))
@@ -452,3 +454,98 @@
         "on-delete callback can be provided"
         (some? (scf/install-fulcro-statecharts! app {:on-delete    (fn [_] :ok)
                                                       :event-loop? false})) => true))))
+
+(defn- new-app
+  "Returns a Fulcro app with statecharts installed with `options`, and `charts` (a map from key to chart) registered."
+  [options charts]
+  (let [app (app/fulcro-app)]
+    (scf/install-fulcro-statecharts! app options)
+    (doseq [[k chart] charts] (scf/register-statechart! app k chart))
+    app))
+
+(specification "start! with :immediate processing, of a chart whose initial entry sends its session an event"
+  (let [chart (chart/statechart {:initial :a}
+                (state {:id :a}
+                  (on-entry {} (send {:event :ping}))
+                  (transition {:event :ping :target :b}))
+                (state {:id :b}))
+        a     (new-app {:event-loop? :immediate} {::pinging chart})]
+    (scf/start! a {:machine ::pinging :session-id :s})
+    (assertions
+      "processes that event once the start is saved"
+      (scf/current-configuration a :s) => #{:b})))
+
+(specification "send! with :immediate processing while a delayed event is pending"
+  (let [chart  (chart/statechart {:initial :a}
+                 (state {:id :a}
+                   (on-entry {} (send {:event :later :delay 60000}))
+                   (transition {:event :next :target :b}))
+                 (state {:id :b}))
+        a      (new-app {:event-loop? :immediate} {::delayed chart})
+        rounds (atom 0)
+        run    scf/process-events!]
+    (scf/start! a {:machine ::delayed :session-id :s})
+    (with-redefs [scf/process-events! (fn [app] (swap! rounds inc) (run app))]
+      (scf/send! a :s :next))
+    (assertions
+      "processes the sent event"
+      (scf/current-configuration a :s) => #{:b}
+      "in one round: the delayed event, not due yet, ends the processing"
+      @rounds => 1)))
+
+(specification "A session started with start! that reaches a final state"
+  (let [chart   (chart/statechart {:initial :a}
+                  (state {:id :a}
+                    (on-entry {} (script {:expr (fn [& _] [(ops/assign :x 1)])}))
+                    (transition {:event :finish :target :end}))
+                  (final {:id :end}))
+        a       (new-app {:event-loop? :immediate} {::finishing chart})
+        _       (scf/start! a {:machine ::finishing :session-id :s})
+        running (app/current-state a)]
+    (scf/send! a :s :finish)
+    (assertions
+      "has its working memory and local data in app state while it runs"
+      (some? (get-in running [::sc/session-id :s])) => true
+      (get-in running [::sc/local-data :s :x]) => 1
+      "and both are removed once it is done"
+      (get-in (app/current-state a) [::sc/session-id :s]) => nil
+      (get-in (app/current-state a) [::sc/local-data :s]) => nil)))
+
+#?(:clj
+   (defn- await-config!
+     "Waits (up to 2 s) until the configuration of session `session-id` is `config`."
+     [app session-id config]
+     (let [deadline (+ (System/currentTimeMillis) 2000)]
+       (while (and (not= config (scf/current-configuration app session-id))
+                (< (System/currentTimeMillis) deadline))
+         (Thread/sleep 1)))))
+
+#?(:clj
+   (specification "Events for a session whose :async? step is parked"
+     (let [settle! (atom nil)
+           parking (chart/statechart {:initial :idle}
+                     (state {:id :idle}
+                       (transition {:event :go :target :working}
+                         (script {:expr (fn [& _] (p/create (fn [resolve _] (reset! settle! resolve))))})))
+                     (state {:id :working}
+                       (transition {:event :next :target :done}))
+                     (state {:id :done}))
+           other   (chart/statechart {:initial :a}
+                     (state {:id :a} (transition {:event :next :target :b}))
+                     (state {:id :b}))
+           a       (new-app {:event-loop? false :async? true} {::parking parking ::other other})]
+       (scf/start! a {:machine ::parking :session-id :s1})
+       (scf/start! a {:machine ::other :session-id :s2})
+       (scf/send! a :s1 :go)
+       (scf/send! a :s1 :next)
+       (scf/send! a :s2 :next)
+       (scf/process-events! a)
+       (assertions
+         "keep other sessions' events running"
+         (scf/current-configuration a :s2) => #{:b})
+       (@settle! nil)
+       (await-config! a :s1 #{:working})
+       (scf/process-events! a)
+       (assertions
+         "wait in the queue until the step's result is saved, then run"
+         (scf/current-configuration a :s1) => #{:done}))))

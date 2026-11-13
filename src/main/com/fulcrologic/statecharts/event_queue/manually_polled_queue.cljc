@@ -70,23 +70,21 @@
     ;; Run the events whose delivery time is before "now" for all sessions registered
     (doseq [sid (keys @session-queues)]
       (sp/receive-events! this env handler {:session-id sid})))
-  (receive-events! [this env handler {:keys [session-id]}]
-    ;; Run the events whose delivery time is before "now" for session-id
+  (receive-events! [this env handler {:keys [session-id] ::keys [session-busy?] :as options}]
+    ;; Run the events whose delivery time is before "now" for session-id. Each event leaves the queue just before its
+    ;; handler runs, and none does while `(session-busy? session-id)` is true: those stay queued, in order.
     (if (nil? session-id)
       (doseq [sid (keys @session-queues)]
-        (sp/receive-events! this env handler {:session-id sid}))
+        (sp/receive-events! this env handler (assoc options :session-id sid)))
       (let [cutoff  (now-ms)
-            [old _] (swap-vals! session-queues
-                      (fn [qs]
-                        (let [to-defer (into []
-                                         (remove
-                                           (fn [evt] (<= (::delivery-time (meta evt)) cutoff))
-                                           (get qs session-id)))]
-                          (assoc qs session-id to-defer))))
-            to-send (filter
+            to-send (filterv
                       (fn [evt] (<= (::delivery-time (meta evt)) cutoff))
-                      (get old session-id))]
-        (doseq [event to-send]
+                      (get @session-queues session-id))]
+        (doseq [event to-send
+                :while (not (and session-busy? (session-busy? session-id)))
+                :let [[old _] (swap-vals! session-queues update session-id
+                                (fn [q] (into [] (remove #(identical? event %)) q)))]
+                :when (some #(identical? event %) (get old session-id))]
           (try
             (handler env event)
             ;; W3C SCXML: event handler errors must not crash the event loop.

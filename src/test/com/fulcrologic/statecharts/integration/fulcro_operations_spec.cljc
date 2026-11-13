@@ -6,8 +6,10 @@
    - fop/apply-action
    - fop/set-actor"
   (:require
+    [com.fulcrologic.fulcro.algorithms.tx-processing.synchronous-tx-processing :as stx]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.mutations :refer [defmutation]]
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
@@ -121,6 +123,30 @@
         (assertions
           "all args are collected"
           (get-in @state-atom [:collected/args]) => ["a" "b" "c"])))))
+
+(defmutation start-ordering-chart
+  "Starts the chart `::ordering` from inside this mutation, so its initial entry runs inside a transaction."
+  [_]
+  (action [{:keys [app]}]
+    (scf/start! app {:machine ::ordering :session-id :s})))
+
+(specification "An apply-action op, run inside a transaction with synchronous tx processing"
+  (let [chart (chart/statechart {:initial :running}
+                (state {:id :running}
+                  (on-entry {}
+                    (script {:expr (fn [& _] [(fop/apply-action assoc :x 1 :y 1)
+                                              (ops/assign [:fulcro/state :y] 2)])})
+                    (script {:expr (fn [_ {:fulcro/keys [state-map]} & _]
+                                     [(ops/assign :seen-x (:x state-map))])}))))
+        a     (stx/with-synchronous-transactions (app/fulcro-app))]
+    (scf/install-fulcro-statecharts! a {:event-loop? false})
+    (scf/register-statechart! a ::ordering chart)
+    (comp/transact! a [(start-ordering-chart {})])
+    (assertions
+      "lands before the expression's later ops"
+      (:y (app/current-state a)) => 2
+      "and before the next expression runs"
+      (get-in (app/current-state a) (scf/local-data-path :s :seen-x)) => 1)))
 
 (specification {:covers {`fop/set-actor "PLACEHOLDER"}} "set-actor"
   (let [app        (test-app)
