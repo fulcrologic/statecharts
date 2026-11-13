@@ -437,10 +437,10 @@
         (fn [sent?]
           (when-not sent?
             (raise env (evts/new-event {:name :error.execution
-                                        :data {:type :send :element element}}))
+                                        :data {:type :send :element (:id element)}}))
             ;; W3C §4.4: in strict mode, abort the surrounding block.
             (when (::sc/errors-abort-siblings? env)
-              (throw (ex-info "send dispatch failed" {:type :send :element element})))))))))
+              (throw (ex-info "send dispatch failed" {:type :send :element (:id element)})))))))))
 
 (defmethod execute-element-content! :cancel [{::sc/keys [event-queue] :as env}
                                              {:keys [sendid sendidexpr] :as element}]
@@ -522,7 +522,7 @@
           (do
             (raise env (evts/new-event {:name :error.execution
                                         :data {:type :foreach :reason :not-iterable
-                                               :array coll :element element}}))
+                                               :array coll :element (:id element)}}))
             (when strict?
               (throw (ex-info "foreach over non-iterable" {:type :foreach :array coll}))))
 
@@ -563,7 +563,7 @@
         strict?            (::sc/errors-abort-siblings? env)
         handle-err (fn [n t]
                      (raise env (evts/new-event {:name :error.execution
-                                                 :data {:element s :node n :exception t}}))
+                                                 :data {:element (chart/element-id statechart s) :node n :exception t}}))
                      (log/error t "Unexpected exception in content")
                      (if strict? ::abort nil))]
     (do-sequence children

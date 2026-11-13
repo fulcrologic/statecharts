@@ -347,10 +347,10 @@
     (log/debug "Send event" element)
     (when-not (send! env element)
       (raise env (evts/new-event {:name :error.execution
-                                  :data {:type :send :element element}}))
+                                  :data {:type :send :element (:id element)}}))
       ;; W3C §4.4: in strict mode, the rest of the surrounding block must be skipped.
       (when (::sc/errors-abort-siblings? env)
-        (throw (ex-info "send dispatch failed" {:type :send :element element}))))))
+        (throw (ex-info "send dispatch failed" {:type :send :element (:id element)}))))))
 
 (defmethod execute-element-content! :cancel [{::sc/keys [event-queue] :as env}
                                              {:keys [sendid sendidexpr] :as element}]
@@ -420,7 +420,7 @@
       (do
         (raise env (evts/new-event {:name :error.execution
                                     :data {:type :foreach :reason :not-iterable
-                                           :array coll :element element}}))
+                                           :array coll :element (:id element)}}))
         ;; W3C §4.4: in strict mode, abort the surrounding block.
         (when strict?
           (throw (ex-info "foreach over non-iterable" {:type :foreach :array coll}))))
@@ -469,7 +469,7 @@
                          ;; W3C SCXML §4.4: executable content errors must not crash the machine.
                          (catch #?(:clj Throwable :cljs :default) t
                            (raise env (evts/new-event {:name :error.execution
-                                                       :data {:element s :node n :exception t}}))
+                                                       :data {:element (chart/element-id statechart s) :node n :exception t}}))
                            (log/error t "Unexpected exception in content")
                            strict?))]
           (when-not aborted? (recur (next remaining)))))))

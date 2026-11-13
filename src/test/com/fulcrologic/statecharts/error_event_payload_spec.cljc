@@ -7,7 +7,7 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.data-model.working-memory-data-model :as wmdm]
-    [com.fulcrologic.statecharts.elements :refer [on-entry script state transition]]
+    [com.fulcrologic.statecharts.elements :as ele :refer [foreach on-entry script state transition]]
     [com.fulcrologic.statecharts.promise :as p]
     [com.fulcrologic.statecharts.protocols :as sp]
     [com.fulcrologic.statecharts.simple :as simple]
@@ -55,3 +55,46 @@
           (contains-fn? wmem) => false
           "still carries the exception"
           (ex-message (get-in event [:data :error])) => "boom")))))
+
+(defn- chart-with-failing-elements
+  "A chart whose separate on-entry blocks each fail differently. Every error.execution payload is conj'd onto
+   the `captured` atom."
+  [captured]
+  (chart/statechart {:initial :s0}
+    (state {:id :s0}
+      (on-entry {}
+        (ele/send {:id :bad-send :event :x :type :unsupported/type :content (fn [_ _] {:a 1})}))
+      (on-entry {}
+        (foreach {:id :bad-foreach :array (fn [_ _] 42) :item [:i]}
+          (script {:expr (fn [_ _] nil)})))
+      (on-entry {:id :throwing-block}
+        (script {:expr (fn [_ _] (throw (ex-info "boom" {})))}))
+      (transition {:event :error.execution}
+        (script {:expr (fn [_ {:keys [_event]}] (swap! captured conj (:data _event)) nil)})))))
+
+(defn- payload-values
+  "Returns `payload` plus the `ex-data` of any exception it carries, since serializers freeze `ex-data` too."
+  [payload]
+  (into [payload] (keep ex-data) [(:error payload) (:exception payload)]))
+
+(specification "error.execution payloads for failing elements"
+  (doseq [[label env-fn register! start!] [["sync" simple/simple-env simple/register! simple/start!]
+                                           ["async" simple-async/simple-env simple-async/register! simple-async/start!]]
+          strict? [false true]]
+    (let [captured (atom [])
+          env      (assoc (env-fn) ::sc/errors-abort-siblings? strict?)
+          result   (do
+                     (register! env ::chart (chart-with-failing-elements captured))
+                     (start! env ::chart ::session))
+          _        #?(:clj (when (p/promise? result) @result) :cljs nil)
+          payloads @captured]
+      (behavior (str label " processor, strict? " strict?)
+        (assertions
+          "reports the failed send by element id"
+          (some #(when (= :send (:type %)) (:element %)) payloads) => :bad-send
+          "reports the non-iterable foreach by element id"
+          (some #(when (= :foreach (:type %)) (:element %)) payloads) => :bad-foreach
+          "never puts an element map in :element"
+          (some (comp map? :element) payloads) => nil
+          "contains no functions, including in exception ex-data"
+          (contains-fn? (into [] (mapcat payload-values) payloads)) => false)))))
