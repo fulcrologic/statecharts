@@ -11,7 +11,7 @@
                                                    on-entry raise foreach
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-150
   (chart/statechart {:initial :_root}
@@ -38,7 +38,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 150 — foreach writes to declared and undeclared item variables"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-150 []) => true))
+(runner/async-specification "IRP test 150 — foreach writes to declared and undeclared item variables"
+  "reaches pass"
+  (runner/passes? chart-150 []) => true)

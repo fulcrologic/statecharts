@@ -14,7 +14,7 @@
                                                    on-entry Send
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-354
   (chart/statechart {:initial :_root}
@@ -45,7 +45,6 @@
 
 (def events [])
 
-(specification "IRP test 354 — send event.data via namelist+content and content-only"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-354 events) => true))
+(runner/async-specification "IRP test 354 — send event.data via namelist+content and content-only"
+  "reaches pass"
+  (runner/passes? chart-354 events) => true)

@@ -135,6 +135,17 @@
   [env sid]
   (assoc env ::sc/vwmem (volatile! {::sc/session-id sid})))
 
+(defn- live-child?
+  "True if statechart child session `sid` can still process events: it has working memory that is not stopped. A child
+   that reached a final state is no longer running (or its working memory is gone). Children of other types are always
+   considered live."
+  [env child-type sid]
+  (let [store (::sc/working-memory-store env)]
+    (or (not (#{::sc/chart :statechart} child-type))
+        (nil? store)
+        (let [wmem (sp/get-working-memory store env sid)]
+          (and (some? wmem) (not (false? (::sc/running? wmem))))))))
+
 (defn- send-to-child!
   "Forward an event to the given child session via the env's event
    queue. Preserves event data; sender is recorded as `source` so
@@ -288,7 +299,8 @@
           true))))
 
   (forward-event! [_ env {:keys [invokeid event]}]
-    (let [{:keys [children]} (get @state invokeid)
+    (let [{:keys [children child-type]} (get @state invokeid)
+          live?              (partial live-child? env child-type)
           source             (env/session-id env)
           data               (or (:data event) {})
           target-mux         (get data mo/target-mux)]
@@ -306,14 +318,16 @@
                                 (assoc mo/from {:sid source}))
               forwarded     (assoc event :data stripped-data)
               send!         (fn [sid] (send-to-child! env source sid forwarded))]
+          ;; Only live children receive events (W3C: autoforward goes to active invocations). Without this, events
+          ;; forwarded after a child finished (e.g. sibling done events) were sent to sessions that no longer exist.
           (cond
-            (= to :all)      (run! send! children)
-            (= to :any)      (when (seq children) (send! (first children)))
+            (= to :all)      (run! send! (filterv live? children))
+            (= to :any)      (some-> (first (filter live? children)) send!)
             (and (map? to)
                  (integer? (:idx to))
                  (<= 0 (:idx to)))
                              (when-let [sid (nth children (:idx to) nil)]
-                               (send! sid))
+                               (when (live? sid) (send! sid)))
             :else            (log/warn "multiplex/forward-event!: unrecognized mo/to value" to))
           true)))))
 

@@ -11,7 +11,7 @@
                                                    on-entry on-exit assign
                                                    data-model initial]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-372
   (chart/statechart {:initial :_root}
@@ -29,7 +29,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 372 — done.state.<id> fires after final's onentry, before its onexit"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-372 []) => true))
+(runner/async-specification "IRP test 372 — done.state.<id> fires after final's onentry, before its onexit"
+  "reaches pass"
+  (runner/passes? chart-372 []) => true)

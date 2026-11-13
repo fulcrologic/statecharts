@@ -11,7 +11,7 @@
     [com.fulcrologic.statecharts.elements :refer [state parallel final transition
                                                    on-exit raise]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-404
   (chart/statechart {:initial :_root}
@@ -45,7 +45,6 @@
 
 (def events [])
 
-(specification "IRP test 404 — exit order: children before parents, reverse doc order"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-404 events) => true))
+(runner/async-specification "IRP test 404 — exit order: children before parents, reverse doc order"
+  "reaches pass"
+  (runner/passes? chart-404 events) => true)

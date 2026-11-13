@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry If raise Send In]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-411
   (chart/statechart {:initial :_root}
@@ -34,7 +34,6 @@
 
 (def events [])
 
-(specification "IRP test 411 — states added to config before on-entry fires"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-411 events) => true))
+(runner/async-specification "IRP test 411 — states added to config before on-entry fires"
+  "reaches pass"
+  (runner/passes? chart-411 events) => true)

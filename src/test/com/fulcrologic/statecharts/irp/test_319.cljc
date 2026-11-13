@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry raise If else]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-319
   (chart/statechart {:initial :_root}
@@ -26,7 +26,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 319 — _event is unbound (nil) before first event"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-319 []) => true))
+(runner/async-specification "IRP test 319 — _event is unbound (nil) before first event"
+  "reaches pass"
+  (runner/passes? chart-319 []) => true)

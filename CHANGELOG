@@ -1,3 +1,52 @@
+1.4.0
+-----
+
+Migration notes:
+
+* The new routing system developed during the 1.4.0 RCs (`integration.fulcro.routing`, `routing-options`, `routing.*`)
+  now lives in com.fulcrologic/fulcro-statechart-routing, with the same namespaces. Add that dependency to keep using it.
+  The legacy `ui-routes`, `ui-routes-options`, `route-url`, `route-history`, and `rad-integration` namespaces remain
+  but are deprecated.
+* funcool/promesa is no longer a dependency. An internal promise shim uses promesa when it is on the classpath
+  (>= 10.0.570 required; older versions fail fast with a clear error) and a native implementation otherwise. CLJS always
+  uses js/Promise. Taoensso encore is no longer used.
+* Errors in executable content queue `error.execution` on the internal queue (was external), per W3C.
+* Event name matching is token based (`/` is also a separator); it previously matched substrings.
+* Raised events (`<raise>`, `env/raise`, `<send>` to `:_internal`) have `:type :internal`.
+* `<finalize>` runs before transition selection, so guards see its data model changes.
+
+New:
+
+* Strict mode (`simple/strict-env` or `::sc/errors-abort-siblings?`): an executable content error aborts the rest
+  of its block (W3C §4.4).
+* Multiplex invocation processor (`invocation.multiplex*`) for dynamic fan-out to N child invocations.
+* Babashka support.
+* `install-fulcro-statecharts!` accepts `:event-loop? :immediate` (CLJ) to process events synchronously in `send!`.
+* `<raise>` supports `:data`. Event `:data` may be any value; non-map `<send>` content becomes the whole event data.
+* `<send>` `:target` accepts keyword forms (`:_internal`, `:_parent`, session ids).
+* `_event.origin` / `_event.origintype` are populated; compound states with only `<final>` children get an initial
+  transition.
+* Visualization: simulator and diagram labels.
+* Testing utilities support exploded (4-arg) expressions. History elements are validated; eventless loops are capped.
+
+Bug fixes:
+
+* CLJS: top-level `letfn` in the sync and async processors compiled to shared global vars, so the async processor
+  could run the sync `send!` (promise-valued `eventexpr`/`typeexpr`/`delayexpr` were not awaited).
+* Async processor parity with sync: system variables, `<foreach>` strict abort, errors in promise callbacks.
+* Strict mode queued two `error.execution` events per failure; now one.
+* `<invoke>` argument errors (`:params`, `namelist`, `srcexpr`, `typeexpr`) escaped the processor; the invocation is
+  now cancelled and `error.execution` queued (W3C §6.4).
+* `:finalize` on `<invoke>` (PR #35).
+* `error.execution` payloads are serializable (element ids, no expression fns).
+* Multiplex no longer forwards events to children that have finished. "Session had no working memory" is now a debug log.
+
+Other:
+
+* The W3C IRP conformance suite runs in CI on CLJ and CLJS, under the sync processor, the async processor, and
+  promise-returning expressions. CI moved to GitHub Actions; JS deps use locked-down pnpm.
+* Dependencies: clojure 1.12.6, guardrails 1.3.2.
+
 1.1.6
 -----
 

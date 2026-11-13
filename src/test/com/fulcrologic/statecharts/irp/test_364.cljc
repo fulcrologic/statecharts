@@ -12,7 +12,7 @@
     [com.fulcrologic.statecharts.elements :refer [state parallel final transition
                                                    initial on-entry raise Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-364
   (chart/statechart {:initial :_root}
@@ -61,7 +61,6 @@
 
 (def events [])
 
-(specification "IRP test 364 — initial attribute, initial element, and first-child default"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-364 events) => true))
+(runner/async-specification "IRP test 364 — initial attribute, initial element, and first-child default"
+  "reaches pass"
+  (runner/passes? chart-364 events) => true)

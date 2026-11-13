@@ -6,7 +6,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition done-data]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-529
   (chart/statechart {:initial :_root}
@@ -25,7 +25,6 @@
 
 (def events [])
 
-(specification "IRP test 529 — literal content in donedata sets event.data"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-529 events) => true))
+(runner/async-specification "IRP test 529 — literal content in donedata sets event.data"
+  "reaches pass"
+  (runner/passes? chart-529 events) => true)

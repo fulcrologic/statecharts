@@ -11,7 +11,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-194
   (chart/statechart {:initial :_root}
@@ -27,7 +27,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 194 — illegal send target raises error.execution"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-194 []) => true))
+(runner/async-specification "IRP test 194 — illegal send target raises error.execution"
+  "reaches pass"
+  (runner/passes? chart-194 []) => true)

@@ -8,7 +8,7 @@
                                                    on-entry on-exit assign raise
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (defn- inc-var [k]
   (assign {:location [k] :expr (fn [_ d] (inc (get d k 0)))}))
@@ -51,7 +51,6 @@
 
 (def events [])
 
-(specification "IRP test 504 — external transition exits all states to LCCA"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-504 events) => true))
+(runner/async-specification "IRP test 504 — external transition exits all states to LCCA"
+  "reaches pass"
+  (runner/passes? chart-504 events) => true)

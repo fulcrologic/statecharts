@@ -14,7 +14,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-344
   (chart/statechart {:initial :_root}
@@ -31,7 +31,6 @@
 
 (def events [])
 
-(specification "IRP test 344 — non-boolean cond raises error.execution"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-344 events) => true))
+(runner/async-specification "IRP test 344 — non-boolean cond raises error.execution"
+  "reaches pass"
+  (runner/passes? chart-344 events) => true)

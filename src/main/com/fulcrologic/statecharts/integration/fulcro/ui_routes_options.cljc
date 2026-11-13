@@ -1,5 +1,6 @@
 (ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.ui-routes-options
-  "DEPRECATED. Use routing package instead.")
+  "DEPRECATED. Use the com.fulcrologic/fulcro-statechart-routing library instead
+   (https://github.com/fulcrologic/fulcro-statechart-routing).")
 
 (def initialize
   "Component option. One of :once, :always, or :never. Indicates when the ui routing entry

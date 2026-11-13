@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry raise Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-423
   (chart/statechart {:initial :_root}
@@ -28,7 +28,6 @@
 
 (def events [])
 
-(specification "IRP test 423 — unmatched events discarded; processor pulls until match"
-  (assertions
-    "reaches pass"
-    (runner/passes-with-delays? chart-423 events) => true))
+(runner/async-specification "IRP test 423 — unmatched events discarded; processor pulls until match"
+  "reaches pass"
+  (runner/passes-with-delays? chart-423 events) => true)

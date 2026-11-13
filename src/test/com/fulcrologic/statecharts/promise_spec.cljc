@@ -30,7 +30,7 @@
     [com.fulcrologic.statecharts.promise :as p]
     [fulcro-spec.core :refer [=> assertions specification]]
     #?@(:clj  [[promesa.core :as pp]]
-        :cljs [[cljs.test :refer-macros [async]]
+        :cljs [[cljs.test :refer-macros [async deftest]]
                [promesa.core :as pp]])))
 
 ;; ============================================================================
@@ -483,8 +483,12 @@
        (p/promise? nil) => false
        (p/promise? "x") => false)))
 
+;; CLJS async tests are plain `deftest`s: fulcro-spec's `specification` discards its body's value, so an `async`
+;; body inside it never runs and the test passes without asserting anything.
+
 #?(:cljs
-   (specification "cljs: then chain resolves to expected value"
+   ;; cljs: then chain resolves to expected value
+   (deftest cljs-then-chain-resolves-to-expected-value
      (async done
        (-> (p/then (p/resolved 1) inc)
          (p/then (fn [v]
@@ -494,7 +498,8 @@
                    (done)))))))
 
 #?(:cljs
-   (specification "cljs: then flattens when callback returns a promise"
+   ;; cljs: then flattens when callback returns a promise
+   (deftest cljs-then-flattens-when-callback-returns-a-promise
      (async done
        (-> (p/then (p/resolved 5) (fn [v] (p/resolved (* v 10))))
          (p/then (fn [v]
@@ -504,7 +509,8 @@
                    (done)))))))
 
 #?(:cljs
-   (specification "cljs: rejected + catch recovers"
+   ;; cljs: rejected + catch recovers
+   (deftest cljs-rejected-catch-recovers
      (async done
        (-> (p/catch (p/rejected (ex-info "boom" {:k 1}))
              (fn [e] (ex-data e)))
@@ -515,7 +521,8 @@
                    (done)))))))
 
 #?(:cljs
-   (specification "cljs: rejection skips intermediate then handlers"
+   ;; cljs: rejection skips intermediate then handlers
+   (deftest cljs-rejection-skips-intermediate-then-handlers
      (async done
        (-> (p/then (p/rejected (ex-info "fail" {:tag 9})) (fn [_] :should-not-run))
          (p/catch (fn [e]
@@ -525,7 +532,8 @@
                     (done)))))))
 
 #?(:cljs
-   (specification "cljs: create + resolve"
+   ;; cljs: create + resolve
+   (deftest cljs-create-resolve
      (async done
        (-> (p/create (fn [resolve _] (resolve :ok)))
          (p/then (fn [v]
@@ -535,7 +543,8 @@
                    (done)))))))
 
 #?(:cljs
-   (specification "cljs: create + reject"
+   ;; cljs: create + reject
+   (deftest cljs-create-reject
      (async done
        (-> (p/create (fn [_ reject] (reject (ex-info "no" {:rc 2}))))
          (p/catch (fn [e]
@@ -545,7 +554,8 @@
                     (done)))))))
 
 #?(:cljs
-   (specification "cljs: let macro: sequential binding"
+   ;; cljs: let macro: sequential binding
+   (deftest cljs-let-macro-sequential-binding
      (async done
        (-> (p/let [a (p/resolved 1)
                    b (p/resolved 2)
@@ -558,7 +568,8 @@
                    (done)))))))
 
 #?(:cljs
-   (specification "cljs: let macro: rejection short-circuits"
+   ;; cljs: let macro: rejection short-circuits
+   (deftest cljs-let-macro-rejection-short-circuits
      (async done
        (let [side-effect (atom :not-touched)]
          (-> (p/let [a (p/resolved 1)
@@ -574,7 +585,8 @@
                       (done))))))))
 
 #?(:cljs
-   (specification "cljs: do! captures sync throws as rejections"
+   ;; cljs: do! captures sync throws as rejections
+   (deftest cljs-do-captures-sync-throws-as-rejections
      (async done
        (-> (p/do! (throw (ex-info "thrown" {:tag :throw})))
          (p/catch (fn [e]
@@ -584,7 +596,8 @@
                     (done)))))))
 
 #?(:cljs
-   (specification "cljs: wrap lifts plain values"
+   ;; cljs: wrap lifts plain values
+   (deftest cljs-wrap-lifts-plain-values
      (async done
        (-> (p/wrap 99)
          (p/then (fn [v]
@@ -601,7 +614,8 @@
 ;; ----------------------------------------------------------------------------
 
 #?(:cljs
-   (specification "cljs interop: our then on a promesa-cljs promise"
+   ;; cljs interop: our then on a promesa-cljs promise
+   (deftest cljs-interop-our-then-on-a-promesa-cljs-promise
      (async done
        (-> (p/then (pp/resolved 7) inc)
          (p/then (fn [v]
@@ -611,7 +625,8 @@
                    (done)))))))
 
 #?(:cljs
-   (specification "cljs interop: promesa-cljs then on our adapter promise"
+   ;; cljs interop: promesa-cljs then on our adapter promise
+   (deftest cljs-interop-promesa-cljs-then-on-our-adapter-promise
      (async done
        (-> (pp/then (p/resolved 5) inc)
          (pp/then (fn [v]
@@ -621,7 +636,8 @@
                     (done)))))))
 
 #?(:cljs
-   (specification "cljs interop: mixed chain alternating libraries"
+   ;; cljs interop: mixed chain alternating libraries
+   (deftest cljs-interop-mixed-chain-alternating-libraries
      (async done
        (-> (pp/resolved 1)
          (p/then  (fn [v] (p/resolved (inc v))))
@@ -634,7 +650,8 @@
                     (done)))))))
 
 #?(:cljs
-   (specification "cljs interop: rejection crosses the library seam"
+   ;; cljs interop: rejection crosses the library seam
+   (deftest cljs-interop-rejection-crosses-the-library-seam
      (async done
        (-> (pp/resolved 1)
          (p/then  (fn [_] (pp/rejected (ex-info "p-fail" {:p 1}))))

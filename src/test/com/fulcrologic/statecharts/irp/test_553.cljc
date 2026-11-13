@@ -13,7 +13,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-553
   (chart/statechart {:initial :_root}
@@ -31,7 +31,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 553 — failed <send> arg-eval suppresses event dispatch"
-  (assertions
-    "reaches pass"
-    (runner/passes-with-delays? chart-553 []) => true))
+(runner/async-specification "IRP test 553 — failed <send> arg-eval suppresses event dispatch"
+  "reaches pass"
+  (runner/passes-with-delays? chart-553 []) => true)

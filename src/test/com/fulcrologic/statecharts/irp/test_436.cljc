@@ -7,7 +7,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state parallel final transition In]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-436
   (chart/statechart {:initial :_root}
@@ -24,7 +24,6 @@
 
 (def events [])
 
-(specification "IRP test 436 — In() predicate in parallel state"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-436 events) => true))
+(runner/async-specification "IRP test 436 — In() predicate in parallel state"
+  "reaches pass"
+  (runner/passes? chart-436 events) => true)

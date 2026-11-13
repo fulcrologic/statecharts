@@ -12,7 +12,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry raise Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (defn- event-fields-bound? [_ d]
   (let [e (get d :_event)]
@@ -39,7 +39,6 @@
 
 (def events [])
 
-(specification "IRP test 330 — required event fields (name, type, data) are present"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-330 events) => true))
+(runner/async-specification "IRP test 330 — required event fields (name, type, data) are present"
+  "reaches pass"
+  (runner/passes? chart-330 events) => true)

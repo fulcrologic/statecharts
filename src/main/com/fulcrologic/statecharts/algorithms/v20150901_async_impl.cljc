@@ -136,7 +136,32 @@
       namelist)
     {}))
 
+(defn- send-data
+  "Returns the data for an event sent by `<send>`. Map (or nil) `content` is merged over the values named by `namelist`.
+   Any other `content` value becomes the event data as-is (W3C SCXML §5.10/§6.2: `<content>` supplies the entire event
+   data and cannot be combined with `namelist`)."
+  [env namelist content]
+  (if (or (nil? content) (map? content))
+    (merge (named-data env namelist) content)
+    content))
+
 (declare raise run-many! execute! add-descendant-states-to-enter!)
+
+(defn- error-raised?
+  "True if exception `e` has already produced an `error.execution` event in this processing `env`. Strict mode
+   (`::sc/errors-abort-siblings?`) rethrows such exceptions so enclosing blocks abort; this keeps those enclosing
+   catches from queueing a second event for the same failure."
+  [env e]
+  (boolean (some-> (::errors-raised env) deref (contains? e))))
+
+(defn- raise-execution-error!
+  "Queues an `error.execution` event with `data` for exception `e` on the internal queue, unless `e` already produced
+   one in this processing `env`. Returns `e`."
+  [env e data]
+  (when-not (error-raised? env e)
+    (raise env (evts/new-event {:name :error.execution :data data}))
+    (some-> (::errors-raised env) (vswap! conj e)))
+  e)
 
 (defn- run-expression!
   "Run an expression through the execution model. Errors (sync throw OR promise rejection)
@@ -150,16 +175,14 @@
                   (sp/run-expression! execution-model env expr)
                   (catch #?(:clj Throwable :cljs :default) e
                     (log/error e "Expression failure (sync throw)")
-                    (raise env (evts/new-event {:name :error.execution
-                                                :data {:error e}}))
+                    (raise-execution-error! env e {:error e})
                     (when strict? (throw e))
                     nil))]
     (if (p/promise? result)
       (p/catch result
         (fn [e]
           (log/error e "Expression failure (promise rejection)")
-          (raise env (evts/new-event {:name :error.execution
-                                      :data {:error e}}))
+          (raise-execution-error! env e {:error e})
           (if strict? (p/rejected e) nil)))
       (do
         (log/spy :debug result)
@@ -385,62 +408,62 @@
         (log/debug "Assign" location " = " v)
         (env/assign! env location v)))))
 
-(letfn [(send! [{::sc/keys [event-queue
-                             data-model] :as env}
-                {:keys [id
-                        idlocation
-                        delay
-                        delayexpr
-                        namelist
-                        content
-                        event
-                        eventexpr
-                        target
-                        targetexpr
-                        type
-                        typeexpr] :as _send-element}]
-          (let [id-v (if idlocation (genid "send") id)]
-            ;; Any of these may be promises. Resolve all with maybe-let.
-            (maybe-let [event-name (!? env event eventexpr)
-                    target     (!? env target targetexpr)
-                    type       (!? env type typeexpr)
-                    delay      (!? env delay delayexpr)
-                    content    (!? env nil content)]
-              (let [resolved (env/resolve-send-target env target)
-                    data     (log/spy :debug
-                               "Computed send event data"
-                               (merge
-                                 (named-data env namelist)
-                                 content))]
-                (when idlocation (sp/update! data-model env {:ops [(ops/assign idlocation id-v)]}))
-                (if (= :internal resolved)
-                  (do
-                    (env/raise env (evts/new-event (cond-> {:name event-name :data data}
-                                                     id-v (assoc :sendid id-v ::sc/send-id id-v))))
-                    true)
-                  (let [resolved-target   (second resolved)
-                        parent-sid        (env/parent-session-id env)
-                        target-is-parent? (and (some? parent-sid)
-                                               (= resolved-target parent-sid))]
-                    (sp/send! event-queue env (cond-> {:send-id           id-v
-                                                       :source-session-id (env/session-id env)
-                                                       :event             event-name
-                                                       :data              data
-                                                       :target            resolved-target
-                                                       :type              (or type ::sc/chart)
-                                                       :delay             (or delay 0)}
-                                                target-is-parent? (assoc :invoke-id (env/invoke-id env))))))))))]
-  (defmethod execute-element-content! :send [env element]
-    (log/debug "Send event" element)
-    (let [result (send! env element)]
-      (maybe-then result
-        (fn [sent?]
-          (when-not sent?
-            (raise env (evts/new-event {:name :error.execution
-                                        :data {:type :send :element (:id element)}}))
+(defn- send!
+  [{::sc/keys [event-queue
+                data-model] :as env}
+   {:keys [id
+           idlocation
+           delay
+           delayexpr
+           namelist
+           content
+           event
+           eventexpr
+           target
+           targetexpr
+           type
+           typeexpr] :as _send-element}]
+  (let [id-v (if idlocation (genid "send") id)]
+    ;; Any of these may be promises. Resolve all with maybe-let.
+    (maybe-let [event-name (!? env event eventexpr)
+            target     (!? env target targetexpr)
+            type       (!? env type typeexpr)
+            delay      (!? env delay delayexpr)
+            content    (!? env nil content)]
+      (let [resolved (env/resolve-send-target env target)
+            data     (log/spy :debug
+                       "Computed send event data"
+                       (send-data env namelist content))]
+        (when idlocation (sp/update! data-model env {:ops [(ops/assign idlocation id-v)]}))
+        (if (= :internal resolved)
+          (do
+            (env/raise env (evts/new-event (cond-> {:name event-name :data data}
+                                             id-v (assoc :sendid id-v ::sc/send-id id-v))))
+            true)
+          (let [resolved-target   (second resolved)
+                parent-sid        (env/parent-session-id env)
+                target-is-parent? (and (some? parent-sid)
+                                       (= resolved-target parent-sid))]
+            (sp/send! event-queue env (cond-> {:send-id           id-v
+                                               :source-session-id (env/session-id env)
+                                               :event             event-name
+                                               :data              data
+                                               :target            resolved-target
+                                               :type              (or type ::sc/chart)
+                                               :delay             (or delay 0)}
+                                        target-is-parent? (assoc :invoke-id (env/invoke-id env))))))))))
+
+(defmethod execute-element-content! :send [env element]
+  (log/debug "Send event" element)
+  (let [result (send! env element)]
+    (maybe-then result
+      (fn [sent?]
+        (when-not sent?
+          (let [e (raise-execution-error! env (ex-info "send dispatch failed" {:type :send :element (:id element)})
+                    {:type :send :element (:id element)})]
             ;; W3C §4.4: in strict mode, abort the surrounding block.
             (when (::sc/errors-abort-siblings? env)
-              (throw (ex-info "send dispatch failed" {:type :send :element (:id element)})))))))))
+              (throw e))))))))
 
 (defmethod execute-element-content! :cancel [{::sc/keys [event-queue] :as env}
                                              {:keys [sendid sendidexpr] :as element}]
@@ -519,18 +542,15 @@
       (fn [coll]
         (cond
           (or (nil? coll) (and (not (coll? coll)) (not (string? coll))))
-          (do
-            (raise env (evts/new-event {:name :error.execution
-                                        :data {:type :foreach :reason :not-iterable
-                                               :array coll :element (:id element)}}))
+          (let [e (raise-execution-error! env (ex-info "foreach over non-iterable" {:type :foreach :array coll})
+                    {:type :foreach :reason :not-iterable :array coll :element (:id element)})]
             (when strict?
-              (throw (ex-info "foreach over non-iterable" {:type :foreach :array coll}))))
+              (throw e)))
 
           :else
           (let [aborted? (volatile! false)
                 handle-err (fn [child-id e]
-                             (raise env (evts/new-event {:name :error.execution
-                                                         :data {:type :foreach :node child-id :exception e}}))
+                             (raise-execution-error! env e {:type :foreach :node child-id :exception e})
                              (log/error e "Error inside <foreach>")
                              (when strict? (vreset! aborted? true))
                              (if strict? ::abort nil))]
@@ -562,8 +582,7 @@
   (let [{:keys [children]} (chart/element statechart s)
         strict?            (::sc/errors-abort-siblings? env)
         handle-err (fn [n t]
-                     (raise env (evts/new-event {:name :error.execution
-                                                 :data {:element (chart/element-id statechart s) :node n :exception t}}))
+                     (raise-execution-error! env t {:element (chart/element-id statechart s) :node n :exception t})
                      (log/error t "Unexpected exception in content")
                      (if strict? ::abort nil))]
     (do-sequence children
@@ -790,19 +809,42 @@
 ;; Invocations — mostly sync, param evaluation may be async
 ;; =============================================================================
 
+(defn- attempt
+  "Calls `(f)` and returns its result (possibly a promise). A synchronous throw, or a rejection of the returned promise,
+   becomes the value `{::eval-error e}` instead."
+  [f]
+  (let [result (try
+                 (f)
+                 (catch #?(:clj Throwable :cljs :default) e
+                   {::eval-error e}))]
+    (if (p/promise? result)
+      (p/catch result (fn [e] {::eval-error e}))
+      result)))
+
 (defn- invocation-details
+  "Returns the `invocation` element with its `:type`, `:src`, and matching `:processor` resolved (possibly as a
+   promise). If evaluating `typeexpr` or `srcexpr` fails, the element has `::eval-error` set and no `:processor`."
   [{::sc/keys [statechart
                invocation-processors] :as env} invocation]
   (let [{:keys [type typeexpr src srcexpr] :as invocation} (chart/element statechart invocation)
-        type-v (!? env type typeexpr)
-        src-v  (or src (!? env nil srcexpr))]
-    ;; type and src may be promises
-    (maybe-let [type (or type-v :statechart)
-            src  src-v]
-      (assoc invocation
-        :type type
-        :src src
-        :processor (first (filterv #(sp/supports-invocation-type? % type) invocation-processors))))))
+        resolved (attempt
+                   (fn []
+                     (let [type-v (!? env type typeexpr)
+                           src-v  (or src (!? env nil srcexpr))]
+                       ;; type and src may be promises
+                       (maybe-let [type (or type-v :statechart)
+                               src  src-v]
+                         {:type type :src src}))))]
+    (maybe-then resolved
+      (fn [{::keys [eval-error] :keys [type src]}]
+        (if eval-error
+          (do
+            (log/error eval-error "Invocation type/src evaluation failed")
+            (assoc invocation ::eval-error eval-error))
+          (assoc invocation
+            :type type
+            :src src
+            :processor (first (filterv #(sp/supports-invocation-type? % type) invocation-processors))))))))
 
 (defn- start-invocation!
   [{::sc/keys [statechart
@@ -814,31 +856,47 @@
                   explicit-id?
                   namelist params
                   processor] :as invocation} (invocation-details env invocation)]
-    (let [parent-state-id (chart/nearest-ancestor-state statechart invocation)]
-      (if processor
-        (maybe-let [param-map (if (map? params)
-                            (let [entries (vec params)
-                                  results (volatile! {})]
-                              (maybe-let [_ (do-sequence entries
-                                          (fn [[k expr]]
-                                            (let [v (sp/run-expression! execution-model env expr)]
-                                              (maybe-then v (fn [resolved] (vswap! results assoc k resolved))))))]
-                                @results))
-                            (sp/run-expression! execution-model env params))]
-          (let [invokeid (if explicit-id?
-                           id
-                           (str parent-state-id "." (new-uuid)))
-                params   (merge
-                           (named-data env namelist)
-                           param-map)]
-            (when idlocation
-              (sp/update! data-model env {:ops [(ops/assign idlocation invokeid)]}))
-            (log/debugf "Starting invocation id = %s, type = %s, src = %s, params = %s"
-              (str invokeid) (str type) (str src) (str params))
-            (sp/start-invocation! processor env {:invokeid invokeid
-                                                  :src      src
-                                                  :type     type
-                                                  :params   params})))
+    (let [parent-state-id (chart/nearest-ancestor-state statechart invocation)
+          ;; W3C SCXML §6.4: an error evaluating any invoke argument cancels the invocation and queues error.execution.
+          cancel!         (fn [e]
+                            (log/error e "Invocation argument evaluation failed. Invocation cancelled.")
+                            (raise-execution-error! env e {:error e :element (:id invocation)})
+                            nil)]
+      (cond
+        (::eval-error invocation)
+        (cancel! (::eval-error invocation))
+
+        processor
+        (maybe-let [args (attempt
+                           (fn []
+                             (maybe-let [param-map (if (map? params)
+                                                 (let [entries (vec params)
+                                                       results (volatile! {})]
+                                                   (maybe-let [_ (do-sequence entries
+                                                               (fn [[k expr]]
+                                                                 (let [v (sp/run-expression! execution-model env expr)]
+                                                                   (maybe-then v (fn [resolved] (vswap! results assoc k resolved))))))]
+                                                     @results))
+                                                 (sp/run-expression! execution-model env params))]
+                               {::params (merge
+                                           (named-data env namelist)
+                                           param-map)})))]
+          (if-let [e (::eval-error args)]
+            (cancel! e)
+            (let [invokeid (if explicit-id?
+                             id
+                             (str parent-state-id "." (new-uuid)))
+                  params   (::params args)]
+              (when idlocation
+                (sp/update! data-model env {:ops [(ops/assign idlocation invokeid)]}))
+              (log/debugf "Starting invocation id = %s, type = %s, src = %s, params = %s"
+                (str invokeid) (str type) (str src) (str params))
+              (sp/start-invocation! processor env {:invokeid invokeid
+                                                    :src      src
+                                                    :type     type
+                                                    :params   params}))))
+
+        :else
         (do
           (log/error "Cannot start invocation. No processor for " invocation)
           (sp/send! event-queue env {:event             :error.execution
@@ -875,9 +933,8 @@
         (try
           (execute-element-content! env (chart/element statechart n))
           (catch #?(:clj Throwable :cljs :default) e
-            (raise env (evts/new-event {:name :error.execution
-                                        :data {:node      n
-                                               :exception e}}))
+            (raise-execution-error! env e {:node      n
+                                           :exception e})
             (log/error e "Unexpected execution error")
             (if strict? ::abort nil)))))))
 
@@ -885,23 +942,24 @@
 ;; Invocation stop & forwarding — sync (no expressions involved)
 ;; =============================================================================
 
-(letfn [(stop-invocation!
-          [{::sc/keys [data-model] :as env} invocation]
-          (let [details (invocation-details env invocation)]
-            (maybe-then details
-              (fn [{:keys [type processor id idlocation]}]
-                (when processor
-                  (let [invokeid (if idlocation
-                                   (sp/get-at data-model env idlocation)
-                                   id)]
-                    (log/debug "Stopping invocation" invokeid)
-                    (sp/stop-invocation! processor env {:invokeid invokeid
-                                                        :type     type})))))))]
-  (defn cancel-active-invocations!
-    [{::sc/keys [statechart] :as env} state]
-    (log/spy :debug "Stopping invocations for " state)
-    (do-sequence (vec (chart/invocations statechart state))
-      (fn [i] (stop-invocation! env i)))))
+(defn- stop-invocation!
+  [{::sc/keys [data-model] :as env} invocation]
+  (let [details (invocation-details env invocation)]
+    (maybe-then details
+      (fn [{:keys [type processor id idlocation]}]
+        (when processor
+          (let [invokeid (if idlocation
+                           (sp/get-at data-model env idlocation)
+                           id)]
+            (log/debug "Stopping invocation" invokeid)
+            (sp/stop-invocation! processor env {:invokeid invokeid
+                                                :type     type})))))))
+
+(defn cancel-active-invocations!
+  [{::sc/keys [statechart] :as env} state]
+  (log/spy :debug "Stopping invocations for " state)
+  (do-sequence (vec (chart/invocations statechart state))
+    (fn [i] (stop-invocation! env i))))
 
 ;; =============================================================================
 ;; Exit states — async-aware (exit handlers may be async)
@@ -1029,33 +1087,33 @@
           (fn [_]
             (env/delete! env [:ROOT :_event])))))))
 
-(letfn [(forward-event!
-          [{::sc/keys [data-model] :as env} invocation event]
-          (let [details (invocation-details env invocation)]
-            (maybe-then details
-              (fn [{:keys [type processor id idlocation]}]
-                (when processor
-                  (let [invokeid (if idlocation (sp/get-at data-model env idlocation) id)]
-                    (sp/forward-event! processor env {:invokeid invokeid
-                                                      :type     type
-                                                      :event    event})))))))]
+(defn- forward-event!
+  [{::sc/keys [data-model] :as env} invocation event]
+  (let [details (invocation-details env invocation)]
+    (maybe-then details
+      (fn [{:keys [type processor id idlocation]}]
+        (when processor
+          (let [invokeid (if idlocation (sp/get-at data-model env idlocation) id)]
+            (sp/forward-event! processor env {:invokeid invokeid
+                                              :type     type
+                                              :event    event})))))))
 
-  (defn handle-external-invocations!
-    [{::sc/keys [statechart vwmem data-model] :as env}
-     {:keys [invokeid] :as external-event}]
-    (do-sequence (vec (::sc/configuration @vwmem))
-      (fn [s]
-        (do-sequence (vec (mapv (partial chart/element statechart) (chart/invocations statechart s)))
-          (fn [{:keys [id idlocation id-location auto-forward? autoforward] :as inv}]
-            (let [id (if-let [loc (or idlocation id-location)]
-                       (sp/get-at data-model env loc)
-                       id)]
-              (let [finalize-result (when (log/spy :debug "event from invocation?" (= invokeid id))
-                                     (finalize! env inv external-event))
-                    forward-result (when (or (true? autoforward) (true? auto-forward?))
-                                    (forward-event! env inv external-event))]
-                (maybe-then finalize-result
-                  (fn [_] forward-result))))))))))
+(defn handle-external-invocations!
+  [{::sc/keys [statechart vwmem data-model] :as env}
+   {:keys [invokeid] :as external-event}]
+  (do-sequence (vec (::sc/configuration @vwmem))
+    (fn [s]
+      (do-sequence (vec (mapv (partial chart/element statechart) (chart/invocations statechart s)))
+        (fn [{:keys [id idlocation id-location auto-forward? autoforward] :as inv}]
+          (let [id (if-let [loc (or idlocation id-location)]
+                     (sp/get-at data-model env loc)
+                     id)]
+            (let [finalize-result (when (log/spy :debug "event from invocation?" (= invokeid id))
+                                   (finalize! env inv external-event))
+                  forward-result (when (or (true? autoforward) (true? auto-forward?))
+                                  (forward-event! env inv external-event))]
+              (maybe-then finalize-result
+                (fn [_] forward-result)))))))))
 
 ;; =============================================================================
 ;; Exit interpreter
@@ -1116,6 +1174,8 @@
       (assoc env
         ::sc/context-element-id :ROOT
         ::sc/statechart statechart
+        ;; Exceptions that already produced error.execution during this run (not part of working memory).
+        ::errors-raised (volatile! #{})
         ::sc/vwmem (volatile! (merge
                                 {::sc/session-id         (or session-id (genid "session"))
                                  ::sc/statechart-src     statechart-src

@@ -18,7 +18,6 @@
 ;; ## Known skips
 ;;
 ;; - integration/fulcro*       — require fulcro, which is not bb-loadable.
-;; - routing_demo2/*           — require fulcro.
 ;; - data_model/integration/*  — require fulcro.
 ;; - promise_spec              — its CLJ interop tests load promesa.core.
 ;; - algorithms/.../async_spec — same: loads promesa.core directly.

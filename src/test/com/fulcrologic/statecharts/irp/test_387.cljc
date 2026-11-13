@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition history
                                                    on-entry raise Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-387
   (chart/statechart {:initial :_root}
@@ -57,7 +57,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 387 — default history state transitions"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-387 []) => true))
+(runner/async-specification "IRP test 387 — default history state transitions"
+  "reaches pass"
+  (runner/passes? chart-387 []) => true)

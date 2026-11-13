@@ -11,7 +11,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state parallel final transition In]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-413
   (chart/statechart {:initial :_root}
@@ -33,7 +33,6 @@
 
 (def events [])
 
-(specification "IRP test 413 — initial attribute overrides document-order defaults"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-413 events) => true))
+(runner/async-specification "IRP test 413 — initial attribute overrides document-order defaults"
+  "reaches pass"
+  (runner/passes? chart-413 events) => true)

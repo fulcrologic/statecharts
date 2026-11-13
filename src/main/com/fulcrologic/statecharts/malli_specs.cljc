@@ -50,7 +50,8 @@
 
 (>def ::sc/event-name keyword?)
 (>def :org.w3.scxml.event/name ::sc/event-name)
-(>def :org.w3.scxml.event/data map?)
+;; Any value (W3C: <content> may set event data to a non-map). Keep it serializable for durable sessions.
+(>def :org.w3.scxml.event/data any?)
 (>def :org.w3.scxml.event/type [:or string? keyword?])
 (>def :org.w3.scxml.event/sendid ::sc/id)
 ;; W3C §5.10.1: origin is a routable target reference. This library does not constrain

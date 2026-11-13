@@ -9,7 +9,7 @@
     [com.fulcrologic.statecharts.elements :refer [state parallel final transition
                                                    on-entry raise]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-406
   (chart/statechart {:initial :_root}
@@ -42,7 +42,6 @@
 
 (def events [])
 
-(specification "IRP test 406 — entry order: parents before children, document order"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-406 events) => true))
+(runner/async-specification "IRP test 406 — entry order: parents before children, document order"
+  "reaches pass"
+  (runner/passes? chart-406 events) => true)

@@ -10,24 +10,23 @@
                                                    on-entry Send cancel
                                                    assign data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-210
   (chart/statechart {:initial :_root}
-    (data-model {:expr {:Var1 "bar"}})
+    (data-model {:expr {:Var1 :bar}})
     (state {:id :_root :initial :s0}
       (state {:id :s0}
         (on-entry {}
-          (Send   {:id "foo" :event :event1 :delay 1000})
+          (Send   {:id :foo :event :event1 :delay 1000})
           (Send   {:event :event2 :delay 1500})
-          (assign {:location [:Var1] :expr (fn [_ _] "foo")})
+          (assign {:location [:Var1] :expr (fn [_ _] :foo)})
           (cancel {:sendidexpr (fn [_ d] (:Var1 d))}))
         (transition {:event :event2 :target :pass})
         (transition {:event :*      :target :fail}))
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 210 — cancel sendidexpr uses current value"
-  (assertions
-    "reaches pass"
-    (runner/passes-with-delays? chart-210 []) => true))
+(runner/async-specification "IRP test 210 — cancel sendidexpr uses current value"
+  "reaches pass"
+  (runner/passes-with-delays? chart-210 []) => true)

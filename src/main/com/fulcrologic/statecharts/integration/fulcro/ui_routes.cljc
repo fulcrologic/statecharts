@@ -1,13 +1,15 @@
 (ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.ui-routes
-  "DEPRECATED. Use com.fulcrologic.statecharts.integration.fulcro.routing instead.
+  "DEPRECATED. Use the com.fulcrologic/fulcro-statechart-routing library instead
+   (https://github.com/fulcrologic/fulcro-statechart-routing), whose main namespace is
+   com.fulcrologic.statecharts.integration.fulcro.routing.
 
    This namespace is maintained for backward compatibility. New projects should use
-   the routing.* package which adds URL synchronization, cross-chart routing via
+   fulcro-statechart-routing, which adds URL synchronization, cross-chart routing via
    :route/reachable, deep busy-checking, and route configuration validation.
 
    NOTE: This namespace uses module-level global state (route-table-atom, history volatile)
    which makes it unsuitable for multiple concurrent Fulcro apps or parallel test suites.
-   The replacement routing.* package avoids this limitation.
+   fulcro-statechart-routing avoids this limitation.
 
    ALPHA. This namespace's API is subject to change."
   (:require

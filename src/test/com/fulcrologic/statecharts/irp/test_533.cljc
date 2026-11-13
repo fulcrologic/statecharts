@@ -9,7 +9,7 @@
                                                    on-entry on-exit assign raise
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (defn- inc-var [k]
   (assign {:location [k] :expr (fn [_ d] (inc (get d k 0)))}))
@@ -47,7 +47,6 @@
 
 (def events [])
 
-(specification "IRP test 533 — internal transition on parallel state exits the parallel"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-533 events) => true))
+(runner/async-specification "IRP test 533 — internal transition on parallel state exits the parallel"
+  "reaches pass"
+  (runner/passes? chart-533 events) => true)

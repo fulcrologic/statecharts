@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition on-entry raise]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-144
   (chart/statechart {:initial :_root}
@@ -27,7 +27,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 144 — raised events are queued in raise order (foo before bar)"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-144 []) => true))
+(runner/async-specification "IRP test 144 — raised events are queued in raise order (foo before bar)"
+  "reaches pass"
+  (runner/passes? chart-144 []) => true)

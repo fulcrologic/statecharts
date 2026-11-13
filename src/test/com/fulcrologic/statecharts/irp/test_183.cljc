@@ -9,7 +9,7 @@
                                                    on-entry Send
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-183
   (chart/statechart {:initial :_root}
@@ -23,7 +23,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 183 — send writes generated send-id into idlocation"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-183 []) => true))
+(runner/async-specification "IRP test 183 — send writes generated send-id into idlocation"
+  "reaches pass"
+  (runner/passes? chart-183 []) => true)

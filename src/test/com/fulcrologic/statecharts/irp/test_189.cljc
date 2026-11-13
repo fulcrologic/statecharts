@@ -12,7 +12,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-189
   (chart/statechart {:initial :_root}
@@ -26,7 +26,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 189 — send target=#_internal queues internally (event1 before event2)"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-189 []) => true))
+(runner/async-specification "IRP test 189 — send target=#_internal queues internally (event1 before event2)"
+  "reaches pass"
+  (runner/passes? chart-189 []) => true)

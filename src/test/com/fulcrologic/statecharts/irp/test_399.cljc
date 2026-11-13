@@ -7,7 +7,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition on-entry raise Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-399
   (chart/statechart {:initial :_root}
@@ -43,7 +43,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 399 — event name matching: multi-descriptor, prefix, wildcard"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-399 []) => true))
+(runner/async-specification "IRP test 399 — event name matching: multi-descriptor, prefix, wildcard"
+  "reaches pass"
+  (runner/passes? chart-399 []) => true)

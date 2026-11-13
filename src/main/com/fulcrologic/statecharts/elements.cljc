@@ -440,7 +440,8 @@
    * `typeexpr` - A (fn [env data]) to generate the type of the event
 
   If BOTH namelist and content are supplied, then they will be MERGED as the event data with `content` overwriting
-  any conflicting keys from `namelist`.
+  any conflicting keys from `namelist`. If `content` returns a non-map value, that value is the entire event data
+  (and `namelist` is ignored).
 
   https://www.w3.org/TR/scxml/#send"
   [attrs]

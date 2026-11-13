@@ -7,7 +7,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state parallel final transition]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-417
   (chart/statechart {:initial :_root}
@@ -28,7 +28,6 @@
 
 (def events [])
 
-(specification "IRP test 417 — done.state.id generated when all parallel regions are final"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-417 events) => true))
+(runner/async-specification "IRP test 417 — done.state.id generated when all parallel regions are final"
+  "reaches pass"
+  (runner/passes? chart-417 events) => true)

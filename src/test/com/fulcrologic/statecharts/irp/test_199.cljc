@@ -9,7 +9,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-199
   (chart/statechart {:initial :_root}
@@ -25,7 +25,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 199 — invalid send type raises error.execution"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-199 []) => true))
+(runner/async-specification "IRP test 199 — invalid send type raises error.execution"
+  "reaches pass"
+  (runner/passes? chart-199 []) => true)

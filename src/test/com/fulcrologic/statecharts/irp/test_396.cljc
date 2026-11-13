@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition on-entry raise]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-396
   (chart/statechart {:initial :_root}
@@ -20,7 +20,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 396 — _event.name matches event name used for transitions"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-396 []) => true))
+(runner/async-specification "IRP test 396 — _event.name matches event name used for transitions"
+  "reaches pass"
+  (runner/passes? chart-396 []) => true)

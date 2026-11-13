@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition on-exit Send script data-model]]
     [com.fulcrologic.statecharts.data-model.operations :as ops]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-378
   (chart/statechart {:initial :_root}
@@ -26,7 +26,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 378 — each onexit is a separate executable block"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-378 []) => true))
+(runner/async-specification "IRP test 378 — each onexit is a separate executable block"
+  "reaches pass"
+  (runner/passes? chart-378 []) => true)

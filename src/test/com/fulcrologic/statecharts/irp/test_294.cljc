@@ -9,7 +9,7 @@
                                                    on-entry done-data
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-294
   (chart/statechart {:initial :_root}
@@ -38,7 +38,6 @@
 
 (def events [])
 
-(specification "IRP test 294 — donedata param populates event.data; content sets event.data directly"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-294 events) => true))
+(runner/async-specification "IRP test 294 — donedata param populates event.data; content sets event.data directly"
+  "reaches pass"
+  (runner/passes? chart-294 events) => true)

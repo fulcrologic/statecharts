@@ -24,7 +24,7 @@ We are porting the **W3C SCXML 1.0 (2015-09-01) IRP automated tests** into Cloju
                                                     assign data-model data Send
                                                     log cancel invoke finalize]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-<N>
   (chart/statechart {:initial :s0}
@@ -34,11 +34,13 @@ We are porting the **W3C SCXML 1.0 (2015-09-01) IRP automated tests** into Cloju
 ;; events to send (in order). Use [] for tests that need no external events.
 (def events [])
 
-(specification "IRP test <N> — <one-line description from .txml comment>"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-<N> events) => true))
+(runner/async-specification "IRP test <N> — <one-line description from .txml comment>"
+  "reaches pass"
+  (runner/passes? chart-<N> events) => true)
 ```
+
+Use `runner/async-specification`, not `specification` + `assertions`: on CLJS the runner predicates return
+promises, and fulcro-spec's `specification` discards an async body (the test would pass without asserting).
 
 5. Run only THIS test file via the REPL (port file: `/Users/tonykay/fulcrologic/statecharts/.nrepl-port`):
 

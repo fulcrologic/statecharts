@@ -13,7 +13,7 @@
                                                    on-entry assign script
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-303
   (chart/statechart {:initial :_root}
@@ -28,7 +28,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 303 — script runs as executable content in order"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-303 []) => true))
+(runner/async-specification "IRP test 303 — script runs as executable content in order"
+  "reaches pass"
+  (runner/passes? chart-303 []) => true)

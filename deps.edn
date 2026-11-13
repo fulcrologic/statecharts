@@ -22,7 +22,7 @@
                               :main-opts   ["-m" "kaocha.runner"]
                               :extra-deps  {lambdaisland/kaocha {:mvn/version "1.91.1392"}}}
 
-           :dev              {:extra-paths ["src/dev" "src/examples" "src/routing-demo" "src/routing-demo2"]
+           :dev              {:extra-paths ["src/dev" "src/examples" "src/routing-demo"]
                               :extra-deps  {thheller/shadow-cljs                   {:mvn/version "3.3.4"}
                                             com.fulcrologic/fulcro-devtools-remote {:mvn/version "0.2.8"}
                                             com.fulcrologic/fulcro-inspect         {:mvn/version "1.0.5"}

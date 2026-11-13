@@ -11,7 +11,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition history
                                                    on-entry script Send raise]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-388
   (chart/statechart {:initial :_root}
@@ -45,7 +45,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 388 — deep and shallow history recall"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-388 []) => true))
+(runner/async-specification "IRP test 388 — deep and shallow history recall"
+  "reaches pass"
+  (runner/passes? chart-388 []) => true)

@@ -10,7 +10,7 @@
                                                    on-entry raise assign
                                                    If elseif data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-149
   (chart/statechart {:initial :_root}
@@ -30,7 +30,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 149 — neither if/elseif branch executes when both conditions are false"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-149 []) => true))
+(runner/async-specification "IRP test 149 — neither if/elseif branch executes when both conditions are false"
+  "reaches pass"
+  (runner/passes? chart-149 []) => true)

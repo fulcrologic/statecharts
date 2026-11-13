@@ -14,7 +14,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry assign Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-311
   (chart/statechart {:initial :_root}
@@ -29,7 +29,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 311 — assign failure raises error.execution"
-  (assertions
-    "reaches pass"
-    (runner/passes-with-delays? chart-311 []) => true))
+(runner/async-specification "IRP test 311 — assign failure raises error.execution"
+  "reaches pass"
+  (runner/passes-with-delays? chart-311 []) => true)

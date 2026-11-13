@@ -56,26 +56,26 @@
    If using a map:
 
    `name` - the event name
-   `data` - Extra data to send with the event
+   `data` - Extra data to send with the event. Any value, typically a map. `nil` becomes `{}`.
    `type` - :internal, :external, or :platform. Defaults to :external
 
    https://www.w3.org/TR/scxml/#events"
   ([nm data]
-   [::sc/event-name map? => ::sc/event]
+   [::sc/event-name any? => ::sc/event]
    (new-event {:name nm :data data}))
   ([event-name-or-map]
    [[:or
      ::sc/event-name
      [:map {:closed false}
       [:name ::sc/event-name]
-      [:data {:optional true} map?]]] => ::sc/event]
+      [:data {:optional true} any?]]] => ::sc/event]
    (if (map? event-name-or-map)
      (let [{:keys [name data] :as base-event} event-name-or-map]
        (merge
          {:type :external}
          base-event
          {:name           name
-          :data           (or data {})
+          :data           (if (nil? data) {} data)
           ::sc/event-name name}))
      {:type           :external
       :name           event-name-or-map

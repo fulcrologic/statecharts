@@ -7,7 +7,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-416
   (chart/statechart {:initial :_root}
@@ -23,7 +23,6 @@
 
 (def events [])
 
-(specification "IRP test 416 — done.state.id generated on compound state final entry"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-416 events) => true))
+(runner/async-specification "IRP test 416 — done.state.id generated on compound state final entry"
+  "reaches pass"
+  (runner/passes? chart-416 events) => true)

@@ -274,6 +274,9 @@ the exception, so the transition to `:pass` (Var1 = 1) never fires.
 
 ## Test 554 — `<invoke>` argument-evaluation error not handled; invocation not cancelled
 
+**FIXED in 1.4.0.** Both processors cancel the invocation and queue `error.execution`. The runner now supports
+`with-helper-charts`, and `test_554` registers a real child plus a control spec proving the child would otherwise start.
+
 - Source: https://www.w3.org/Voice/2013/scxml-irp/554/test554.txml
 - Test file: `src/test/com/fulcrologic/statecharts/irp/test_554.cljc`
 
@@ -338,6 +341,9 @@ This was deferred per the porting briefing ("STOP if you would need to extend
 the runner — document the gap and report back").
 
 ## Test 402 — error.execution emitted twice when an executable expression throws in strict mode
+
+**FIXED in 1.4.0.** Each processing env tracks exceptions that already produced `error.execution`; enclosing
+catches skip raising again. Also covers failed `<send>` dispatch and `<foreach>` errors (`strict_error_events_spec`).
 
 - Source: https://www.w3.org/Voice/2013/scxml-irp/402/test402.txml
 - Test file: `src/test/com/fulcrologic/statecharts/irp/test_402.cljc`

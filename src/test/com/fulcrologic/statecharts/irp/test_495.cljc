@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-495
   (chart/statechart {:initial :_root}
@@ -31,7 +31,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 495 — #_internal target routes to internal queue (internal events first)"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-495 []) => true))
+(runner/async-specification "IRP test 495 — #_internal target routes to internal queue (internal events first)"
+  "reaches pass"
+  (runner/passes? chart-495 []) => true)

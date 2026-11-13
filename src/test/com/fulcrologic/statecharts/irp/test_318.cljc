@@ -11,7 +11,7 @@
     [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.elements :refer [state final transition on-entry raise assign data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-318
   (chart/statechart {:initial :_root}
@@ -31,7 +31,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 318 — _event stays bound during onexit/onentry"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-318 []) => true))
+(runner/async-specification "IRP test 318 — _event stays bound during onexit/onentry"
+  "reaches pass"
+  (runner/passes? chart-318 []) => true)

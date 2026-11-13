@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry assign data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-323
   (chart/statechart {:initial :_root :name "machineName"}
@@ -22,7 +22,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 323 — _name is bound at startup"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-323 []) => true))
+(runner/async-specification "IRP test 323 — _name is bound at startup"
+  "reaches pass"
+  (runner/passes? chart-323 []) => true)

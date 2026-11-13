@@ -1,5 +1,6 @@
 (ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.route-url
-  "DEPRECATED."
+  "DEPRECATED. Use the com.fulcrologic/fulcro-statechart-routing library instead
+   (https://github.com/fulcrologic/fulcro-statechart-routing)."
   (:require
     [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.transit :as ft]

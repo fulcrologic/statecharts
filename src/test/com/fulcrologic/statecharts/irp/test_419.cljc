@@ -7,7 +7,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry raise Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-419
   (chart/statechart {:initial :_root}
@@ -23,7 +23,6 @@
 
 (def events [])
 
-(specification "IRP test 419 — eventless transitions beat event-driven ones"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-419 events) => true))
+(runner/async-specification "IRP test 419 — eventless transitions beat event-driven ones"
+  "reaches pass"
+  (runner/passes? chart-419 events) => true)

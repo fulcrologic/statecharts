@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition on-entry parallel raise Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-576
   (chart/statechart {:initial :_root}
@@ -33,7 +33,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 576 — initial attribute starts in non-default nested parallel states"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-576 []) => true))
+(runner/async-specification "IRP test 576 — initial attribute starts in non-default nested parallel states"
+  "reaches pass"
+  (runner/passes? chart-576 []) => true)

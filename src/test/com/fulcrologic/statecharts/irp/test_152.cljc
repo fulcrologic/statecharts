@@ -10,7 +10,7 @@
                                                    on-entry raise assign foreach
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 ;; conf:illegalArray — a non-collection value (integer) that is not iterable
 ;; conf:illegalItem  — not directly representable; we use nil location which
@@ -40,7 +40,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 152 — foreach with illegal array/item raises error.execution"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-152 []) => true))
+(runner/async-specification "IRP test 152 — foreach with illegal array/item raises error.execution"
+  "reaches pass"
+  (runner/passes? chart-152 []) => true)

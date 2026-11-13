@@ -13,7 +13,7 @@
                                                    on-entry Send assign
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-350
   (chart/statechart {:initial :_root}
@@ -31,7 +31,6 @@
 
 (def events [])
 
-(specification "IRP test 350 — session can send to itself using its session ID"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-350 events) => true))
+(runner/async-specification "IRP test 350 — session can send to itself using its session ID"
+  "reaches pass"
+  (runner/passes? chart-350 events) => true)

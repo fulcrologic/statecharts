@@ -11,7 +11,7 @@
                                                    on-entry Send assign
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-175
   (chart/statechart {:initial :_root}
@@ -30,7 +30,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 175 — send delayexpr uses current value of Var1"
-  (assertions
-    "reaches pass (event1 before event2)"
-    (runner/passes-with-delays? chart-175 []) => true))
+(runner/async-specification "IRP test 175 — send delayexpr uses current value of Var1"
+  "reaches pass (event1 before event2)"
+  (runner/passes-with-delays? chart-175 []) => true)

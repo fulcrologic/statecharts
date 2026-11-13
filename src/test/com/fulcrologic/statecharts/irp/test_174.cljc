@@ -11,7 +11,7 @@
                                                    on-entry Send assign
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-174
   (chart/statechart {:initial :_root}
@@ -28,7 +28,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 174 — send typeexpr uses current value of Var1"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-174 []) => true))
+(runner/async-specification "IRP test 174 — send typeexpr uses current value of Var1"
+  "reaches pass"
+  (runner/passes? chart-174 []) => true)

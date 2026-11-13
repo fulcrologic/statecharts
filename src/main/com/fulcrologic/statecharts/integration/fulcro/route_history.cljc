@@ -1,5 +1,6 @@
 (ns ^:deprecated com.fulcrologic.statecharts.integration.fulcro.route-history
-  "DEPRECATED. use routing package."
+  "DEPRECATED. Use the com.fulcrologic/fulcro-statechart-routing library instead
+   (https://github.com/fulcrologic/fulcro-statechart-routing)."
   (:require
     #?(:cljs [goog.object :as gobj])
     [clojure.set :as set]

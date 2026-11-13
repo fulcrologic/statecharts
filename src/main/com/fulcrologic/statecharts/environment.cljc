@@ -111,10 +111,10 @@
 
 (>defn raise
   "Place an event on the internal event queue for immediate processing. Only callable from within active runnable content.
-   A `nil` `data` is treated as an empty map. The queued event's `:type` is always `:internal` (SCXML §5.10.1)."
+   `data` may be any value (typically a map); `nil` is treated as an empty map. The queued event's `:type` is always `:internal` (SCXML §5.10.1)."
   ([env event-name data]
-   [::sc/processing-env ::sc/event-name (? map?) => nil?]
-   (raise env (evts/new-event {:name event-name :data (or data {})})))
+   [::sc/processing-env ::sc/event-name any? => nil?]
+   (raise env (evts/new-event {:name event-name :data (if (nil? data) {} data)})))
   ([{::sc/keys [vwmem] :as env} event]
    [::sc/processing-env ::sc/event-or-name => nil?]
    (vswap! vwmem update ::sc/internal-queue conj (assoc (evts/new-event event) :type :internal))

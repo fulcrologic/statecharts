@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry raise Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-421
   (chart/statechart {:initial :_root}
@@ -30,7 +30,6 @@
 
 (def events [])
 
-(specification "IRP test 421 — internal events drain before external events"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-421 events) => true))
+(runner/async-specification "IRP test 421 — internal events drain before external events"
+  "reaches pass"
+  (runner/passes? chart-421 events) => true)

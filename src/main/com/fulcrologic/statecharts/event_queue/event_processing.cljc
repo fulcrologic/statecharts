@@ -14,7 +14,8 @@
                   (log/debug "Ran" event "on" session-id)
                   (if next-mem
                     (sp/save-working-memory! working-memory-store env session-id next-mem)
-                    (log/error "Session had no working memory. Event to session ignored" session-id)))]
+                    ;; Normal when a session has already ended (e.g. a delayed or forwarded event arriving after its final state).
+                    (log/debug "Session had no working memory. Event to session ignored" session-id)))]
     (if (p/promise? result)
       (p/then result save-fn)
       (save-fn result))))

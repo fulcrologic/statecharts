@@ -12,7 +12,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-279
   (chart/statechart {:initial :_root}
@@ -25,7 +25,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 279 — early binding initializes data before state is visited"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-279 []) => true))
+(runner/async-specification "IRP test 279 — early binding initializes data before state is visited"
+  "reaches pass"
+  (runner/passes? chart-279 []) => true)

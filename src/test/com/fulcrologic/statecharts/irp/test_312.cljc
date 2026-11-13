@@ -8,7 +8,7 @@
                                                    on-entry assign
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-312
   (chart/statechart {:initial :_root}
@@ -26,7 +26,6 @@
 
 (def events [])
 
-(specification "IRP test 312 — assign with illegal expr raises error.execution"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-312 events) => true))
+(runner/async-specification "IRP test 312 — assign with illegal expr raises error.execution"
+  "reaches pass"
+  (runner/passes? chart-312 events) => true)

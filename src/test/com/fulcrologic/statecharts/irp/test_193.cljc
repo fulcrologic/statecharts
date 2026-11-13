@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-193
   (chart/statechart {:initial :_root}
@@ -28,7 +28,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 193 — send without target uses external queue"
-  (assertions
-    "reaches pass"
-    (runner/passes-with-delays? chart-193 []) => true))
+(runner/async-specification "IRP test 193 — send without target uses external queue"
+  "reaches pass"
+  (runner/passes-with-delays? chart-193 []) => true)

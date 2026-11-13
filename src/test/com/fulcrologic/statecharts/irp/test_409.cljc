@@ -10,7 +10,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry on-exit If raise Send In]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-409
   (chart/statechart {:initial :_root}
@@ -32,7 +32,6 @@
 
 (def events [])
 
-(specification "IRP test 409 — states removed from config as exited; In() is false in onexit"
-  (assertions
-    "reaches pass"
-    (runner/passes-with-delays? chart-409 events) => true))
+(runner/async-specification "IRP test 409 — states removed from config as exited; In() is false in onexit"
+  "reaches pass"
+  (runner/passes-with-delays? chart-409 events) => true)

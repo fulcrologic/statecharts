@@ -11,7 +11,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-304
   (chart/statechart {:initial :_root}
@@ -23,7 +23,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 304 — script-declared variable is accessible from data model"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-304 []) => true))
+(runner/async-specification "IRP test 304 — script-declared variable is accessible from data model"
+  "reaches pass"
+  (runner/passes? chart-304 []) => true)

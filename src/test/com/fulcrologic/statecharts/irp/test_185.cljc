@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-185
   (chart/statechart {:initial :_root}
@@ -25,7 +25,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 185 — send respects delay (event1 before event2)"
-  (assertions
-    "reaches pass"
-    (runner/passes-with-delays? chart-185 []) => true))
+(runner/async-specification "IRP test 185 — send respects delay (event1 before event2)"
+  "reaches pass"
+  (runner/passes-with-delays? chart-185 []) => true)

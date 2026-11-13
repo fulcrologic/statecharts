@@ -9,7 +9,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-278
   (chart/statechart {:initial :_root}
@@ -22,7 +22,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 278 — data variable accessible outside lexical scope"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-278 []) => true))
+(runner/async-specification "IRP test 278 — data variable accessible outside lexical scope"
+  "reaches pass"
+  (runner/passes? chart-278 []) => true)

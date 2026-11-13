@@ -15,7 +15,7 @@
                                                    on-entry foreach script
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-525
   (chart/statechart {:initial :_root}
@@ -33,7 +33,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 525 — foreach shallow-copies the array, iteration count is fixed"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-525 []) => true))
+(runner/async-specification "IRP test 525 — foreach shallow-copies the array, iteration count is fixed"
+  "reaches pass"
+  (runner/passes? chart-525 []) => true)

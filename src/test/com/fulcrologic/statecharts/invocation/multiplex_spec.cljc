@@ -97,13 +97,20 @@
      :children      — vector of child sids (default [])
      :child-type    — invocation type stored alongside children (default ::sc/chart)
      :grandparent   — sid of the simulated parent (default :gp)
+     :finished      — set of child sids that have already finished (no working memory); all others are live
    Returns {:env :queue :processor :parent-env :mux-id}."
-  [{:keys [mux-id children child-type grandparent]
-    :or   {mux-id :j children [] child-type ::sc/chart grandparent :gp}}]
+  [{:keys [mux-id children child-type grandparent finished]
+    :or   {mux-id :j children [] child-type ::sc/chart grandparent :gp finished #{}}}]
   (let [env       (build-env)
         queue     (::sc/event-queue env)
         processor (first (filter #(sp/supports-invocation-type? % mo/type)
                                  (::sc/invocation-processors env)))]
+    ;; Live statechart children have working memory; finished ones have had it deleted.
+    (simple/register! env ::waiting-child waiting-child)
+    (doseq [sid children
+            :when (not (contains? finished sid))]
+      (sp/save-working-memory! (::sc/working-memory-store env) env sid
+        {::sc/session-id sid ::sc/statechart-src ::waiting-child ::sc/configuration #{:child/waiting}}))
     (swap! (:state processor) assoc mux-id {:children children :child-type child-type})
     {:env        env
      :queue      queue
@@ -360,6 +367,42 @@
           (:payload (:data evt)) => :x
           "mo/from records the sender"
           (:sid (get (:data evt) mo/from)) => :gp)))))
+
+(specification "forward-event! skips children that have already finished"
+  (component ":all only reaches live children"
+    (let [{:keys [env queue processor parent-env mux-id]}
+          (seeded-mux-fixture {:children [:multiplex.j.0 :multiplex.j.1 :multiplex.j.2]
+                               :finished #{:multiplex.j.1}})]
+      ;; A child that reached final during start keeps its working memory, marked not running.
+      (sp/save-working-memory! (::sc/working-memory-store env) env :multiplex.j.2
+        {::sc/session-id :multiplex.j.2 ::sc/statechart-src ::waiting-child ::sc/running? false})
+      (sp/forward-event! processor parent-env {:invokeid mux-id :event {:name :ping}})
+      (assertions
+        "the live child receives the event"
+        (received? queue :multiplex.j.0 :ping) => true
+        "a child with no working memory does not"
+        (received? queue :multiplex.j.1 :ping) => false
+        "a child whose working memory is no longer running does not"
+        (received? queue :multiplex.j.2 :ping) => false)))
+
+  (component ":any picks a live child"
+    (let [{:keys [queue processor parent-env mux-id]}
+          (seeded-mux-fixture {:children [:multiplex.j.0 :multiplex.j.1]
+                               :finished #{:multiplex.j.0}})]
+      (sp/forward-event! processor parent-env {:invokeid mux-id :event {:name :one :data {mo/to :any}}})
+      (assertions
+        "the first live child receives it"
+        (received? queue :multiplex.j.1 :one) => true
+        (received? queue :multiplex.j.0 :one) => false)))
+
+  (component "{:idx K} to a finished child is dropped"
+    (let [{:keys [queue processor parent-env mux-id]}
+          (seeded-mux-fixture {:children [:multiplex.j.0 :multiplex.j.1]
+                               :finished #{:multiplex.j.1}})]
+      (sp/forward-event! processor parent-env {:invokeid mux-id :event {:name :targeted :data {mo/to {:idx 1}}}})
+      (assertions
+        "nothing is sent"
+        (received? queue :multiplex.j.1 :targeted) => false))))
 
 ;;;; -------------------------------------------------------------------
 ;;;; Forward-event! edge cases

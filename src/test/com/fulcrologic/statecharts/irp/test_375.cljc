@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition on-entry raise]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-375
   (chart/statechart {:initial :_root}
@@ -24,7 +24,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 375 — multiple onentry handlers execute in document order"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-375 []) => true))
+(runner/async-specification "IRP test 375 — multiple onentry handlers execute in document order"
+  "reaches pass"
+  (runner/passes? chart-375 []) => true)

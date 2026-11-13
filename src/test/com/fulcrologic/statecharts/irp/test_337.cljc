@@ -7,7 +7,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry raise]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-337
   (chart/statechart {:initial :_root}
@@ -24,7 +24,6 @@
 
 (def events [])
 
-(specification "IRP test 337 — origintype field is blank for internal events"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-337 events) => true))
+(runner/async-specification "IRP test 337 — origintype field is blank for internal events"
+  "reaches pass"
+  (runner/passes? chart-337 events) => true)

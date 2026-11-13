@@ -8,7 +8,7 @@
                                                    on-exit assign
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-407
   (chart/statechart {:initial :_root}
@@ -26,7 +26,6 @@
 
 (def events [])
 
-(specification "IRP test 407 — on-exit handler increments Var1 when leaving s0"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-407 events) => true))
+(runner/async-specification "IRP test 407 — on-exit handler increments Var1 when leaving s0"
+  "reaches pass"
+  (runner/passes? chart-407 events) => true)

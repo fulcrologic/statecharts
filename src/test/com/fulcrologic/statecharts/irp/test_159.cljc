@@ -11,7 +11,7 @@
                                                    on-entry script Send
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-159
   (chart/statechart {:initial :_root}
@@ -28,7 +28,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 159 — error in executable content skips subsequent elements"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-159 []) => true))
+(runner/async-specification "IRP test 159 — error in executable content skips subsequent elements"
+  "reaches pass"
+  (runner/passes? chart-159 []) => true)

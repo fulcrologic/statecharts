@@ -11,7 +11,7 @@
     [com.fulcrologic.statecharts.elements :refer [state parallel final transition
                                                    on-exit raise]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-405
   (chart/statechart {:initial :_root}
@@ -47,7 +47,6 @@
 
 (def events [])
 
-(specification "IRP test 405 — parallel region exit/transition content ordering"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-405 events) => true))
+(runner/async-specification "IRP test 405 — parallel region exit/transition content ordering"
+  "reaches pass"
+  (runner/passes? chart-405 events) => true)

@@ -10,7 +10,7 @@
                                                    on-entry Send assign
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-205
   (chart/statechart {:initial :_root}
@@ -33,7 +33,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 205 — send param round-trips through _event.data"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-205 []) => true))
+(runner/async-specification "IRP test 205 — send param round-trips through _event.data"
+  "reaches pass"
+  (runner/passes? chart-205 []) => true)

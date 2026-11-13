@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts.elements :refer [state parallel final transition initial history on-exit assign data-model]]
     [com.fulcrologic.statecharts.environment :as env]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-580
   (chart/statechart {:initial :_root}
@@ -37,7 +37,6 @@
 
 (def events [])
 
-(specification "IRP test 580 — history state is never in the configuration"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-580 events) => true))
+(runner/async-specification "IRP test 580 — history state is never in the configuration"
+  "reaches pass"
+  (runner/passes? chart-580 events) => true)

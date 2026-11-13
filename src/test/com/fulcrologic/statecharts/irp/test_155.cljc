@@ -10,7 +10,7 @@
                                                    on-entry assign foreach
                                                    data-model]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-155
   (chart/statechart {:initial :_root}
@@ -26,7 +26,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 155 — foreach iterates body once per item, summing to 6"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-155 []) => true))
+(runner/async-specification "IRP test 155 — foreach iterates body once per item, summing to 6"
+  "reaches pass"
+  (runner/passes? chart-155 []) => true)

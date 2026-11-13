@@ -7,7 +7,7 @@
     [com.fulcrologic.statecharts.elements :refer [state final transition
                                                    on-entry Send]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-348
   (chart/statechart {:initial :_root}
@@ -23,7 +23,6 @@
 
 (def events [])
 
-(specification "IRP test 348 — send event param sets the event name"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-348 events) => true))
+(runner/async-specification "IRP test 348 — send event param sets the event name"
+  "reaches pass"
+  (runner/passes? chart-348 events) => true)

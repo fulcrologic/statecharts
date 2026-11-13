@@ -8,7 +8,7 @@
     [com.fulcrologic.statecharts.chart :as chart]
     [com.fulcrologic.statecharts.elements :refer [state final transition]]
     [com.fulcrologic.statecharts.irp.runner :as runner]
-    [fulcro-spec.core :refer [=> assertions specification]]))
+    [fulcro-spec.core :refer [=>]]))
 
 (def chart-355
   (chart/statechart {:initial :_root}
@@ -20,7 +20,6 @@
       (final {:id :pass})
       (final {:id :fail}))))
 
-(specification "IRP test 355 — default initial state is first in document order"
-  (assertions
-    "reaches pass"
-    (runner/passes? chart-355 []) => true))
+(runner/async-specification "IRP test 355 — default initial state is first in document order"
+  "reaches pass"
+  (runner/passes? chart-355 []) => true)
