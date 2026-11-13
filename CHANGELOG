@@ -1,3 +1,33 @@
+1.4.1
+-----
+
+New:
+
+* The manually polled queue's `receive-events!` accepts `::mpq/session-busy?`, a predicate on session id. A busy
+  session's events stay queued, in order.
+
+Bug fixes:
+
+* Fulcro: `fops/apply-action` takes effect in op order. Run inside a transaction with synchronous tx processing, it
+  used to land after the expression's later ops.
+* Fulcro: a session processes one event at a time. With `:async? true`, events for a session whose step is parked used
+  to run against its stale working memory, and their results were overwritten. Under `:immediate`, an event that
+  `start!`'s initial entry sends to its own session was dropped.
+* Fulcro `:immediate` processing stops once no event is due, instead of re-polling the queue 100 times on every `send!`
+  while a delayed event is pending.
+* An `invoke` with neither `:id` nor `:idlocation` is now stopped when its state exits, and its `finalize` and
+  `:autoforward` now work.
+* Fulcro (CLJ): a session started with `start!` is removed from app state once it reaches a final state. The master
+  chart's cleanup expression took 2 args but is called with 4, so it threw.
+
+Behavior changes:
+
+* Fulcro: while an `:async?` step is parked, its session's later events wait. A step that awaits an event sent to its
+  own session never finishes, and a promise that never settles leaves the session's events queued.
+* Fulcro: an `:on-save` that returns a promise holds its session's events until the promise settles, also with the
+  synchronous processor.
+* Fulcro: `apply-action` no longer runs as a transaction, so Fulcro Inspect shows no transaction entry for it.
+
 1.4.0
 -----
 

@@ -360,8 +360,13 @@
       (catch #?(:cljs :default :clj Throwable) t
         (log/error "Apply action failed:" {:f f :args args})))))
 
+;; A direct swap, not `transact!!`: synchronous tx processing queues a transaction submitted inside a running one until
+;; that one ends, i.e. after the expression's later ops. The data model's `update!` schedules the render.
 (defmethod run-fulcro-data-op! :fulcro/apply-action [app _processing-env {:keys [f args]}]
-  (rc/transact!! app [(do-apply-action {:f f :args args})]))
+  (try
+    (swap! (state-atom app) (fn [s] (apply f s args)))
+    (catch #?(:cljs :default :clj Throwable) t
+      (log/error t "Apply action failed:" {:f f :args args}))))
 
 (def master-chart-id :com.fulcrologic.fulcro/master-statechart)
 
@@ -369,7 +374,8 @@
   (chart/statechart {:initial :state/initial}
     (ele/state {:id :state/initial}
       (ele/transition {:event :done.invoke.*}
-        (ele/script {:expr (fn [_env {:keys [_event]}]
+        ;; `& _`: Fulcro's execution model calls expressions with 4 args (CLJ throws on a 2-arity fn).
+        (ele/script {:expr (fn [_env {:keys [_event]} & _]
                              (let [{::sc/keys [source-session-id]} _event]
                                [(op/delete [:fulcro/state-map ::sc/session-id source-session-id])
                                 (op/delete [:fulcro/state-map ::sc/local-data source-session-id])]))})))))

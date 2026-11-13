@@ -3,10 +3,12 @@
    Uses testing-async with synchronous expressions to prove behavioral equivalence
    with the sync processor across all major SCXML algorithm paths."
   (:require
+    [com.fulcrologic.statecharts :as sc]
     [com.fulcrologic.statecharts.chart :as chart]
-    [com.fulcrologic.statecharts.elements :refer [assign data-model final history initial
+    [com.fulcrologic.statecharts.elements :refer [assign data-model final finalize history initial invoke
                                                    on-entry on-exit parallel script state transition]]
     [com.fulcrologic.statecharts.events :as evt]
+    [com.fulcrologic.statecharts.testing :refer [ran?]]
     [com.fulcrologic.statecharts.testing-async :as testing]
     [fulcro-spec.core :refer [=> assertions specification]]))
 
@@ -515,3 +517,31 @@
     (assertions
       "Initial element transition targets correct state"
       (testing/in? env :b) => true)))
+
+;;; ============================================================================
+;;; Invocations
+;;; ============================================================================
+
+(defn- record-finalize [& _] nil)
+
+(specification "Invoke: no :id or :idlocation"
+  (let [chart       (chart/statechart {:initial :idle}
+                      (state {:id :idle}
+                        (transition {:event :open :target :open}))
+                      (state {:id :open}
+                        (invoke {:type :statechart :src :child :autoforward true}
+                          (finalize {} (script {:expr record-finalize})))
+                        (transition {:event :close :target :idle})))
+        env         (testing/new-testing-env {:statechart chart} {})
+        invocations (.-invocations (first (::sc/invocation-processors (:env env))))]
+    (testing/start! env)
+    (testing/run-events! env :open)
+    (let [invokeid (first (keys @invocations))]
+      (testing/run-events! env :ping {:name :reply :invokeid invokeid} :close)
+      (assertions
+        "Forwards its external events to its child by the generated id"
+        (set (map :name (get-in @invocations [invokeid :forward-events]))) => #{:ping :reply :close}
+        "Runs its finalize for events from that id"
+        (ran? env record-finalize) => true
+        "Stops its child by that id when its state is exited"
+        (get-in @invocations [invokeid :finished?]) => true))))

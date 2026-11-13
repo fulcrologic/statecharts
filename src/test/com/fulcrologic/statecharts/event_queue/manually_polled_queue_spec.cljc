@@ -91,3 +91,28 @@
         (sp/receive-events! queue {} handler {:session-id my-session})
         (assertions
           @seen => [])))))
+
+(specification "receive-events! with a ::mpq/session-busy? predicate"
+  (let [queue   (mpq/new-queue)
+        busy    (atom #{})
+        seen    (atom [])
+        queued  (atom [])
+        handler (fn [_ {:keys [name target]}]
+                  (swap! seen conj name)
+                  (swap! queued conj (mapv :name (get @(:session-queues queue) target)))
+                  (when (= :A name) (swap! busy conj target)))
+        options {::mpq/session-busy? #(contains? @busy %)}]
+    (doseq [[target event] [[1 :A] [1 :B] [2 :C]]]
+      (sp/send! queue {} {:target target :source-session-id target :event event}))
+    (sp/receive-events! queue {} handler options)
+    (assertions
+      "takes each event off its session's queue just before its handler runs"
+      @queued => [[:B] []]
+      "holds a session's events once it is busy, and runs other sessions' events"
+      @seen => [:A :C])
+    (reset! busy #{})
+    (reset! seen [])
+    (sp/receive-events! queue {} handler options)
+    (assertions
+      "runs the held events, in order, once the session is no longer busy"
+      @seen => [:B])))

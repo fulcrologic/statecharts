@@ -698,6 +698,9 @@
                            (str parent-state-id "." (new-uuid)))]
             (when idlocation
               (sp/update! data-model env {:ops [(ops/assign idlocation invokeid)]}))
+            ;; A generated id is kept, so the invocation can be stopped, forwarded to and finalized by it.
+            (when-not (or explicit-id? idlocation)
+              (vswap! (::sc/vwmem env) assoc-in [::sc/invocation-ids id] invokeid))
             (log/debugf "Starting invocation id = %s, type = %s, src = %s, params = %s"
               (str invokeid) (str type) (str src) (str params))
             (sp/start-invocation! processor env {:invokeid invokeid
@@ -751,14 +754,15 @@
   nil)
 
 (defn- stop-invocation!
-  [{::sc/keys [data-model] :as env} invocation]
+  [{::sc/keys [data-model vwmem] :as env} invocation]
   (let [{:keys [type
                 processor
                 id idlocation]} (invocation-details env invocation)]
     (when processor
       (let [invokeid (if idlocation
                        (sp/get-at data-model env idlocation)
-                       id)]
+                       (get-in @vwmem [::sc/invocation-ids id] id))]
+        (vswap! vwmem #(cond-> % (::sc/invocation-ids %) (update ::sc/invocation-ids dissoc id)))
         (log/debug "Stopping invocation" invokeid)
         (sp/stop-invocation! processor env {:invokeid invokeid
                                             :type     type})))))
@@ -913,12 +917,12 @@
       (env/delete! env [:ROOT :_event]))))
 
 (defn- forward-event!
-  [{::sc/keys [data-model] :as env} invocation event]
+  [{::sc/keys [data-model vwmem] :as env} invocation event]
   (let [{:keys [type
                 processor
                 id idlocation]} (invocation-details env invocation)]
     (when processor
-      (let [invokeid (if idlocation (sp/get-at data-model env idlocation) id)]
+      (let [invokeid (if idlocation (sp/get-at data-model env idlocation) (get-in @vwmem [::sc/invocation-ids id] id))]
         (sp/forward-event! processor env {:invokeid invokeid
                                           :type     type
                                           :event    event})))))
@@ -930,7 +934,7 @@
     (doseq [{:keys [id idlocation id-location auto-forward? autoforward] :as inv} (map (partial chart/element statechart) (chart/invocations statechart s))
             :let [id (if-let [loc (or idlocation id-location)]
                        (sp/get-at data-model env loc)
-                       id)]]
+                       (get-in @vwmem [::sc/invocation-ids id] id))]]
       (when (log/spy :debug "event from invocation?" (= invokeid id))
         (finalize! env inv external-event))
       (when (or (true? autoforward) (true? auto-forward?))

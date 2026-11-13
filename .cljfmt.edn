@@ -2,7 +2,11 @@
  
  ;; Always use 2 spaces for indentation (equivalent to "Default to Only Indent")
  ;; This applies [:inner 0] to all forms, giving consistent 2-space indentation
- :indents ^:replace {#".*" [[:inner 0]]}
+ :indents ^:replace {#re ".*" [[:inner 0]]}
+
+ ;; Keyword-headed forms such as (:require ...) are not matched by the regex above; without this they get
+ ;; 1-space list alignment instead of the 2-space "Only Indent" style.
+ :function-arguments-indentation :cursive
  
  ;; Align map keys and values in columns (experimental feature)
  ;; Example: {:key-one   value-1
