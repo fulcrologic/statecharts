@@ -375,8 +375,8 @@
   (if data
     (let [result (run-expression! (assoc env ::sc/raw-result? true) data)]
       (maybe-then result
-        (fn [v] (raise env (evts/new-event {:name event :data v})))))
-    (raise env event)))
+        (fn [v] (env/raise env event v))))
+    (env/raise env event)))
 
 (defmethod execute-element-content! :assign [env {:keys [location expr]}]
   (let [result (run-expression! (assoc env ::sc/raw-result? true) expr)]
