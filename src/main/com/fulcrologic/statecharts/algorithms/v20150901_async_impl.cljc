@@ -151,7 +151,7 @@
                   (catch #?(:clj Throwable :cljs :default) e
                     (log/error e "Expression failure (sync throw)")
                     (raise env (evts/new-event {:name :error.execution
-                                                :data {:error e :expression expr}}))
+                                                :data {:error e}}))
                     (when strict? (throw e))
                     nil))]
     (if (p/promise? result)
@@ -159,7 +159,7 @@
         (fn [e]
           (log/error e "Expression failure (promise rejection)")
           (raise env (evts/new-event {:name :error.execution
-                                      :data {:error e :expression expr}}))
+                                      :data {:error e}}))
           (if strict? (p/rejected e) nil)))
       (do
         (log/spy :debug result)

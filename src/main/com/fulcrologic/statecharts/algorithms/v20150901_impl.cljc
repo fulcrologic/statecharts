@@ -96,7 +96,7 @@
     (catch #?(:clj Throwable :cljs :default) e
       (log/error e "Expression failure")
       (raise env (evts/new-event {:name :error.execution
-                                  :data {:error e :expression expr}}))
+                                  :data {:error e}}))
       ;; Strict mode (W3C §4.4 conformance) propagates the error so the surrounding
       ;; block can abort. Default mode swallows it (legacy behavior).
       (when (::sc/errors-abort-siblings? env) (throw e))
